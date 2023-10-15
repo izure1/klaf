@@ -9,7 +9,7 @@ export class IntegerConverter {
   protected static View64   = new DataView(IntegerConverter.Buffer64)
 
 
-  static FromArray8(array: number[]): number {
+  static FromArray8(array: number[]|Uint8Array): number {
     const view = IntegerConverter.View8
     for (let i = 0; i < array.length; i++) {
       view.setUint8(i, array[i])
@@ -17,7 +17,7 @@ export class IntegerConverter {
     return view.getUint8(0)
   }
 
-  static FromArray16(array: number[]): number {
+  static FromArray16(array: number[]|Uint8Array): number {
     const view = IntegerConverter.View16
     for (let i = 0; i < array.length; i++) {
       view.setUint8(i, array[i])
@@ -25,7 +25,7 @@ export class IntegerConverter {
     return view.getUint16(0)
   }
 
-  static FromArray32(array: number[]): number {
+  static FromArray32(array: number[]|Uint8Array): number {
     const view = IntegerConverter.View32
     for (let i = 0; i < array.length; i++) {
       view.setUint8(i, array[i])
@@ -33,12 +33,12 @@ export class IntegerConverter {
     return view.getUint32(0)
   }
 
-  static FromArray64(array: number[]): number {
+  static FromArray64(array: number[]|Uint8Array): bigint {
     const view = IntegerConverter.View64
     for (let i = 0; i < array.length; i++) {
       view.setUint8(i, array[i])
     }
-    return Number(view.getBigUint64(0))
+    return view.getBigUint64(0)
   }
 
   static ToArray8(num: number): number[] {
@@ -71,9 +71,9 @@ export class IntegerConverter {
     return array
   }
 
-  static ToArray64(num: number): number[] {
+  static ToArray64(num: bigint): number[] {
     const view = IntegerConverter.View64
-    view.setBigUint64(0, BigInt(num))
+    view.setBigUint64(0, num)
     const array = []
     for (let i = 0; i < 8; i++) {
       array.push(view.getUint8(i))

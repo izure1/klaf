@@ -25,7 +25,7 @@ describe('Record test', () => {
 
   test('put record that shorter than page size', () => {
     const max = 10
-    const ids: number[] = []
+    const ids: string[] = []
     for (let i = 0; i < max; i++) {
       const content = `:db-put-test-${i}:`
       const id = db.put(content)
@@ -63,7 +63,7 @@ describe('Record test', () => {
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
 
-    let id: number
+    let id: string
     id = db.put(content)
     id = db.update(id, longerContent)
 
@@ -79,5 +79,12 @@ describe('Record test', () => {
     db.delete(id)
     expect(() => db.pick(id)).toThrow()
     expect(() => db.update(id, 'error')).toThrow()
+  })
+
+  test('invalid record', () => {
+    const invalidId = btoa('1928399199299331123')
+    expect(() => db.pick(invalidId)).toThrow()
+    expect(() => db.update(invalidId, 'test')).toThrow()
+    expect(() => db.delete(invalidId)).toThrow()
   })
 })

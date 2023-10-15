@@ -2,7 +2,7 @@ export class TextConverter {
   protected static Encoder = new TextEncoder()
   protected static Decoder = new TextDecoder()
 
-  static FromArray(array: number[]): string {
+  static FromArray(array: Iterable<number>): string {
     const r = Uint8Array.from(array)
     return TextConverter.Decoder.decode(r)
   }

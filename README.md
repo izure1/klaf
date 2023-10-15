@@ -1,7 +1,7 @@
 # Tissue Roll
 
 Very simple read/write database with a `key-value`.  
-It's written in JavaScript using pure Node.js API and has no dependencies.
+It's written in JavaScript using pure Node.js API and pretty easy and small.
 
 ## Usage
 
@@ -9,7 +9,7 @@ It's written in JavaScript using pure Node.js API and has no dependencies.
 import { TissueRoll } from 'tissue-roll'
 
 // OPEN DB
-const payloadSize = 1024
+const payloadSize = 8192
 const db = TissueRoll.Open('my_file_path.db', payloadSize)
 
 // INPUT
@@ -45,7 +45,7 @@ db.close()
 
 ### Static Functions
 
-#### TissueRoll.Create(file: `string`, payloadSize = `1024`, overwrite = `false`): `TissueRoll`
+#### TissueRoll.Create(file: `string`, payloadSize = `8192`, overwrite = `false`): `TissueRoll`
 
 It creates a new database file.
 
@@ -59,54 +59,89 @@ It opens or creates a database file at the specified path. If `payloadSize` para
 
 You store data in the database and receive a record ID for the saved data. This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
 
-#### update(recordId: `number`, data: `string`): `number`
+#### update(recordId: `string`, data: `string`): `string`
 
 You can update an existing record.  
 If the new data is smaller, it replaces the old one. If it's larger, a new record is created, and you get its ID. In this case, the old record is deleted and can't be used anymore.
 
-#### delete(recordId: `number`): `void`
+#### delete(recordId: `string`): `void`
 
 You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
 
-## Why use `tissue-roll`?
+#### pick(recordId: `string`): `RecordInformation`
+
+Get record from database with a id.  
+Don't pass an incorrect record ID. This does not ensure the validity of the record.
+If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
+
+## Why
+
+### Q. Why use `tissue-roll`?
 
 JavaScript has numerous fantastic database libraries available, but at times, they can seem overly complex.  
 This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure. Or when it's annoying.
-
-### Q. How does it differ from a `Map` object?
-
-The `Map` object is memory-based, while `tissue-roll` is file-based.
 
 ### Q. Why should I use this instead of `JSON`?
 
 When the `JSON` files get large, quick data read and write operations can become challenging.  
 `tissue-roll` handles data input and output in real-time, ensuring fast and lightweight performance.
 
+### Q. Where can this be used?
+
+It can be used, for example, to create website URLs. You save a post and insert the obtained record ID into the URL address.
+
+## How
+
+### Q. How does it differ from a `Map` object?
+
+The `Map` object is memory-based, while `tissue-roll` is file-based.
+
 ### Q. How does `tissue-roll` work?
 
 `tissue-roll` manages files by breaking them into blocks called pages. You can set the page size when creating the database.
 
-When you insert data, the ID you get back includes information about where the data is stored on the page. This makes it possible to work with large files quickly.
+When you insert data, the ID you get back includes information about where the data is stored on the page. This makes it possible to work with large files quickly. This value could be seen by users, but it's encrypted to make it hard to predict. This way, it stops users from trying to steal data by requesting fake record IDs.
+
+### Q. How many can I own data?
+
+`tissue-roll` can make a unsigned 32bit range of page block. This is a `4,294,967,296`. And each page can own unsigned 32bit range of records also. So you can theoretically insert `4,294,967,296`*`4,294,967,296` records.
 
 ## Performance Test
 
 The test result is the average value from 10 attempts.  
 If you're adding data to the database in real-time, the results would be as follows:
 
-|`WRITE`|JSON|tissue-roll|`RESULT`|
+### WRITE
+
+For a little data, JSON is faster, but when you've got a big file, it's the other way around, and the gap gets bigger.
+
+|`WRITE`|JSON|TISSUE-ROLL|`RESULT`|
 |---|---|---|---|
-|1 times|3ms|8ms|`-266% Slower`|
-|100 times|111ms|67ms|`165% Faster`|
-|10,000 times|22,269ms|4,175ms|`533% Faster`|
+|1,000 times|1014ms|1990ms|*-49% Slower*|
+|2,000 times|2200ms|3800ms|*-42% Slower*|
+|4,000 times|5674ms|7509ms|*-24% Slower*|
+|8,000 times|15332ms|14788ms|***+4% Faster***|
+|16,000 times|46617ms|29755ms|***+57% Faster***|
 
-|`READ`|JSON|tissue-roll|`RESULT`|
+### READ
+
+`tissue-roll` maintains a steady reading speed no matter the database size. In contrast, JSON files slow down as they get bigger.
+
+|`READ`|JSON|TISSUE-ROLL|`RESULT`|
 |---|---|---|---|
-|from 1,000 record|1ms|5ms|`-500% Slower`|
-|from 10,000 records|3ms|6ms|`-200% Slower`|
-|from 100,000 records|23ms|4ms|`575% Faster`|
+|from 8,000 records|1.8ms|5.6ms|*-68% Slower*|
+|from 16,000 records|4ms|2ms|***+100% Faster***|
+|from 32,000 records|5.4ms|2.2ms|***+145% Faster***|
+|from 64,000 records|11.4ms|2ms|***+470% Faster***|
+|from 128,000 records|26.4ms|2.6ms|***+915% Faster***|
 
-This is the usual case, but the results can be different depending on programming optimizations.
+### RESULT
 
-## LICENSE
+![WRITE](./docs/asset/image/svg_perf_write.svg)
+![READ](./docs/asset/image/svg_perf_read.svg)
+
+**NOTICE!** *This is the usual case, but the results can be different depending on programming optimizations.*
+
+## License
 
 MIT LICENSE

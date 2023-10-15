@@ -5,7 +5,7 @@ const common = {
   entryPoints: [
     { in: 'src/index.ts', out: 'index' }
   ],
-  external: ['fs']
+  external: ['node:fs', 'node:crypto', 'crypto']
 }
 
 esbuild.build({

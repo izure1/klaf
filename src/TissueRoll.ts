@@ -1,8 +1,13 @@
-import fs from 'fs'
+import fs from 'node:fs'
+
+import type { FpeCipher } from 'node-fpe'
 
 import { TextConverter } from './TextConverter'
 import { IntegerConverter } from './IntegerConverter'
+import { Base64Helper } from './Base64Helper'
 import { ErrorBuilder } from './ErrorBuilder'
+import { CryptoHelper } from './CryptoHelper'
+import { FpeBuilder } from './FpeBuilder'
 import { IterableView, FileView } from './IterableView'
 
 type IPageHeader = {
@@ -18,41 +23,46 @@ type IRootHeader = {
   minorVersion: number
   patchVersion: number
   payloadSize: number
-  timestamp: number
+  timestamp: bigint
+  secretKey: bigint
   index: number
 }
 
 export class TissueRoll {
-  protected static DB_VERSION                   = '1.0.0'
+  protected static DB_VERSION                   = '2.0.0'
   protected static DB_NAME                      = 'TissueRoll'
   protected static RootValidStringOffset        = 0
   protected static RootValidStringSize          = 10
-  protected static RootMajorVersionOffset       = 10
+  protected static RootMajorVersionOffset       = TissueRoll.RootValidStringOffset+TissueRoll.RootValidStringSize
   protected static RootMajorVersionSize         = 1
-  protected static RootMinorVersionOffset       = 11
+  protected static RootMinorVersionOffset       = TissueRoll.RootMajorVersionOffset+TissueRoll.RootMajorVersionSize
   protected static RootMinorVersionSize         = 1
-  protected static RootPatchVersionOffset       = 12
+  protected static RootPatchVersionOffset       = TissueRoll.RootMinorVersionOffset+TissueRoll.RootMinorVersionSize
   protected static RootPatchVersionSize         = 1
-  protected static RootIndexOffset              = 13
+  protected static RootIndexOffset              = TissueRoll.RootPatchVersionOffset+TissueRoll.RootPatchVersionSize
   protected static RootIndexSize                = 4
-  protected static RootPayloadSizeOffset        = 17
+  protected static RootPayloadSizeOffset        = TissueRoll.RootIndexOffset+TissueRoll.RootIndexSize
   protected static RootPayloadSizeSize          = 4
-  protected static RootTimestampOffset          = 21
+  protected static RootTimestampOffset          = TissueRoll.RootPayloadSizeOffset+TissueRoll.RootPayloadSizeSize
   protected static RootTimestampSize            = 8
+  protected static RootSecretKeyOffset          = TissueRoll.RootTimestampOffset+TissueRoll.RootTimestampSize
+  protected static RootSecretKeySize            = 8
 
-  protected static RootChunkSize                = 100
+  protected static RootChunkSize                = 200
   protected static HeaderSize                   = 100
   protected static CellSize                     = 4
   protected static RecordHeaderSize             = 40
+  protected static RecordHeaderIndexOffset      = 0
   protected static RecordHeaderIndexSize        = 8
+  protected static RecordHeaderSaltOffset       = TissueRoll.RecordHeaderIndexOffset+TissueRoll.RecordHeaderIndexSize
+  protected static RecordHeaderSaltSize         = 4
+  protected static RecordHeaderLengthOffset     = TissueRoll.RecordHeaderSaltOffset+TissueRoll.RecordHeaderSaltSize
   protected static RecordHeaderLengthSize       = 4
+  protected static RecordHeaderMaxLengthOffset  = TissueRoll.RecordHeaderLengthOffset+TissueRoll.RecordHeaderLengthSize
   protected static RecordHeaderMaxLengthSize    = 4
+  protected static RecordHeaderDeletedOffset    = TissueRoll.RecordHeaderMaxLengthOffset+TissueRoll.RecordHeaderMaxLengthSize
   protected static RecordHeaderDeletedSize      = 1
 
-  protected static RecordHeaderIndexOffset      = 0
-  protected static RecordHeaderLengthOffset     = 8
-  protected static RecordHeaderMaxLengthOffset  = 12
-  protected static RecordHeaderDeletedOffset    = 16
 
   protected static UnknownType                  = 0
   protected static InternalType                 = 1
@@ -63,16 +73,14 @@ export class TissueRoll {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create(file: string, payloadSize = 1024, overwrite = false): TissueRoll {
+  static Create(file: string, payloadSize = 8192, overwrite = false): TissueRoll {
     if (fs.existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
     }
-    const fd = fs.openSync(file, 'w+')
-    const inst = new TissueRoll(fd, payloadSize)
-
+    
     // create root
     const root = TissueRoll.CreateIterable(TissueRoll.RootChunkSize, 0)
     const {
@@ -84,22 +92,26 @@ export class TissueRoll {
       RootPatchVersionOffset,
       RootPayloadSizeOffset,
       RootTimestampOffset,
+      RootSecretKeyOffset,
+      RootSecretKeySize,
     } = TissueRoll
     const [
       majorVersion,
       minorVersion,
       patchVersion
     ] = DB_VERSION.split('.')
-    IterableView.Update(root, RootValidStringOffset, TextConverter.ToArray(DB_NAME))
+    const secretKey = CryptoHelper.RandomBytes(RootSecretKeySize)
+    IterableView.Update(root, RootValidStringOffset,  TextConverter.ToArray(DB_NAME))
     IterableView.Update(root, RootMajorVersionOffset, IntegerConverter.ToArray8(Number(majorVersion)))
     IterableView.Update(root, RootMinorVersionOffset, IntegerConverter.ToArray8(Number(minorVersion)))
     IterableView.Update(root, RootPatchVersionOffset, IntegerConverter.ToArray8(Number(patchVersion)))
-    IterableView.Update(root, RootPayloadSizeOffset, IntegerConverter.ToArray32(payloadSize))
-    IterableView.Update(root, RootTimestampOffset, IntegerConverter.ToArray64(Date.now()))
+    IterableView.Update(root, RootPayloadSizeOffset,  IntegerConverter.ToArray32(payloadSize))
+    IterableView.Update(root, RootTimestampOffset,    IntegerConverter.ToArray64(BigInt(Date.now())))
+    IterableView.Update(root, RootSecretKeyOffset,    Array.from(secretKey))
 
-    FileView.Append(inst.fd, root)
+    fs.writeFileSync(file, Buffer.from(root))
 
-    // create first page
+    const inst = TissueRoll.Open(file)
     inst._addEmptyPage({ type: TissueRoll.InternalType })
     return inst
   }
@@ -132,7 +144,10 @@ export class TissueRoll {
     }
 
     const root = TissueRoll.ParseRootChunk(fd)
-    return new TissueRoll(fd, root.payloadSize)
+    const secretBuf = Buffer.from(IntegerConverter.ToArray64(root.secretKey))
+    const secretKey = secretBuf.toString('base64')
+    
+    return new TissueRoll(fd, secretKey, root.payloadSize)
   }
 
   protected static ParseRootChunk(fd: number): IRootHeader {
@@ -150,6 +165,8 @@ export class TissueRoll {
       RootPayloadSizeSize,
       RootTimestampOffset,
       RootTimestampSize,
+      RootSecretKeyOffset,
+      RootSecretKeySize,
     } = TissueRoll
     const majorVersion  = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
@@ -169,12 +186,16 @@ export class TissueRoll {
     const timestamp     = IntegerConverter.FromArray64(
       IterableView.Read(rHeader, RootTimestampOffset, RootTimestampSize)
     )
+    const secretKey     = IntegerConverter.FromArray64(
+      IterableView.Read(rHeader, RootSecretKeyOffset, RootSecretKeySize)
+    )
     return {
       majorVersion,
       minorVersion,
       patchVersion,
       payloadSize,
       timestamp,
+      secretKey,
       index,
     }
   }
@@ -198,8 +219,10 @@ export class TissueRoll {
   protected readonly headerSize: number
   protected readonly payloadSize: number
   protected readonly fd: number
+  protected readonly secretKey: string
+  protected readonly fpe: FpeCipher
 
-  protected constructor(fd: number, payloadSize: number) {
+  protected constructor(fd: number, secretKey: string, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
       fs.closeSync(fd)
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
@@ -207,7 +230,12 @@ export class TissueRoll {
     this.chunkSize    = TissueRoll.HeaderSize+payloadSize
     this.headerSize   = TissueRoll.HeaderSize
     this.payloadSize  = payloadSize
-    this.fd = fd
+    this.fd           = fd
+    this.secretKey    = secretKey
+    this.fpe          = new FpeBuilder()
+      .setSecretKey(secretKey)
+      .setDomain(FpeBuilder.Base64UrlSafeDomain)
+      .build()
   }
 
   get root(): IRootHeader {
@@ -275,6 +303,10 @@ export class TissueRoll {
     return endOfPage-(TissueRoll.CellSize*order)
   }
 
+  private _createSalt(): number {
+    return IntegerConverter.FromArray32(CryptoHelper.RandomBytes(4))
+  }
+
   private _recordPosition(index: number, order: number): number {
     const payloadPos    = this._pagePayloadPosition(index)
     const cellPos       = this._cellPosition(index, order)
@@ -288,37 +320,44 @@ export class TissueRoll {
     return FileView.Read(this.fd, start, this.chunkSize)
   }
 
-  private _recordId(index: number, order: number): number {
-    const sIndex = index.toString().padStart(4, '0')
-    const sOrder = order.toString().padStart(4, '0')
-    return Number(`1${sIndex}${sOrder}`)
+  private _recordId(index: number, order: number, salt: number): string {
+    const sIndex  = index.toString(16).padStart(4, '0')
+    const sOrder  = order.toString(16).padStart(4, '0')
+    const sSalt   = salt.toString(16).padStart(4, '0')
+    const base64 = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`)
+    return this.fpe.encrypt(base64)
   }
 
-  private _recordIdFromRaw(rawRecordId: number[]): number {
-    const index = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 0, 4))
-    const order = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 4, 4))
-    return this._recordId(index, order)
-  }
-  
-  private _normalizeRecordId(recordId: number) {
-    const stringify = recordId.toString()
-    const index = Number(stringify.slice(1, 5))
-    const order = Number(stringify.slice(5, 9))
+  private _normalizeRecordId(recordId: string) {
+    const base64 = this.fpe.decrypt(recordId)
+    const plain = Base64Helper.UrlSafeDecode(base64)
+    const index = parseInt(plain.slice(0, 4), 16)
+    const order = parseInt(plain.slice(4, 8), 16)
+    const salt  = parseInt(plain.slice(8, 12), 16)
     return {
       index,
       order,
+      salt,
     }
   }
 
-  private _rawRecordId(recordId: number): number[] {
-    const { index, order } = this._normalizeRecordId(recordId)
+  private _recordIdFromRaw(rawRecordId: number[]): string {
+    const index = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 0, 4))
+    const order = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 4, 4))
+    const salt  = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 8, 4))
+    return this._recordId(index, order, salt)
+  }
+
+  private _rawRecordId(recordId: string): number[] {
+    const { index, order, salt } = this._normalizeRecordId(recordId)
     return [
       ...IntegerConverter.ToArray32(index),
       ...IntegerConverter.ToArray32(order),
+      ...IntegerConverter.ToArray32(salt),
     ]
   }
 
-  private _createRecord(id: number, data: number[]): number[] {
+  private _createRecord(id: string, data: number[]): number[] {
     const rawId = this._rawRecordId(id)
     const length = IntegerConverter.ToArray32(data.length)
 
@@ -391,6 +430,13 @@ export class TissueRoll {
         TissueRoll.RecordHeaderIndexSize
       )
     )
+    const salt = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        TissueRoll.RecordHeaderSaltOffset,
+        TissueRoll.RecordHeaderSaltSize
+      )
+    )
     const length = IntegerConverter.FromArray32(
       IterableView.Read(
         rawHeader,
@@ -414,9 +460,10 @@ export class TissueRoll {
     )
     const header = {
       index,
+      salt,
       length,
       maxLength,
-      deleted
+      deleted,
     }
     const rawRecord = [...rawHeader, ...rawPayload]
     const payload = TextConverter.FromArray(rawPayload)
@@ -425,7 +472,7 @@ export class TissueRoll {
       rawHeader,
       rawPayload,
       header,
-      payload
+      payload,
     }
   }
 
@@ -470,12 +517,16 @@ export class TissueRoll {
    * If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
    * @param recordId The record id what you want pick.
    */
-  pick(recordId: number) {
-    const { index, order } = this._normalizeRecordId(recordId)
+  pick(recordId: string) {
+    const { index, order, salt } = this._normalizeRecordId(recordId)
 
     const page      = this._normalizeHeader(this._getHeader(index))
     const rawRecord = this._getRecord(index, order)
     const record    = this._normalizeRecord(rawRecord)
+
+    if (record.header.salt !== salt) {
+      throw ErrorBuilder.ERR_INVALID_RECORD(recordId)
+    }
 
     if (record.header.deleted) {
       throw ErrorBuilder.ERR_ALREADY_DELETED(recordId)
@@ -518,10 +569,11 @@ export class TissueRoll {
     FileView.Update(this.fd, cellPos, cell)
   }
 
-  private _putJustOnePage(header: IPageHeader, data: number[]): number {
-    const order = header.count+1
-    const recordId = this._recordId(header.index, order)
-    const record  = this._createRecord(recordId, data)
+  private _putJustOnePage(header: IPageHeader, data: number[]): string {
+    const order     = header.count+1
+    const salt      = this._createSalt()
+    const recordId  = this._recordId(header.index, order, salt)
+    const record    = this._createRecord(recordId, data)
 
     this._putPagePayload(header, record)
     
@@ -533,7 +585,7 @@ export class TissueRoll {
     return recordId
   }
 
-  private _put(data: number[]): number {
+  private _put(data: number[]): string {
     let index   = this._getHeadPageIndex(this.root.index)
     let header  = this._normalizeHeader(this._getHeader(index))
 
@@ -571,7 +623,8 @@ export class TissueRoll {
     // Overflow 타입의 페이지입니다.
     // 다음 삽입 시 무조건 새로운 페이지를 만들어야하므로, free, count 값이 고정됩니다.
     const order       = header.count+1
-    const recordId    = this._recordId(header.index, order)
+    const salt        = this._createSalt()
+    const recordId    = this._recordId(header.index, order, salt)
     const record      = this._createRecord(recordId, data)
     const headIndex   = index
 
@@ -615,7 +668,7 @@ export class TissueRoll {
    * @param data The data string what you want store.
    * @returns The record id.
    */
-  put(data: string): number {
+  put(data: string): string {
     const rData = TextConverter.ToArray(data)
     return this._put(rData)
   }
@@ -627,7 +680,7 @@ export class TissueRoll {
    * @param data The data string what you want update.
    * @returns The updated record id.
    */
-  update(recordId: number, data: string): number {
+  update(recordId: string, data: string): string {
     const payload = TextConverter.ToArray(data)
     const prev = this.pick(recordId)
 
@@ -659,9 +712,9 @@ export class TissueRoll {
    * You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
    * @param recordId The record id what you want delete.
    */
-  delete(recordId: number): void {
-    const { index, order } = this._normalizeRecordId(recordId)
-    const pos = this._recordPosition(index, order)+TissueRoll.RecordHeaderDeletedOffset
+  delete(recordId: string): void {
+    const { page, order } = this.pick(recordId)
+    const pos = this._recordPosition(page.index, order)+TissueRoll.RecordHeaderDeletedOffset
     const buf = IntegerConverter.ToArray8(1)
     
     FileView.Update(this.fd, pos, buf)

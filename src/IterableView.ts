@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs'
 
 export class IterableView {
   static Read<T>(array: T[], start: number, length = array.length-start): T[] {

@@ -11,7 +11,11 @@ export class ErrorBuilder {
     return new Error(`The database file not exists in '${file}'.`)
   }
 
-  static ERR_ALREADY_DELETED(recordId: number) {
+  static ERR_ALREADY_DELETED(recordId: string) {
     return new Error(`The record '${recordId}' is already deleted.`)
+  }
+
+  static ERR_INVALID_RECORD(recordId: string) {
+    return new Error(`The record '${recordId}' is invalid. Maybe incorrect id.`)
   }
 }

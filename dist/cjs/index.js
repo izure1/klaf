@@ -5,6 +5,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -27,6 +30,53 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// node_modules/node-fpe/lib/index.js
+var require_lib = __commonJS({
+  "node_modules/node-fpe/lib/index.js"(exports, module2) {
+    var crypto = require("crypto");
+    var digits = "1234567890".split("");
+    module2.exports = function({ secret, domain = digits }) {
+      if (!secret) {
+        throw new Error("`secret` is required");
+      }
+      function enc(text) {
+        return crypto.createHmac("sha256", secret).update(text).digest("hex");
+      }
+      const sorted = domain.map((c) => c).sort((c1, c2) => enc(c1).localeCompare(enc(c2)));
+      const encTable = {};
+      const decTable = {};
+      for (let i in domain) {
+        encTable[domain[i]] = sorted[i];
+        decTable[sorted[i]] = domain[i];
+      }
+      function validate(text, result) {
+        if (text.length !== result.length) {
+          throw new Error(
+            `some of the input characters are not in the cipher's domain: [${domain}]`
+          );
+        }
+      }
+      function encrypt(text) {
+        if (typeof text !== "string") {
+          throw new Error("input is not a string");
+        }
+        const encrypted = text.split("").map((c) => encTable[c]).join("");
+        validate(text, encrypted);
+        return encrypted;
+      }
+      function decrypt(text) {
+        if (typeof text !== "string") {
+          throw new Error("input is not a string");
+        }
+        const decrypted = text.split("").map((c) => decTable[c]).join("");
+        validate(text, decrypted);
+        return decrypted;
+      }
+      return { encrypt, decrypt };
+    };
+  }
+});
+
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
@@ -35,7 +85,7 @@ __export(src_exports, {
 module.exports = __toCommonJS(src_exports);
 
 // src/TissueRoll.ts
-var import_fs2 = __toESM(require("fs"));
+var import_node_fs2 = __toESM(require("node:fs"));
 
 // src/TextConverter.ts
 var TextConverter = class _TextConverter {
@@ -86,7 +136,7 @@ var IntegerConverter = class _IntegerConverter {
     for (let i = 0; i < array.length; i++) {
       view.setUint8(i, array[i]);
     }
-    return Number(view.getBigUint64(0));
+    return view.getBigUint64(0);
   }
   static ToArray8(num) {
     const view = _IntegerConverter.View8;
@@ -117,12 +167,22 @@ var IntegerConverter = class _IntegerConverter {
   }
   static ToArray64(num) {
     const view = _IntegerConverter.View64;
-    view.setBigUint64(0, BigInt(num));
+    view.setBigUint64(0, num);
     const array = [];
     for (let i = 0; i < 8; i++) {
       array.push(view.getUint8(i));
     }
     return array;
+  }
+};
+
+// src/Base64Helper.ts
+var Base64Helper = class {
+  static UrlSafeEncode(plain) {
+    return btoa(plain).replaceAll("+", "-").replaceAll("/", "_");
+  }
+  static UrlSafeDecode(base64) {
+    return atob(base64.replaceAll("-", "+").replaceAll("_", "/"));
   }
 };
 
@@ -140,10 +200,63 @@ var ErrorBuilder = class {
   static ERR_ALREADY_DELETED(recordId) {
     return new Error(`The record '${recordId}' is already deleted.`);
   }
+  static ERR_INVALID_RECORD(recordId) {
+    return new Error(`The record '${recordId}' is invalid. Maybe incorrect id.`);
+  }
+};
+
+// src/CryptoHelper.ts
+var import_node_crypto = require("node:crypto");
+var CryptoHelper = class {
+  static RandomBytes(size) {
+    return (0, import_node_crypto.getRandomValues)(new Uint8Array(size));
+  }
+  static EncryptAES256(text, secret) {
+    const iv = (0, import_node_crypto.randomBytes)(16);
+    const cipher = (0, import_node_crypto.createCipheriv)("aes-256-gcm", secret, iv);
+    const a = cipher.update(text, "utf8");
+    const b = cipher.final();
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([a, b]).toString("hex") + ":" + iv.toString("hex") + ":" + tag.toString("hex");
+  }
+  static DecryptAES256(text, secret) {
+    const [encryptedText, iv, tag] = text.split(":");
+    const decipher = (0, import_node_crypto.createDecipheriv)("aes-256-gcm", secret, Buffer.from(iv, "hex"));
+    decipher.setAuthTag(Buffer.from(tag, "hex"));
+    const a = decipher.update(encryptedText, "hex", "utf8");
+    const b = decipher.final("utf8");
+    return a + b;
+  }
+};
+
+// src/FpeBuilder.ts
+var import_node_fpe = __toESM(require_lib());
+var FpeBuilder = class {
+  _secret;
+  _domain;
+  static Base64UrlSafeDomain = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_".split("");
+  constructor() {
+    this._secret = "";
+    this._domain = [];
+  }
+  setSecretKey(secret) {
+    this._secret = secret;
+    return this;
+  }
+  setDomain(domain) {
+    this._domain = domain;
+    return this;
+  }
+  build() {
+    return (0, import_node_fpe.default)({
+      secret: this._secret,
+      domain: this._domain
+    });
+  }
 };
 
 // src/IterableView.ts
-var import_fs = __toESM(require("fs"));
+var import_node_fs = __toESM(require("node:fs"));
 var IterableView = class {
   static Read(array, start, length = array.length - start) {
     return array.slice(start, start + length);
@@ -166,11 +279,11 @@ var IterableView = class {
 };
 var FileView = class _FileView {
   static Size(fd) {
-    return import_fs.default.fstatSync(fd).size;
+    return import_node_fs.default.fstatSync(fd).size;
   }
   static Read(fd, start, length = _FileView.Size(fd) - start) {
     const buf = Buffer.alloc(length);
-    import_fs.default.readSync(fd, buf, 0, buf.length, start);
+    import_node_fs.default.readSync(fd, buf, 0, buf.length, start);
     return Array.from(buf);
   }
   static Update(fd, start, data) {
@@ -178,46 +291,50 @@ var FileView = class _FileView {
     const writable = Math.min(data.length, size - start);
     const chunk = data.slice(0, writable);
     const buf = Uint8Array.from(chunk);
-    import_fs.default.writeSync(fd, buf, 0, buf.length, start);
+    import_node_fs.default.writeSync(fd, buf, 0, buf.length, start);
     return chunk;
   }
   static Append(fd, data) {
     const buf = Uint8Array.from(data);
-    const pos = import_fs.default.fstatSync(fd).size;
-    import_fs.default.writeSync(fd, buf, 0, buf.length, pos);
+    const pos = import_node_fs.default.fstatSync(fd).size;
+    import_node_fs.default.writeSync(fd, buf, 0, buf.length, pos);
   }
 };
 
 // src/TissueRoll.ts
 var TissueRoll = class _TissueRoll {
-  static DB_VERSION = "1.0.0";
+  static DB_VERSION = "2.0.0";
   static DB_NAME = "TissueRoll";
   static RootValidStringOffset = 0;
   static RootValidStringSize = 10;
-  static RootMajorVersionOffset = 10;
+  static RootMajorVersionOffset = _TissueRoll.RootValidStringOffset + _TissueRoll.RootValidStringSize;
   static RootMajorVersionSize = 1;
-  static RootMinorVersionOffset = 11;
+  static RootMinorVersionOffset = _TissueRoll.RootMajorVersionOffset + _TissueRoll.RootMajorVersionSize;
   static RootMinorVersionSize = 1;
-  static RootPatchVersionOffset = 12;
+  static RootPatchVersionOffset = _TissueRoll.RootMinorVersionOffset + _TissueRoll.RootMinorVersionSize;
   static RootPatchVersionSize = 1;
-  static RootIndexOffset = 13;
+  static RootIndexOffset = _TissueRoll.RootPatchVersionOffset + _TissueRoll.RootPatchVersionSize;
   static RootIndexSize = 4;
-  static RootPayloadSizeOffset = 17;
+  static RootPayloadSizeOffset = _TissueRoll.RootIndexOffset + _TissueRoll.RootIndexSize;
   static RootPayloadSizeSize = 4;
-  static RootTimestampOffset = 21;
+  static RootTimestampOffset = _TissueRoll.RootPayloadSizeOffset + _TissueRoll.RootPayloadSizeSize;
   static RootTimestampSize = 8;
-  static RootChunkSize = 100;
+  static RootSecretKeyOffset = _TissueRoll.RootTimestampOffset + _TissueRoll.RootTimestampSize;
+  static RootSecretKeySize = 8;
+  static RootChunkSize = 200;
   static HeaderSize = 100;
   static CellSize = 4;
   static RecordHeaderSize = 40;
-  static RecordHeaderIndexSize = 8;
-  static RecordHeaderLengthSize = 4;
-  static RecordHeaderMaxLengthSize = 4;
-  static RecordHeaderDeletedSize = 1;
   static RecordHeaderIndexOffset = 0;
-  static RecordHeaderLengthOffset = 8;
-  static RecordHeaderMaxLengthOffset = 12;
-  static RecordHeaderDeletedOffset = 16;
+  static RecordHeaderIndexSize = 8;
+  static RecordHeaderSaltOffset = _TissueRoll.RecordHeaderIndexOffset + _TissueRoll.RecordHeaderIndexSize;
+  static RecordHeaderSaltSize = 4;
+  static RecordHeaderLengthOffset = _TissueRoll.RecordHeaderSaltOffset + _TissueRoll.RecordHeaderSaltSize;
+  static RecordHeaderLengthSize = 4;
+  static RecordHeaderMaxLengthOffset = _TissueRoll.RecordHeaderLengthOffset + _TissueRoll.RecordHeaderLengthSize;
+  static RecordHeaderMaxLengthSize = 4;
+  static RecordHeaderDeletedOffset = _TissueRoll.RecordHeaderMaxLengthOffset + _TissueRoll.RecordHeaderMaxLengthSize;
+  static RecordHeaderDeletedSize = 1;
   static UnknownType = 0;
   static InternalType = 1;
   static OverflowType = 2;
@@ -225,15 +342,13 @@ var TissueRoll = class _TissueRoll {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create(file, payloadSize = 1024, overwrite = false) {
-    if (import_fs2.default.existsSync(file) && !overwrite) {
+  static Create(file, payloadSize = 8192, overwrite = false) {
+    if (import_node_fs2.default.existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file);
     }
-    const fd = import_fs2.default.openSync(file, "w+");
-    const inst = new _TissueRoll(fd, payloadSize);
     const root = _TissueRoll.CreateIterable(_TissueRoll.RootChunkSize, 0);
     const {
       DB_VERSION,
@@ -243,20 +358,25 @@ var TissueRoll = class _TissueRoll {
       RootMinorVersionOffset,
       RootPatchVersionOffset,
       RootPayloadSizeOffset,
-      RootTimestampOffset
+      RootTimestampOffset,
+      RootSecretKeyOffset,
+      RootSecretKeySize
     } = _TissueRoll;
     const [
       majorVersion,
       minorVersion,
       patchVersion
     ] = DB_VERSION.split(".");
+    const secretKey = CryptoHelper.RandomBytes(RootSecretKeySize);
     IterableView.Update(root, RootValidStringOffset, TextConverter.ToArray(DB_NAME));
     IterableView.Update(root, RootMajorVersionOffset, IntegerConverter.ToArray8(Number(majorVersion)));
     IterableView.Update(root, RootMinorVersionOffset, IntegerConverter.ToArray8(Number(minorVersion)));
     IterableView.Update(root, RootPatchVersionOffset, IntegerConverter.ToArray8(Number(patchVersion)));
     IterableView.Update(root, RootPayloadSizeOffset, IntegerConverter.ToArray32(payloadSize));
-    IterableView.Update(root, RootTimestampOffset, IntegerConverter.ToArray64(Date.now()));
-    FileView.Append(inst.fd, root);
+    IterableView.Update(root, RootTimestampOffset, IntegerConverter.ToArray64(BigInt(Date.now())));
+    IterableView.Update(root, RootSecretKeyOffset, Array.from(secretKey));
+    import_node_fs2.default.writeFileSync(file, Buffer.from(root));
+    const inst = _TissueRoll.Open(file);
     inst._addEmptyPage({ type: _TissueRoll.InternalType });
     return inst;
   }
@@ -267,20 +387,22 @@ var TissueRoll = class _TissueRoll {
    * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `0`.
    */
   static Open(file, payloadSize = 0) {
-    if (!import_fs2.default.existsSync(file)) {
+    if (!import_node_fs2.default.existsSync(file)) {
       if (!payloadSize) {
         throw ErrorBuilder.ERR_DB_NO_EXISTS(file);
       } else {
         return _TissueRoll.Create(file, payloadSize);
       }
     }
-    const fd = import_fs2.default.openSync(file, "r+");
+    const fd = import_node_fs2.default.openSync(file, "r+");
     if (!_TissueRoll.CheckDBValid(fd)) {
-      import_fs2.default.closeSync(fd);
+      import_node_fs2.default.closeSync(fd);
       throw ErrorBuilder.ERR_DB_INVALID(file);
     }
     const root = _TissueRoll.ParseRootChunk(fd);
-    return new _TissueRoll(fd, root.payloadSize);
+    const secretBuf = Buffer.from(IntegerConverter.ToArray64(root.secretKey));
+    const secretKey = secretBuf.toString("base64");
+    return new _TissueRoll(fd, secretKey, root.payloadSize);
   }
   static ParseRootChunk(fd) {
     const rHeader = FileView.Read(fd, 0, _TissueRoll.RootChunkSize);
@@ -296,7 +418,9 @@ var TissueRoll = class _TissueRoll {
       RootPayloadSizeOffset,
       RootPayloadSizeSize,
       RootTimestampOffset,
-      RootTimestampSize
+      RootTimestampSize,
+      RootSecretKeyOffset,
+      RootSecretKeySize
     } = _TissueRoll;
     const majorVersion = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
@@ -316,12 +440,16 @@ var TissueRoll = class _TissueRoll {
     const timestamp = IntegerConverter.FromArray64(
       IterableView.Read(rHeader, RootTimestampOffset, RootTimestampSize)
     );
+    const secretKey = IntegerConverter.FromArray64(
+      IterableView.Read(rHeader, RootSecretKeyOffset, RootSecretKeySize)
+    );
     return {
       majorVersion,
       minorVersion,
       patchVersion,
       payloadSize,
       timestamp,
+      secretKey,
       index
     };
   }
@@ -341,15 +469,19 @@ var TissueRoll = class _TissueRoll {
   headerSize;
   payloadSize;
   fd;
-  constructor(fd, payloadSize) {
+  secretKey;
+  fpe;
+  constructor(fd, secretKey, payloadSize) {
     if (payloadSize < _TissueRoll.CellSize) {
-      import_fs2.default.closeSync(fd);
+      import_node_fs2.default.closeSync(fd);
       throw new Error(`The payload size is too small. It must be greater than ${_TissueRoll.CellSize}. But got a ${payloadSize}`);
     }
     this.chunkSize = _TissueRoll.HeaderSize + payloadSize;
     this.headerSize = _TissueRoll.HeaderSize;
     this.payloadSize = payloadSize;
     this.fd = fd;
+    this.secretKey = secretKey;
+    this.fpe = new FpeBuilder().setSecretKey(secretKey).setDomain(FpeBuilder.Base64UrlSafeDomain).build();
   }
   get root() {
     return _TissueRoll.ParseRootChunk(this.fd);
@@ -402,6 +534,9 @@ var TissueRoll = class _TissueRoll {
     const endOfPage = pagePos + this.chunkSize;
     return endOfPage - _TissueRoll.CellSize * order;
   }
+  _createSalt() {
+    return IntegerConverter.FromArray32(CryptoHelper.RandomBytes(4));
+  }
   _recordPosition(index, order) {
     const payloadPos = this._pagePayloadPosition(index);
     const cellPos = this._cellPosition(index, order);
@@ -413,30 +548,37 @@ var TissueRoll = class _TissueRoll {
     const start = this._pagePosition(index);
     return FileView.Read(this.fd, start, this.chunkSize);
   }
-  _recordId(index, order) {
-    const sIndex = index.toString().padStart(4, "0");
-    const sOrder = order.toString().padStart(4, "0");
-    return Number(`1${sIndex}${sOrder}`);
+  _recordId(index, order, salt) {
+    const sIndex = index.toString(16).padStart(4, "0");
+    const sOrder = order.toString(16).padStart(4, "0");
+    const sSalt = salt.toString(16).padStart(4, "0");
+    const base64 = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`);
+    return this.fpe.encrypt(base64);
+  }
+  _normalizeRecordId(recordId) {
+    const base64 = this.fpe.decrypt(recordId);
+    const plain = Base64Helper.UrlSafeDecode(base64);
+    const index = parseInt(plain.slice(0, 4), 16);
+    const order = parseInt(plain.slice(4, 8), 16);
+    const salt = parseInt(plain.slice(8, 12), 16);
+    return {
+      index,
+      order,
+      salt
+    };
   }
   _recordIdFromRaw(rawRecordId) {
     const index = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 0, 4));
     const order = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 4, 4));
-    return this._recordId(index, order);
-  }
-  _normalizeRecordId(recordId) {
-    const stringify = recordId.toString();
-    const index = Number(stringify.slice(1, 5));
-    const order = Number(stringify.slice(5, 9));
-    return {
-      index,
-      order
-    };
+    const salt = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 8, 4));
+    return this._recordId(index, order, salt);
   }
   _rawRecordId(recordId) {
-    const { index, order } = this._normalizeRecordId(recordId);
+    const { index, order, salt } = this._normalizeRecordId(recordId);
     return [
       ...IntegerConverter.ToArray32(index),
-      ...IntegerConverter.ToArray32(order)
+      ...IntegerConverter.ToArray32(order),
+      ...IntegerConverter.ToArray32(salt)
     ];
   }
   _createRecord(id, data) {
@@ -494,6 +636,13 @@ var TissueRoll = class _TissueRoll {
         _TissueRoll.RecordHeaderIndexSize
       )
     );
+    const salt = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        _TissueRoll.RecordHeaderSaltOffset,
+        _TissueRoll.RecordHeaderSaltSize
+      )
+    );
     const length = IntegerConverter.FromArray32(
       IterableView.Read(
         rawHeader,
@@ -517,6 +666,7 @@ var TissueRoll = class _TissueRoll {
     );
     const header = {
       index,
+      salt,
       length,
       maxLength,
       deleted
@@ -570,10 +720,13 @@ var TissueRoll = class _TissueRoll {
    * @param recordId The record id what you want pick.
    */
   pick(recordId) {
-    const { index, order } = this._normalizeRecordId(recordId);
+    const { index, order, salt } = this._normalizeRecordId(recordId);
     const page = this._normalizeHeader(this._getHeader(index));
     const rawRecord = this._getRecord(index, order);
     const record = this._normalizeRecord(rawRecord);
+    if (record.header.salt !== salt) {
+      throw ErrorBuilder.ERR_INVALID_RECORD(recordId);
+    }
     if (record.header.deleted) {
       throw ErrorBuilder.ERR_ALREADY_DELETED(recordId);
     }
@@ -608,7 +761,8 @@ var TissueRoll = class _TissueRoll {
   }
   _putJustOnePage(header, data) {
     const order = header.count + 1;
-    const recordId = this._recordId(header.index, order);
+    const salt = this._createSalt();
+    const recordId = this._recordId(header.index, order, salt);
     const record = this._createRecord(recordId, data);
     this._putPagePayload(header, record);
     const usage = _TissueRoll.RecordHeaderSize + _TissueRoll.CellSize + data.length;
@@ -639,7 +793,8 @@ var TissueRoll = class _TissueRoll {
       return this._putJustOnePage(header, data);
     }
     const order = header.count + 1;
-    const recordId = this._recordId(header.index, order);
+    const salt = this._createSalt();
+    const recordId = this._recordId(header.index, order, salt);
     const record = this._createRecord(recordId, data);
     const headIndex = index;
     for (let i = 0; i < count; i++) {
@@ -670,7 +825,7 @@ var TissueRoll = class _TissueRoll {
    * Shut down the database to close file input and output.
    */
   close() {
-    import_fs2.default.closeSync(this.fd);
+    import_node_fs2.default.closeSync(this.fd);
   }
   /**
    * You store data in the database and receive a record ID for the saved data. This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
@@ -715,8 +870,8 @@ var TissueRoll = class _TissueRoll {
    * @param recordId The record id what you want delete.
    */
   delete(recordId) {
-    const { index, order } = this._normalizeRecordId(recordId);
-    const pos = this._recordPosition(index, order) + _TissueRoll.RecordHeaderDeletedOffset;
+    const { page, order } = this.pick(recordId);
+    const pos = this._recordPosition(page.index, order) + _TissueRoll.RecordHeaderDeletedOffset;
     const buf = IntegerConverter.ToArray8(1);
     FileView.Update(this.fd, pos, buf);
   }
