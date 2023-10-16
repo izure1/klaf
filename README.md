@@ -76,33 +76,33 @@ If you pass an incorrect record ID, it may result in returning non-existent or c
 
 ## Why
 
-### Q. Why use `tissue-roll`?
+### Why use `tissue-roll`?
 
 JavaScript has numerous fantastic database libraries available, but at times, they can seem overly complex.  
 This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure. Or when it's annoying.
 
-### Q. Why should I use this instead of `JSON`?
+### Why should I use this instead of `JSON`?
 
 When the `JSON` files get large, quick data read and write operations can become challenging.  
 `tissue-roll` handles data input and output in real-time, ensuring fast and lightweight performance.
 
-### Q. Where can this be used?
+### Where can this be used?
 
 It can be used, for example, to create website URLs. You save a post and insert the obtained record ID into the URL address.
 
 ## How
 
-### Q. How does it differ from a `Map` object?
+### How does it differ from a `Map` object?
 
 The `Map` object is memory-based, while `tissue-roll` is file-based.
 
-### Q. How does `tissue-roll` work?
+### How does `tissue-roll` work?
 
 `tissue-roll` manages files by breaking them into blocks called pages. You can set the page size when creating the database.
 
 When you insert data, the ID you get back includes information about where the data is stored on the page. This makes it possible to work with large files quickly. This value could be seen by users, but it's encrypted to make it hard to predict. This way, it stops users from trying to steal data by requesting fake record IDs.
 
-### Q. How many can I own data?
+### How many can I own data?
 
 `tissue-roll` can make a unsigned 32bit range of page block. This is a `4,294,967,296`. And each page can own unsigned 32bit range of records also. So you can theoretically insert `4,294,967,296`*`4,294,967,296` records.
 

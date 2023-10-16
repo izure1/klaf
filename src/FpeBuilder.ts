@@ -4,8 +4,6 @@ export class FpeBuilder {
   private _secret: string
   private _domain: string[]
 
-  static readonly Base64UrlSafeDomain = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_'.split('')
-
   constructor() {
     this._secret = ''
     this._domain = []

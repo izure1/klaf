@@ -1,4 +1,6 @@
 export class Base64Helper {
+  static readonly UrlSafeDomain = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_'.split('')
+
   static UrlSafeEncode(plain: string): string {
     return btoa(plain).replaceAll('+', '-').replaceAll('/', '_')
   }

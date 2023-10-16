@@ -234,7 +234,7 @@ export class TissueRoll {
     this.secretKey    = secretKey
     this.fpe          = new FpeBuilder()
       .setSecretKey(secretKey)
-      .setDomain(FpeBuilder.Base64UrlSafeDomain)
+      .setDomain(Base64Helper.UrlSafeDomain)
       .build()
   }
 
