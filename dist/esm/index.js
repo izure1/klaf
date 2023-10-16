@@ -172,6 +172,8 @@ var IntegerConverter = class _IntegerConverter {
 
 // src/Base64Helper.ts
 var Base64Helper = class {
+  static UrlDomain = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=+/".split("");
+  static UrlSafeDomain = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_".split("");
   static UrlSafeEncode(plain) {
     return btoa(plain).replaceAll("+", "-").replaceAll("/", "_");
   }
@@ -228,7 +230,6 @@ var import_node_fpe = __toESM(require_lib());
 var FpeBuilder = class {
   _secret;
   _domain;
-  static Base64UrlSafeDomain = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_".split("");
   constructor() {
     this._secret = "";
     this._domain = [];
@@ -320,8 +321,10 @@ var TissueRoll = class _TissueRoll {
   static CellSize = 4;
   static RecordHeaderSize = 40;
   static RecordHeaderIndexOffset = 0;
-  static RecordHeaderIndexSize = 8;
-  static RecordHeaderSaltOffset = _TissueRoll.RecordHeaderIndexOffset + _TissueRoll.RecordHeaderIndexSize;
+  static RecordHeaderIndexSize = 4;
+  static RecordHeaderOrderOffset = _TissueRoll.RecordHeaderIndexOffset + _TissueRoll.RecordHeaderIndexSize;
+  static RecordHeaderOrderSize = 4;
+  static RecordHeaderSaltOffset = _TissueRoll.RecordHeaderOrderOffset + _TissueRoll.RecordHeaderOrderSize;
   static RecordHeaderSaltSize = 4;
   static RecordHeaderLengthOffset = _TissueRoll.RecordHeaderSaltOffset + _TissueRoll.RecordHeaderSaltSize;
   static RecordHeaderLengthSize = 4;
@@ -329,6 +332,12 @@ var TissueRoll = class _TissueRoll {
   static RecordHeaderMaxLengthSize = 4;
   static RecordHeaderDeletedOffset = _TissueRoll.RecordHeaderMaxLengthOffset + _TissueRoll.RecordHeaderMaxLengthSize;
   static RecordHeaderDeletedSize = 1;
+  static RecordHeaderAliasIndexOffset = _TissueRoll.RecordHeaderDeletedOffset + _TissueRoll.RecordHeaderDeletedSize;
+  static RecordHeaderAliasIndexSize = 4;
+  static RecordHeaderAliasOrderOffset = _TissueRoll.RecordHeaderAliasIndexOffset + _TissueRoll.RecordHeaderAliasIndexSize;
+  static RecordHeaderAliasOrderSize = 4;
+  static RecordHeaderAliasSaltOffset = _TissueRoll.RecordHeaderAliasOrderOffset + _TissueRoll.RecordHeaderAliasOrderSize;
+  static RecordHeaderAliasSaltSize = 4;
   static UnknownType = 0;
   static InternalType = 1;
   static OverflowType = 2;
@@ -475,7 +484,7 @@ var TissueRoll = class _TissueRoll {
     this.payloadSize = payloadSize;
     this.fd = fd;
     this.secretKey = secretKey;
-    this.fpe = new FpeBuilder().setSecretKey(secretKey).setDomain(FpeBuilder.Base64UrlSafeDomain).build();
+    this.fpe = new FpeBuilder().setSecretKey(secretKey).setDomain(Base64Helper.UrlSafeDomain).build();
   }
   get root() {
     return _TissueRoll.ParseRootChunk(this.fd);
@@ -543,29 +552,23 @@ var TissueRoll = class _TissueRoll {
     return FileView.Read(this.fd, start, this.chunkSize);
   }
   _recordId(index, order, salt) {
-    const sIndex = index.toString(16).padStart(4, "0");
-    const sOrder = order.toString(16).padStart(4, "0");
-    const sSalt = salt.toString(16).padStart(4, "0");
+    const sIndex = index.toString(16).padStart(8, "0");
+    const sOrder = order.toString(16).padStart(8, "0");
+    const sSalt = salt.toString(16).padStart(8, "0");
     const base64 = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`);
     return this.fpe.encrypt(base64);
   }
   _normalizeRecordId(recordId) {
     const base64 = this.fpe.decrypt(recordId);
     const plain = Base64Helper.UrlSafeDecode(base64);
-    const index = parseInt(plain.slice(0, 4), 16);
-    const order = parseInt(plain.slice(4, 8), 16);
-    const salt = parseInt(plain.slice(8, 12), 16);
+    const index = parseInt(plain.slice(0, 8), 16);
+    const order = parseInt(plain.slice(8, 16), 16);
+    const salt = parseInt(plain.slice(16, 24), 16);
     return {
       index,
       order,
       salt
     };
-  }
-  _recordIdFromRaw(rawRecordId) {
-    const index = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 0, 4));
-    const order = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 4, 4));
-    const salt = IntegerConverter.FromArray32(IterableView.Read(rawRecordId, 8, 4));
-    return this._recordId(index, order, salt);
   }
   _rawRecordId(recordId) {
     const { index, order, salt } = this._normalizeRecordId(recordId);
@@ -623,11 +626,18 @@ var TissueRoll = class _TissueRoll {
   _normalizeRecord(record) {
     const rawHeader = IterableView.Read(record, 0, _TissueRoll.RecordHeaderSize);
     const rawPayload = IterableView.Read(record, _TissueRoll.RecordHeaderSize);
-    const index = this._recordIdFromRaw(
+    const index = IntegerConverter.FromArray32(
       IterableView.Read(
         rawHeader,
         _TissueRoll.RecordHeaderIndexOffset,
         _TissueRoll.RecordHeaderIndexSize
+      )
+    );
+    const order = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        _TissueRoll.RecordHeaderOrderOffset,
+        _TissueRoll.RecordHeaderOrderSize
       )
     );
     const salt = IntegerConverter.FromArray32(
@@ -658,9 +668,38 @@ var TissueRoll = class _TissueRoll {
         _TissueRoll.RecordHeaderDeletedSize
       )
     );
+    const aliasIndex = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        _TissueRoll.RecordHeaderAliasIndexOffset,
+        _TissueRoll.RecordHeaderAliasIndexSize
+      )
+    );
+    const aliasOrder = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        _TissueRoll.RecordHeaderAliasOrderOffset,
+        _TissueRoll.RecordHeaderAliasOrderSize
+      )
+    );
+    const aliasSalt = IntegerConverter.FromArray32(
+      IterableView.Read(
+        rawHeader,
+        _TissueRoll.RecordHeaderAliasSaltOffset,
+        _TissueRoll.RecordHeaderAliasSaltSize
+      )
+    );
+    const id = this._recordId(index, order, salt);
+    const aliasId = this._recordId(aliasIndex, aliasOrder, aliasSalt);
     const header = {
+      id,
+      aliasId,
       index,
+      order,
       salt,
+      aliasIndex,
+      aliasOrder,
+      aliasSalt,
       length,
       maxLength,
       deleted
@@ -707,17 +746,14 @@ var TissueRoll = class _TissueRoll {
     }
     return index;
   }
-  /**
-   * Get record from database with a id.  
-   * Don't pass an incorrect record ID. This does not ensure the validity of the record.
-   * If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
-   * @param recordId The record id what you want pick.
-   */
-  pick(recordId) {
+  pickRecord(recordId, includeUpdated) {
     const { index, order, salt } = this._normalizeRecordId(recordId);
     const page = this._normalizeHeader(this._getHeader(index));
     const rawRecord = this._getRecord(index, order);
     const record = this._normalizeRecord(rawRecord);
+    if (includeUpdated && record.header.aliasIndex && record.header.aliasOrder) {
+      return this.pickRecord(record.header.aliasId, false);
+    }
     if (record.header.salt !== salt) {
       throw ErrorBuilder.ERR_INVALID_RECORD(recordId);
     }
@@ -729,6 +765,15 @@ var TissueRoll = class _TissueRoll {
       record,
       order
     };
+  }
+  /**
+   * Get record from database with a id.  
+   * Don't pass an incorrect record ID. This does not ensure the validity of the record.
+   * If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
+   * @param recordId The record id what you want pick.
+   */
+  pick(recordId) {
+    return this.pickRecord(recordId, true);
   }
   _putPageHead(header) {
     const pos = this._pagePosition(header.index);
@@ -831,43 +876,75 @@ var TissueRoll = class _TissueRoll {
     return this._put(rData);
   }
   /**
-   * You can update an existing record.  
-   * If the new data is smaller, it replaces the old one. If it's larger, a new record is created, and you get its ID. In this case, the old record is deleted and can't be used anymore.
+   * You update an existing record.
+   * 
+   * If the inserted data is shorter than the previous data, the existing record is updated.
+   * Conversely, if the new data is longer, a new record is created.
+   * 
+   * These newly created records are called `alias record`, and when you call the `pick` method using the current record ID, the alias record is retrieved.
+   * If an alias record existed previously, the existing alias record is deleted and can no longer be used.
    * @param recordId The record id what you want update.
    * @param data The data string what you want update.
-   * @returns The updated record id.
+   * @returns The record id.
    */
   update(recordId, data) {
     const payload = TextConverter.ToArray(data);
-    const prev = this.pick(recordId);
-    if (prev.record.header.deleted) {
+    const before = this.pickRecord(recordId, false);
+    if (before.record.header.deleted) {
       throw ErrorBuilder.ERR_ALREADY_DELETED(recordId);
     }
-    if (prev.record.header.maxLength < payload.length) {
-      this.delete(recordId);
-      return this._put(payload);
-    }
-    const pos = this._recordPosition(prev.page.index, prev.order);
+    const pos = this._recordPosition(before.page.index, before.order);
     const len = IntegerConverter.ToArray32(payload.length);
+    if (before.record.header.maxLength < payload.length) {
+      const afterRecordId = this._put(payload);
+      const { index, order, salt } = this._normalizeRecordId(afterRecordId);
+      if (before.record.header.aliasIndex && before.record.header.aliasOrder) {
+        this._delete(
+          before.record.header.aliasIndex,
+          before.record.header.aliasOrder
+        );
+      }
+      const updatedRawHeader = [...before.record.rawHeader];
+      IterableView.Update(
+        updatedRawHeader,
+        _TissueRoll.RecordHeaderAliasIndexOffset,
+        IntegerConverter.ToArray32(index)
+      );
+      IterableView.Update(
+        updatedRawHeader,
+        _TissueRoll.RecordHeaderAliasOrderOffset,
+        IntegerConverter.ToArray32(order)
+      );
+      IterableView.Update(
+        updatedRawHeader,
+        _TissueRoll.RecordHeaderAliasSaltOffset,
+        IntegerConverter.ToArray32(salt)
+      );
+      FileView.Update(this.fd, pos, updatedRawHeader);
+      return recordId;
+    }
     IterableView.Ensure(
-      prev.record.rawRecord,
+      before.record.rawRecord,
       _TissueRoll.RecordHeaderSize + payload.length,
       0
     );
-    IterableView.Update(prev.record.rawRecord, _TissueRoll.RecordHeaderLengthOffset, len);
-    IterableView.Update(prev.record.rawRecord, _TissueRoll.RecordHeaderSize, payload);
-    FileView.Update(this.fd, pos, prev.record.rawRecord);
+    IterableView.Update(before.record.rawRecord, _TissueRoll.RecordHeaderLengthOffset, len);
+    IterableView.Update(before.record.rawRecord, _TissueRoll.RecordHeaderSize, payload);
+    FileView.Update(this.fd, pos, before.record.rawRecord);
     return recordId;
+  }
+  _delete(index, order) {
+    const pos = this._recordPosition(index, order) + _TissueRoll.RecordHeaderDeletedOffset;
+    const buf = IntegerConverter.ToArray8(1);
+    FileView.Update(this.fd, pos, buf);
   }
   /**
    * You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
    * @param recordId The record id what you want delete.
    */
   delete(recordId) {
-    const { page, order } = this.pick(recordId);
-    const pos = this._recordPosition(page.index, order) + _TissueRoll.RecordHeaderDeletedOffset;
-    const buf = IntegerConverter.ToArray8(1);
-    FileView.Update(this.fd, pos, buf);
+    const { page, order } = this.pickRecord(recordId, false);
+    this._delete(page.index, order);
   }
 };
 export {

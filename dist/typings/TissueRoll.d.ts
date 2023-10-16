@@ -40,6 +40,8 @@ export declare class TissueRoll {
     protected static RecordHeaderSize: number;
     protected static RecordHeaderIndexOffset: number;
     protected static RecordHeaderIndexSize: number;
+    protected static RecordHeaderOrderOffset: number;
+    protected static RecordHeaderOrderSize: number;
     protected static RecordHeaderSaltOffset: number;
     protected static RecordHeaderSaltSize: number;
     protected static RecordHeaderLengthOffset: number;
@@ -48,6 +50,12 @@ export declare class TissueRoll {
     protected static RecordHeaderMaxLengthSize: number;
     protected static RecordHeaderDeletedOffset: number;
     protected static RecordHeaderDeletedSize: number;
+    protected static RecordHeaderAliasIndexOffset: number;
+    protected static RecordHeaderAliasIndexSize: number;
+    protected static RecordHeaderAliasOrderOffset: number;
+    protected static RecordHeaderAliasOrderSize: number;
+    protected static RecordHeaderAliasSaltOffset: number;
+    protected static RecordHeaderAliasSaltSize: number;
     protected static UnknownType: number;
     protected static InternalType: number;
     protected static OverflowType: number;
@@ -89,7 +97,6 @@ export declare class TissueRoll {
     private _get;
     private _recordId;
     private _normalizeRecordId;
-    private _recordIdFromRaw;
     private _rawRecordId;
     private _createRecord;
     private _createCell;
@@ -98,6 +105,11 @@ export declare class TissueRoll {
     private _getHeader;
     private _normalizeHeader;
     private _getHeadPageIndex;
+    protected pickRecord(recordId: string, includeUpdated: boolean): {
+        page: ReturnType<TissueRoll['_normalizeHeader']>;
+        record: ReturnType<TissueRoll['_normalizeRecord']>;
+        order: number;
+    };
     /**
      * Get record from database with a id.
      * Don't pass an incorrect record ID. This does not ensure the validity of the record.
@@ -111,8 +123,14 @@ export declare class TissueRoll {
             rawHeader: number[];
             rawPayload: number[];
             header: {
-                index: string;
+                id: string;
+                aliasId: string;
+                index: number;
+                order: number;
                 salt: number;
+                aliasIndex: number;
+                aliasOrder: number;
+                aliasSalt: number;
                 length: number;
                 maxLength: number;
                 deleted: number;
@@ -136,13 +154,19 @@ export declare class TissueRoll {
      */
     put(data: string): string;
     /**
-     * You can update an existing record.
-     * If the new data is smaller, it replaces the old one. If it's larger, a new record is created, and you get its ID. In this case, the old record is deleted and can't be used anymore.
+     * You update an existing record.
+     *
+     * If the inserted data is shorter than the previous data, the existing record is updated.
+     * Conversely, if the new data is longer, a new record is created.
+     *
+     * These newly created records are called `alias record`, and when you call the `pick` method using the current record ID, the alias record is retrieved.
+     * If an alias record existed previously, the existing alias record is deleted and can no longer be used.
      * @param recordId The record id what you want update.
      * @param data The data string what you want update.
-     * @returns The updated record id.
+     * @returns The record id.
      */
     update(recordId: string, data: string): string;
+    private _delete;
     /**
      * You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
      * @param recordId The record id what you want delete.

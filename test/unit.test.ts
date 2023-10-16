@@ -63,9 +63,8 @@ describe('Record test', () => {
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
 
-    let id: string
-    id = db.put(content)
-    id = db.update(id, longerContent)
+    const id = db.put(content)
+    db.update(id, longerContent)
 
     const res = db.pick(id)
     expect(res.record.payload).toBe(longerContent)
