@@ -806,4 +806,17 @@ export class TissueRoll {
     const { page, order } = this.pickRecord(recordId, false)
     this._delete(page.index, order)
   }
+
+  /**
+   * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns false.
+   * @param recordId The record id what you want verify.
+   */
+  exists(recordId: string): boolean {
+    try {
+      this.pickRecord(recordId, false)
+      return true
+    } catch (e) {
+      return false
+    }
+  }
 }
