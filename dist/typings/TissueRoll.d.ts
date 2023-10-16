@@ -172,5 +172,10 @@ export declare class TissueRoll {
      * @param recordId The record id what you want delete.
      */
     delete(recordId: string): void;
+    /**
+     * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns false.
+     * @param recordId The record id what you want verify.
+     */
+    exists(recordId: string): boolean;
 }
 export {};

@@ -86,4 +86,12 @@ describe('Record test', () => {
     expect(() => db.update(invalidId, 'test')).toThrow()
     expect(() => db.delete(invalidId)).toThrow()
   })
+
+  test('exists', () => {
+    const correctId = db.put('test')
+    const invalidId = correctId+'1'
+
+    expect(db.exists(correctId)).toBe(true)
+    expect(db.exists(invalidId)).toBe(false)
+  })
 })
