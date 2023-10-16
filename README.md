@@ -79,6 +79,10 @@ Get record from database with a id.
 Don't pass an incorrect record ID. This does not ensure the validity of the record.
 If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
 
+#### exists(recordId: `string`): `boolean`
+
+It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
+
 ## Why
 
 ### Why use `tissue-roll`?
