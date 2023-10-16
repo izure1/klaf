@@ -61,8 +61,13 @@ You store data in the database and receive a record ID for the saved data. This 
 
 #### update(recordId: `string`, data: `string`): `string`
 
-You can update an existing record.  
-If the new data is smaller, it replaces the old one. If it's larger, a new record is created, and you get its ID. In this case, the old record is deleted and can't be used anymore.
+You update an existing record.
+
+If the inserted data is shorter than the previous data, the existing record is updated.
+Conversely, if the new data is longer, a new record is created.
+
+These newly created records are called `alias record`, and when you call the `pick` method using the current record ID, the alias record is retrieved.
+If an alias record existed previously, the existing alias record is deleted and can no longer be used.
 
 #### delete(recordId: `string`): `void`
 
@@ -104,7 +109,7 @@ When you insert data, the ID you get back includes information about where the d
 
 ### How many can I own data?
 
-`tissue-roll` can make a unsigned 32bit range of page block. This is a `4,294,967,296`. And each page can own unsigned 32bit range of records also. So you can theoretically insert `4,294,967,296`*`4,294,967,296` records.
+`tissue-roll` can make a unsigned 32bit range of page block. This is a `4,294,967,296`. And each page can own unsigned 32bit range of records also. So you can theoretically insert `4,294,967,295`*`4,294,967,295` records.
 
 ## Performance Test
 
