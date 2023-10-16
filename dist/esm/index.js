@@ -947,7 +947,7 @@ var TissueRoll = class _TissueRoll {
     this._delete(page.index, order);
   }
   /**
-   * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns false.
+   * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
    * @param recordId The record id what you want verify.
    */
   exists(recordId) {
