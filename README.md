@@ -34,55 +34,6 @@ db.pick(updatedId) // Error! The record was destroyed.
 db.close()
 ```
 
-## Install
-
-|Site|Link|
-|---|---|
-|**NPM**|[View](https://www.npmjs.com/package/tissue-roll)|
-|**Github**|[View](https://github.com/izure1/tissue-roll)|
-
-## API
-
-### Static Functions
-
-#### TissueRoll.Create(file: `string`, payloadSize = `8192`, overwrite = `false`): `TissueRoll`
-
-It creates a new database file.
-
-#### TissueRoll.Open(file: `string`, payloadSize = `0`): `TissueRoll`
-
-It opens or creates a database file at the specified path. If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one.
-
-### Methods
-
-#### put(data: `string`): `number`
-
-You store data in the database and receive a record ID for the saved data. This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
-
-#### update(recordId: `string`, data: `string`): `string`
-
-You update an existing record.
-
-If the inserted data is shorter than the previous data, the existing record is updated.
-Conversely, if the new data is longer, a new record is created.
-
-These newly created records are called `alias record`, and when you call the `pick` method using the current record ID, the alias record is retrieved.
-If an alias record existed previously, the existing alias record is deleted and can no longer be used.
-
-#### delete(recordId: `string`): `void`
-
-You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
-
-#### pick(recordId: `string`): `RecordInformation`
-
-Get record from database with a id.  
-Don't pass an incorrect record ID. This does not ensure the validity of the record.
-If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
-
-#### exists(recordId: `string`): `boolean`
-
-It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
-
 ## Why
 
 ### Why use `tissue-roll`?
@@ -93,7 +44,7 @@ This particular solution is ideal for situations where you need to store data fo
 ### Why should I use this instead of `JSON`?
 
 When the `JSON` files get large, quick data read and write operations can become challenging.  
-`tissue-roll` handles data input and output in real-time, ensuring fast and lightweight performance.
+`tissue-roll` handles data input and output in real-time, ensuring fast and lightweight performance. Check the performance tests below.
 
 ### Where can this be used?
 
@@ -150,6 +101,55 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 ![READ](./docs/asset/image/svg_perf_read.svg)
 
 **NOTICE!** *This is the usual case, but the results can be different depending on programming optimizations.*
+
+## Install
+
+|Site|Link|
+|---|---|
+|**NPM**|[View](https://www.npmjs.com/package/tissue-roll)|
+|**Github**|[View](https://github.com/izure1/tissue-roll)|
+
+## API
+
+### Static Functions
+
+#### TissueRoll.Create(file: `string`, payloadSize = `8192`, overwrite = `false`): `TissueRoll`
+
+It creates a new database file.
+
+#### TissueRoll.Open(file: `string`, payloadSize = `0`): `TissueRoll`
+
+It opens or creates a database file at the specified path. If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one.
+
+### Methods
+
+#### put(data: `string`): `string`
+
+You store data in the database and receive a record ID for the saved data. This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
+
+#### update(recordId: `string`, data: `string`): `string`
+
+You update an existing record.
+
+If the inserted data is shorter than the previous data, the existing record is updated.
+Conversely, if the new data is longer, a new record is created.
+
+These newly created records are called `alias record`, and when you call the `pick` method using the current record ID, the alias record is retrieved.
+If an alias record existed previously, the existing alias record is deleted and can no longer be used.
+
+#### delete(recordId: `string`): `void`
+
+You delete a record from the database, but it's not completely erased from the file. The record becomes unusable.
+
+#### pick(recordId: `string`): `RecordInformation`
+
+Get record from database with a id.  
+Don't pass an incorrect record ID. This does not ensure the validity of the record.
+If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
+
+#### exists(recordId: `string`): `boolean`
+
+It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
 
 ## License
 
