@@ -105,7 +105,7 @@ export declare class TissueRoll {
     private _getHeader;
     private _normalizeHeader;
     private _getHeadPageIndex;
-    protected pickRecord(recordId: string, includeUpdated: boolean): {
+    protected pickRecord(recordId: string, recursiveAlias: boolean): {
         page: ReturnType<TissueRoll['_normalizeHeader']>;
         record: ReturnType<TissueRoll['_normalizeRecord']>;
         order: number;
@@ -139,7 +139,7 @@ export declare class TissueRoll {
         };
         order: number;
     };
-    private _putPageHead;
+    private _putPageHeader;
     private _putPagePayload;
     private _putJustOnePage;
     private _put;

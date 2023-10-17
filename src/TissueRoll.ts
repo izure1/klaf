@@ -550,7 +550,7 @@ export class TissueRoll {
     return index
   }
 
-  protected pickRecord(recordId: string, includeUpdated: boolean): {
+  protected pickRecord(recordId: string, recursiveAlias: boolean): {
     page: ReturnType<TissueRoll['_normalizeHeader']>
     record: ReturnType<TissueRoll['_normalizeRecord']>
     order: number
@@ -561,8 +561,8 @@ export class TissueRoll {
     const rawRecord = this._getRecord(index, order)
     const record    = this._normalizeRecord(rawRecord)
     
-    if (includeUpdated && record.header.aliasIndex && record.header.aliasOrder) {
-      return this.pickRecord(record.header.aliasId, false)
+    if (recursiveAlias && record.header.aliasIndex && record.header.aliasOrder) {
+      return this.pickRecord(record.header.aliasId, recursiveAlias)
     }
 
     if (record.header.salt !== salt) {
@@ -590,29 +590,27 @@ export class TissueRoll {
     return this.pickRecord(recordId, true)
   }
 
-  private _putPageHead(header: IPageHeader): void {
+  private _putPageHeader(header: IPageHeader): void {
     const pos = this._pagePosition(header.index)
     const rHeader = this._createEmptyHeader(header)
     FileView.Update(this.fd, pos, rHeader)
   }
 
-  private _putPagePayload(header: IPageHeader, record: number[]): void {
-    const payloadPos = this._pagePayloadPosition(header.index)
-    let recordPos = payloadPos
-    if (header.count) {
-      const prevOrder         = header.count
-      const prevRawRecord     = this._getRecord(header.index, prevOrder)
-      const prevRecord        = this._normalizeRecord(prevRawRecord)
-      const prevRecordPos     = this._recordPosition(header.index, prevOrder)
-      const prevRecordLength  = prevRecord.header.length
-      recordPos = prevRecordPos+TissueRoll.RecordHeaderSize+prevRecordLength
-    }
-    
-    const order = header.count+1
-    const cellPos = this._cellPosition(header.index, order)
+  private _putPagePayload(index: number, order: number, record: number[]): void {
+    const payloadPos  = this._pagePayloadPosition(index)
+    const prevOrder   = order-1
 
-    const recordOffset = recordPos-payloadPos
-    const cell = this._createCell(recordOffset)
+    let recordPos
+    if (order > 1) {
+      const prevRecord  = this._normalizeRecord(this._getRecord(index, prevOrder))
+      recordPos         = this._recordPosition(index, prevOrder)+prevRecord.rawRecord.length
+    }
+    else {
+      recordPos = payloadPos
+    }
+
+    const cellPos = this._cellPosition(index, order)
+    const cell    = this._createCell(recordPos-payloadPos)
 
     // update payload
     FileView.Update(this.fd, recordPos, record)
@@ -621,17 +619,16 @@ export class TissueRoll {
   }
 
   private _putJustOnePage(header: IPageHeader, data: number[]): string {
-    const order     = header.count+1
     const salt      = this._createSalt()
-    const recordId  = this._recordId(header.index, order, salt)
+    const recordId  = this._recordId(header.index, header.count+1, salt)
     const record    = this._createRecord(recordId, data)
 
-    this._putPagePayload(header, record)
+    this._putPagePayload(header.index, header.count+1, record)
     
     const usage = TissueRoll.RecordHeaderSize+TissueRoll.CellSize+data.length
     header.count += 1
     header.free -= usage
-    this._putPageHead(header)
+    this._putPageHeader(header)
 
     return recordId
   }
@@ -664,7 +661,7 @@ export class TissueRoll {
     }
     
     const chunkSize = this.payloadSize-TissueRoll.CellSize
-    let count = Math.ceil(recordSize/chunkSize)
+    const count = Math.ceil(recordSize/chunkSize)
     
     // 한 페이지에 삽입이 가능할 경우, Internal 타입으로 생성되어야 하며, 삽입 후 종료되어야 합니다.
     if (count === 1) {
@@ -673,11 +670,10 @@ export class TissueRoll {
     
     // Overflow 타입의 페이지입니다.
     // 다음 삽입 시 무조건 새로운 페이지를 만들어야하므로, free, count 값이 고정됩니다.
-    const order       = header.count+1
-    const salt        = this._createSalt()
-    const recordId    = this._recordId(header.index, order, salt)
-    const record      = this._createRecord(recordId, data)
-    const headIndex   = index
+    const salt      = this._createSalt()
+    const recordId  = this._recordId(header.index, header.count+1, salt)
+    const record    = this._createRecord(recordId, data)
+    const headIndex = index
 
     for (let i = 0; i < count; i++) {
       const last = i === count-1
@@ -685,7 +681,7 @@ export class TissueRoll {
       const chunk = IterableView.Read(record, start, chunkSize)
       
       const currentHeader = this._normalizeHeader(this._getHeader(index))
-      this._putPagePayload(currentHeader, chunk)
+      this._putPagePayload(currentHeader.index, currentHeader.count+1, chunk)
       
       if (!last) {
         index = this._addEmptyPage({ type: TissueRoll.OverflowType })
@@ -693,16 +689,17 @@ export class TissueRoll {
       currentHeader.type = TissueRoll.OverflowType
       currentHeader.free = 0
       currentHeader.next = index
+      currentHeader.count += 1
       if (last) {
         currentHeader.next = 0
       }
-      this._putPageHead(currentHeader)
+      this._putPageHeader(currentHeader)
     }
     const headHeader = this._normalizeHeader(this._getHeader(headIndex))
     headHeader.type = TissueRoll.InternalType
     headHeader.count = 1
     headHeader.free = 0
-    this._putPageHead(headHeader)
+    this._putPageHeader(headHeader)
 
     return recordId
   }
@@ -738,55 +735,73 @@ export class TissueRoll {
    */
   update(recordId: string, data: string): string {
     const payload = TextConverter.ToArray(data)
-    const before = this.pickRecord(recordId, false)
+    const payloadLen = IntegerConverter.ToArray32(payload.length)
+    const head = this.pickRecord(recordId, false)
+    const tail = this.pickRecord(recordId, true)
 
-    if (before.record.header.deleted) {
+    if (tail.record.header.deleted) {
       throw ErrorBuilder.ERR_ALREADY_DELETED(recordId)
     }
     
-    const pos = this._recordPosition(before.page.index, before.order)
-    const len = IntegerConverter.ToArray32(payload.length)
-
-    if (before.record.header.maxLength < payload.length) {
+    // 최근 업데이트 레코드보다 크기가 큰 값이 들어왔을 경우 새롭게 생성해야 합니다.
+    // 최근 업데이트 레코드는 무조건 기존의 레코드보다 길이가 깁니다.
+    if (tail.record.header.maxLength < payload.length) {
       const afterRecordId = this._put(payload)
       const { index, order, salt } = this._normalizeRecordId(afterRecordId)
-
-      if (before.record.header.aliasIndex && before.record.header.aliasOrder) {
+      
+      if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
         this._delete(
-          before.record.header.aliasIndex,
-          before.record.header.aliasOrder
+          tail.record.header.aliasIndex,
+          tail.record.header.aliasOrder
         )
       }
-
-      const updatedRawHeader = [...before.record.rawHeader]
+      
+      // update head record's header
+      const headPos = this._recordPosition(head.page.index, head.order)
       IterableView.Update(
-        updatedRawHeader,
+        head.record.rawHeader,
         TissueRoll.RecordHeaderAliasIndexOffset,
         IntegerConverter.ToArray32(index)
       )
       IterableView.Update(
-        updatedRawHeader,
+        head.record.rawHeader,
         TissueRoll.RecordHeaderAliasOrderOffset,
         IntegerConverter.ToArray32(order)
       )
       IterableView.Update(
-        updatedRawHeader,
+        head.record.rawHeader,
         TissueRoll.RecordHeaderAliasSaltOffset,
         IntegerConverter.ToArray32(salt)
       )
-      FileView.Update(this.fd, pos, updatedRawHeader)
+      FileView.Update(this.fd, headPos, head.record.rawHeader)
 
       return recordId
     }
 
-    IterableView.Ensure(
-      before.record.rawRecord,
-      TissueRoll.RecordHeaderSize+payload.length,
-      0
-    )
-    IterableView.Update(before.record.rawRecord, TissueRoll.RecordHeaderLengthOffset, len)
-    IterableView.Update(before.record.rawRecord, TissueRoll.RecordHeaderSize, payload)
-    FileView.Update(this.fd, pos, before.record.rawRecord)
+    // 기존의 레코드보다 짧을 경우엔 덮어쓰기합니다
+    const rawRecord = TissueRoll.CreateIterable(TissueRoll.RecordHeaderSize+payload.length, 0)
+    IterableView.Update(rawRecord, 0, tail.record.rawHeader)
+
+    const chunkSize = this.payloadSize-TissueRoll.CellSize
+    const count = Math.ceil(rawRecord.length/chunkSize)
+
+    // 업데이트할 레코드를 데이터 크기에 맞추어 새롭게 생성한 뒤
+    IterableView.Update(rawRecord, TissueRoll.RecordHeaderLengthOffset, payloadLen)
+    IterableView.Update(rawRecord, TissueRoll.RecordHeaderSize, payload)
+
+    // 각 페이지에 맞추어 재삽입합니다
+    let index = tail.page.index
+    let order = tail.order
+
+    for (let i = 0; i < count; i++) {
+      const start = i*chunkSize
+      const chunk = IterableView.Read(rawRecord, start, chunkSize)
+      this._putPagePayload(index, order, chunk)
+
+      const page = this._normalizeHeader(this._getHeader(index))
+      index = page.next
+      order = 1
+    }
     
     return recordId
   }

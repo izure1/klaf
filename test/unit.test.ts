@@ -63,20 +63,32 @@ describe('Record test', () => {
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
     const longerContent2 = longerContent+'1'
-    const shorterContent = 'token'
+    const shorterContent = 'shorter token'
+    const longerContent3 = longerContent+'2'
+    const longestContent = longerContent3.repeat(2)
 
     const id = db.put(content)
-    db.update(id, longerContent)
 
-    const res = db.pick(id)
-    expect(res.record.payload).toBe(longerContent)
-    expect(res.record.header.maxLength).toBe(longerContent.length)
+    db.update(id, longerContent)
+    const res1 = db.pick(id)
+    expect(res1.record.payload).toBe(longerContent)
+    expect(res1.record.header.maxLength).toBe(longerContent.length)
 
     db.update(id, longerContent2)
-    expect(db.pick(id).record.payload).toBe(longerContent2)
+    const res2 = db.pick(id)
+    expect(res2.record.payload).toBe(longerContent2)
     
     db.update(id, shorterContent)
-    expect(db.pick(id).record.payload).toBe(shorterContent)
+    const res3 = db.pick(id)
+    expect(res3.record.payload).toBe(shorterContent)
+    
+    db.update(id, longerContent3)
+    const res4 = db.pick(id)
+    expect(res4.record.payload).toBe(longerContent3)
+
+    db.update(id, longestContent)
+    const res5 = db.pick(id)
+    expect(res5.record.payload).toBe(longestContent)
   })
 
   test('delete', () => {
