@@ -1,1 +1,0 @@
-export { TissueRoll } from './TissueRoll';
