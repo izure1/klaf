@@ -33,6 +33,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
+    "hookall": "^2.0.2",
     "node-fpe": "^2.0.2"
   }
 }

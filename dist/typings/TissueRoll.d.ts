@@ -1,4 +1,5 @@
 import type { FpeCipher } from 'node-fpe';
+import type { IHookallSync } from 'hookall';
 type IPageHeader = {
     type: number;
     index: number;
@@ -14,6 +15,15 @@ type IRootHeader = {
     timestamp: bigint;
     secretKey: bigint;
     index: number;
+};
+type IHookerRecordInformation = {
+    recordId: string;
+    data: string;
+};
+type IHooker = {
+    put: (data: string) => string;
+    update: (information: IHookerRecordInformation) => IHookerRecordInformation;
+    delete: (recordId: string) => string;
 };
 export declare class TissueRoll {
     protected static DB_VERSION: string;
@@ -83,6 +93,7 @@ export declare class TissueRoll {
     protected readonly fd: number;
     protected readonly secretKey: string;
     protected readonly fpe: FpeCipher;
+    protected readonly hooker: IHookallSync<IHooker>;
     protected constructor(fd: number, secretKey: string, payloadSize: number);
     get root(): IRootHeader;
     private _createEmptyHeader;
@@ -177,5 +188,137 @@ export declare class TissueRoll {
      * @param recordId The record id what you want verify.
      */
     exists(recordId: string): boolean;
+    /**
+     * Hook into the database for pre-processing before put data.
+     * The callback function receives the input data, and the value returned by this callback function is what actually puts into the database.
+     *
+     * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the data returned by the previous one as a parameter.
+     * @param command Only "put"
+     * @param callback The pre-processing callback function. This function must return the string that you want to put into the database.
+     */
+    onBefore(command: 'put', callback: (data: string) => string): this;
+    /**
+     * Hook into the database for pre-processing before updating data.
+     * The callback function receives the record ID and the data to be updated. The data returned by this callback function, along with the record ID, is what is actually used to update the database.
+     *
+     * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the data and record ID returned by the previous one as parameters.
+     * @param command Only "update"
+     * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
+     */
+    onBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * Hook into the database for pre-processing before deleting a record.
+     * The callback function receives the ID of the record to be deleted. The record ID returned by this callback function is what is actually used to delete the record from the database.
+     *
+     * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the record ID returned by the previous one as a parameter.
+     * @param command Only "delete"
+     * @param callback The pre-processing callback function. This function must return the record ID that you want to delete from the database.
+     */
+    onBefore(command: 'delete', callback: (recordId: string) => string): this;
+    /**
+     * Hook into the database after put a data.
+     * The callback function receives the newly created record ID.
+     *
+     * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the value returned by the previous one as a parameter.
+     * @param command Only "put"
+     * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+     */
+    onAfter(command: 'put', callback: (recordId: string) => string): this;
+    /**
+     * Hook into the database after put data.
+     * The callback function receives the newly created record ID and the input data.
+     *
+     * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+     * @param command Only "update"
+     * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
+     */
+    onAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * Hook into the database after deleting a record.
+     * The callback function receives the deleted record ID.
+     *
+     * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+     * @param command Only "delete"
+     * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+     */
+    onAfter(command: 'delete', callback: (recordId: string) => string): this;
+    /**
+     * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+     * @param command Only "put"
+     * @param callback The pre-processing callback function. This function must return the string that you want to put into the database.
+     */
+    onceBefore(command: 'put', callback: (data: string) => string): this;
+    /**
+     * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+     * @param command Only "update"
+     * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
+     */
+    onceBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+     * @param command Only "delete"
+     * @param callback The pre-processing callback function. This function must return the record ID that you want to delete from the database.
+     */
+    onceBefore(command: 'delete', callback: (recordId: string) => string): this;
+    /**
+     * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+     * @param command Only "put"
+     * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+     */
+    onceAfter(command: 'put', callback: (recordId: string) => string): this;
+    /**
+     * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+     * @param command Only "update"
+     * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
+     */
+    onceAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+     * @param command Only "delete"
+     * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+     */
+    onceAfter(command: 'delete', callback: (recordId: string) => string): this;
+    /**
+     * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.
+     * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+     * @param command Only "put"
+     * @param callback Functions you want to remove.
+     */
+    offBefore(command: 'put', callback: (data: string) => string): this;
+    /**
+     * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.
+     * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+     * @param command Only "update"
+     * @param callback Functions you want to remove.
+     */
+    offBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.
+     * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+     * @param command Only "delete"
+     * @param callback Functions you want to remove.
+     */
+    offBefore(command: 'delete', callback: (recordId: string) => string): this;
+    /**
+     * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.
+     * If there is no callback parameter, it removes all post-processing functions registered for that command.
+     * @param command Only "put"
+     * @param callback Functions you want to remove.
+     */
+    offAfter(command: 'put', callback: (recordId: string) => string): this;
+    /**
+     * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.
+     * If there is no callback parameter, it removes all post-processing functions registered for that command.
+     * @param command Only "update"
+     * @param callback Functions you want to remove.
+     */
+    offAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this;
+    /**
+     * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.
+     * If there is no callback parameter, it removes all post-processing functions registered for that command.
+     * @param command Only "delete"
+     * @param callback Functions you want to remove.
+     */
+    offAfter(command: 'delete', callback: (recordId: string) => string): this;
 }
 export {};

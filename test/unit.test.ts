@@ -57,6 +57,17 @@ describe('Record test', () => {
 
     const res = db.pick(id)
     expect(res.record.payload).toBe(content)
+    
+    db
+      .onBefore('put', (data) => data+'!')
+      .onBefore('put', (data) => data+'!')
+      .onAfter('put', (recordId) => {
+        console.log(`Record created: ${recordId}`)
+        return recordId
+      })
+
+    const res2 = db.pick(db.put('test'))
+    expect(res2.record.payload).toBe('test!!')
   })
 
   test('update', () => {
@@ -68,7 +79,7 @@ describe('Record test', () => {
     const longestContent = longerContent3.repeat(2)
 
     const id = db.put(content)
-
+    
     db.update(id, longerContent)
     const res1 = db.pick(id)
     expect(res1.record.payload).toBe(longerContent)
@@ -89,6 +100,20 @@ describe('Record test', () => {
     db.update(id, longestContent)
     const res5 = db.pick(id)
     expect(res5.record.payload).toBe(longestContent)
+
+    db
+    .onBefore('update', (info) => {
+      info.data += '!'
+      return info
+    })
+    .onAfter('update', (info) => {
+      console.log(`Record updated: ${info.recordId}`)
+      return info
+    })
+    
+    db.update(id, 'test')
+    const res6 = db.pick(id)
+    expect(res6.record.payload).toBe('test!')
   })
 
   test('delete', () => {
@@ -98,6 +123,22 @@ describe('Record test', () => {
     db.delete(id)
     expect(() => db.pick(id)).toThrow()
     expect(() => db.update(id, 'error')).toThrow()
+
+    db
+      .onBefore('delete', (recordId) => {
+        if (!db.exists(recordId)) {
+          throw new Error(`Not exists: ${recordId}`)
+        }
+        return recordId
+      })
+      .onAfter('delete', (recordId) => {
+        console.log(`Record deleted: ${recordId}`)
+        return recordId
+      })
+
+    const id2 = db.put('test content')
+    expect(() => db.delete('incorrected id')).toThrow()
+    db.delete(id2)
   })
 
   test('invalid record', () => {

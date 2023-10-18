@@ -81,6 +81,213 @@ var require_lib = __commonJS({
 // src/TissueRoll.ts
 import fs2 from "node:fs";
 
+// node_modules/hookall/dist/esm/index.js
+var __defProp2 = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp2(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => {
+  __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+  return value;
+};
+var HookallStore = class extends WeakMap {
+  ensure(obj, key) {
+    if (!this.has(obj)) {
+      const scope2 = {};
+      this.set(obj, scope2);
+    }
+    const scope = this.get(obj);
+    if (!Object.prototype.hasOwnProperty.call(scope, key)) {
+      scope[key] = /* @__PURE__ */ new Map();
+    }
+    return scope[key];
+  }
+};
+var _Hookall = class {
+  beforeHooks;
+  afterHooks;
+  constructor(target) {
+    this.beforeHooks = _Hookall._Store.ensure(target, "before");
+    this.afterHooks = _Hookall._Store.ensure(target, "after");
+  }
+  _ensureCommand(hooks, command) {
+    if (!hooks.has(command)) {
+      hooks.set(command, []);
+    }
+    return hooks.get(command);
+  }
+  _createWrapper(command, callback, repeat) {
+    return {
+      callback,
+      command,
+      repeat
+    };
+  }
+  _on(hooks, command, callback, repeat) {
+    const wrappers = this._ensureCommand(hooks, command);
+    const wrapper = this._createWrapper(command, callback, repeat);
+    wrappers.unshift(wrapper);
+  }
+  onBefore(command, callback) {
+    this._on(this.beforeHooks, command, callback, -1);
+    return this;
+  }
+  onceBefore(command, callback) {
+    this._on(this.beforeHooks, command, callback, 1);
+    return this;
+  }
+  onAfter(command, callback) {
+    this._on(this.afterHooks, command, callback, -1);
+    return this;
+  }
+  onceAfter(command, callback) {
+    this._on(this.afterHooks, command, callback, 1);
+    return this;
+  }
+  _off(hooks, command, callback) {
+    const wrappers = this._ensureCommand(hooks, command);
+    if (callback) {
+      const i = wrappers.findIndex((wrapper) => wrapper.callback === callback);
+      if (i !== -1) {
+        wrappers.splice(i, 1);
+      }
+    } else {
+      wrappers.length = 0;
+    }
+    return this;
+  }
+  offBefore(command, callback) {
+    this._off(this.beforeHooks, command, callback);
+    return this;
+  }
+  offAfter(command, callback) {
+    this._off(this.afterHooks, command, callback);
+    return this;
+  }
+  async _hookWith(hooks, command, value) {
+    let wrappers = this._ensureCommand(hooks, command);
+    let i = wrappers.length;
+    while (i--) {
+      const wrapper = wrappers[i];
+      value = await wrapper.callback(value);
+      wrapper.repeat -= 1;
+      if (wrapper.repeat === 0) {
+        this._off(hooks, command, wrapper.callback);
+      }
+    }
+    return value;
+  }
+  async trigger(command, initialValue, callback) {
+    let value;
+    value = await this._hookWith(this.beforeHooks, command, initialValue);
+    value = await callback(value);
+    value = await this._hookWith(this.afterHooks, command, value);
+    return value;
+  }
+};
+var Hookall = _Hookall;
+__publicField(Hookall, "Global", {});
+__publicField(Hookall, "_Store", new HookallStore());
+var HookallStore2 = class extends WeakMap {
+  ensure(obj, key) {
+    if (!this.has(obj)) {
+      const scope2 = {};
+      this.set(obj, scope2);
+    }
+    const scope = this.get(obj);
+    if (!Object.prototype.hasOwnProperty.call(scope, key)) {
+      scope[key] = /* @__PURE__ */ new Map();
+    }
+    return scope[key];
+  }
+};
+var _HookallSync = class {
+  beforeHooks;
+  afterHooks;
+  constructor(target) {
+    this.beforeHooks = _HookallSync._Store.ensure(target, "before");
+    this.afterHooks = _HookallSync._Store.ensure(target, "after");
+  }
+  _ensureCommand(hooks, command) {
+    if (!hooks.has(command)) {
+      hooks.set(command, []);
+    }
+    return hooks.get(command);
+  }
+  _createWrapper(command, callback, repeat) {
+    return {
+      callback,
+      command,
+      repeat
+    };
+  }
+  _on(hooks, command, callback, repeat) {
+    const wrappers = this._ensureCommand(hooks, command);
+    const wrapper = this._createWrapper(command, callback, repeat);
+    wrappers.unshift(wrapper);
+  }
+  onBefore(command, callback) {
+    this._on(this.beforeHooks, command, callback, -1);
+    return this;
+  }
+  onceBefore(command, callback) {
+    this._on(this.beforeHooks, command, callback, 1);
+    return this;
+  }
+  onAfter(command, callback) {
+    this._on(this.afterHooks, command, callback, -1);
+    return this;
+  }
+  onceAfter(command, callback) {
+    this._on(this.afterHooks, command, callback, 1);
+    return this;
+  }
+  _off(hooks, command, callback) {
+    const wrappers = this._ensureCommand(hooks, command);
+    if (callback) {
+      const i = wrappers.findIndex((wrapper) => wrapper.callback === callback);
+      if (i !== -1) {
+        wrappers.splice(i, 1);
+      }
+    } else {
+      wrappers.length = 0;
+    }
+    return this;
+  }
+  offBefore(command, callback) {
+    this._off(this.beforeHooks, command, callback);
+    return this;
+  }
+  offAfter(command, callback) {
+    this._off(this.afterHooks, command, callback);
+    return this;
+  }
+  _hookWith(hooks, command, value) {
+    let wrappers = this._ensureCommand(hooks, command);
+    let i = wrappers.length;
+    while (i--) {
+      const wrapper = wrappers[i];
+      value = wrapper.callback(value);
+      wrapper.repeat -= 1;
+      if (wrapper.repeat === 0) {
+        this._off(hooks, command, wrapper.callback);
+      }
+    }
+    return value;
+  }
+  trigger(command, initialValue, callback) {
+    let value;
+    value = this._hookWith(this.beforeHooks, command, initialValue);
+    value = callback(value);
+    value = this._hookWith(this.afterHooks, command, value);
+    return value;
+  }
+};
+var HookallSync = _HookallSync;
+__publicField(HookallSync, "Global", {});
+__publicField(HookallSync, "_Store", new HookallStore2());
+function useHookallSync(target = HookallSync.Global) {
+  return new HookallSync(target);
+}
+
 // src/TextConverter.ts
 var TextConverter = class _TextConverter {
   static Encoder = new TextEncoder();
@@ -474,6 +681,7 @@ var TissueRoll = class _TissueRoll {
   fd;
   secretKey;
   fpe;
+  hooker;
   constructor(fd, secretKey, payloadSize) {
     if (payloadSize < _TissueRoll.CellSize) {
       fs2.closeSync(fd);
@@ -485,6 +693,7 @@ var TissueRoll = class _TissueRoll {
     this.fd = fd;
     this.secretKey = secretKey;
     this.fpe = new FpeBuilder().setSecretKey(secretKey).setDomain(Base64Helper.UrlSafeDomain).build();
+    this.hooker = useHookallSync(this);
   }
   get root() {
     return _TissueRoll.ParseRootChunk(this.fd);
@@ -868,8 +1077,11 @@ var TissueRoll = class _TissueRoll {
    * @returns The record id.
    */
   put(data) {
-    const rData = TextConverter.ToArray(data);
-    return this._put(rData);
+    return this.hooker.trigger("put", data, (data2) => {
+      const rData = TextConverter.ToArray(data2);
+      const id = this._put(rData);
+      return id;
+    });
   }
   /**
    * You update an existing record.
@@ -884,58 +1096,61 @@ var TissueRoll = class _TissueRoll {
    * @returns The record id.
    */
   update(recordId, data) {
-    const payload = TextConverter.ToArray(data);
-    const payloadLen = IntegerConverter.ToArray32(payload.length);
-    const head = this.pickRecord(recordId, false);
-    const tail = this.pickRecord(recordId, true);
-    if (tail.record.header.deleted) {
-      throw ErrorBuilder.ERR_ALREADY_DELETED(recordId);
-    }
-    if (tail.record.header.maxLength < payload.length) {
-      const afterRecordId = this._put(payload);
-      const { index: index2, order: order2, salt } = this._normalizeRecordId(afterRecordId);
-      if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
-        this._delete(
-          tail.record.header.aliasIndex,
-          tail.record.header.aliasOrder
-        );
+    const information = this.hooker.trigger("update", { recordId, data }, ({ recordId: recordId2, data: data2 }) => {
+      const payload = TextConverter.ToArray(data2);
+      const payloadLen = IntegerConverter.ToArray32(payload.length);
+      const head = this.pickRecord(recordId2, false);
+      const tail = this.pickRecord(recordId2, true);
+      if (tail.record.header.deleted) {
+        throw ErrorBuilder.ERR_ALREADY_DELETED(recordId2);
       }
-      const headPos = this._recordPosition(head.page.index, head.order);
-      IterableView.Update(
-        head.record.rawHeader,
-        _TissueRoll.RecordHeaderAliasIndexOffset,
-        IntegerConverter.ToArray32(index2)
-      );
-      IterableView.Update(
-        head.record.rawHeader,
-        _TissueRoll.RecordHeaderAliasOrderOffset,
-        IntegerConverter.ToArray32(order2)
-      );
-      IterableView.Update(
-        head.record.rawHeader,
-        _TissueRoll.RecordHeaderAliasSaltOffset,
-        IntegerConverter.ToArray32(salt)
-      );
-      FileView.Update(this.fd, headPos, head.record.rawHeader);
-      return recordId;
-    }
-    const rawRecord = _TissueRoll.CreateIterable(_TissueRoll.RecordHeaderSize + payload.length, 0);
-    IterableView.Update(rawRecord, 0, tail.record.rawHeader);
-    const chunkSize = this.payloadSize - _TissueRoll.CellSize;
-    const count = Math.ceil(rawRecord.length / chunkSize);
-    IterableView.Update(rawRecord, _TissueRoll.RecordHeaderLengthOffset, payloadLen);
-    IterableView.Update(rawRecord, _TissueRoll.RecordHeaderSize, payload);
-    let index = tail.page.index;
-    let order = tail.order;
-    for (let i = 0; i < count; i++) {
-      const start = i * chunkSize;
-      const chunk = IterableView.Read(rawRecord, start, chunkSize);
-      this._putPagePayload(index, order, chunk);
-      const page = this._normalizeHeader(this._getHeader(index));
-      index = page.next;
-      order = 1;
-    }
-    return recordId;
+      if (tail.record.header.maxLength < payload.length) {
+        const afterRecordId = this._put(payload);
+        const { index: index2, order: order2, salt } = this._normalizeRecordId(afterRecordId);
+        if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
+          this._delete(
+            tail.record.header.aliasIndex,
+            tail.record.header.aliasOrder
+          );
+        }
+        const headPos = this._recordPosition(head.page.index, head.order);
+        IterableView.Update(
+          head.record.rawHeader,
+          _TissueRoll.RecordHeaderAliasIndexOffset,
+          IntegerConverter.ToArray32(index2)
+        );
+        IterableView.Update(
+          head.record.rawHeader,
+          _TissueRoll.RecordHeaderAliasOrderOffset,
+          IntegerConverter.ToArray32(order2)
+        );
+        IterableView.Update(
+          head.record.rawHeader,
+          _TissueRoll.RecordHeaderAliasSaltOffset,
+          IntegerConverter.ToArray32(salt)
+        );
+        FileView.Update(this.fd, headPos, head.record.rawHeader);
+        return { recordId: recordId2, data: data2 };
+      }
+      const rawRecord = _TissueRoll.CreateIterable(_TissueRoll.RecordHeaderSize + payload.length, 0);
+      IterableView.Update(rawRecord, 0, tail.record.rawHeader);
+      const chunkSize = this.payloadSize - _TissueRoll.CellSize;
+      const count = Math.ceil(rawRecord.length / chunkSize);
+      IterableView.Update(rawRecord, _TissueRoll.RecordHeaderLengthOffset, payloadLen);
+      IterableView.Update(rawRecord, _TissueRoll.RecordHeaderSize, payload);
+      let index = tail.page.index;
+      let order = tail.order;
+      for (let i = 0; i < count; i++) {
+        const start = i * chunkSize;
+        const chunk = IterableView.Read(rawRecord, start, chunkSize);
+        this._putPagePayload(index, order, chunk);
+        const page = this._normalizeHeader(this._getHeader(index));
+        index = page.next;
+        order = 1;
+      }
+      return { recordId: recordId2, data: data2 };
+    });
+    return information.recordId;
   }
   _delete(index, order) {
     const pos = this._recordPosition(index, order) + _TissueRoll.RecordHeaderDeletedOffset;
@@ -947,8 +1162,11 @@ var TissueRoll = class _TissueRoll {
    * @param recordId The record id what you want delete.
    */
   delete(recordId) {
-    const { page, order } = this.pickRecord(recordId, false);
-    this._delete(page.index, order);
+    this.hooker.trigger("delete", recordId, (recordId2) => {
+      const { page, order } = this.pickRecord(recordId2, false);
+      this._delete(page.index, order);
+      return recordId2;
+    });
   }
   /**
    * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
@@ -961,6 +1179,68 @@ var TissueRoll = class _TissueRoll {
     } catch (e) {
       return false;
     }
+  }
+  /**
+   * Register preprocessing functions for hooking before executing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * The value returned by this callback function is what is actually applied to the database.
+   * 
+   * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the value returned by the previous one as a parameter.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The pre-processing callback function.
+   */
+  onBefore(command, callback) {
+    this.hooker.onBefore(command, callback);
+    return this;
+  }
+  /**
+   * Register post-processing functions for hooking after performing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * You can use the value returned by this callback function for additional operations.
+   * 
+   * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The post-processing callback function.
+   */
+  onAfter(command, callback) {
+    this.hooker.onAfter(command, callback);
+    return this;
+  }
+  /**
+   * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The pre-processing callback function.
+   */
+  onceBefore(command, callback) {
+    this.hooker.onceBefore(command, callback);
+    return this;
+  }
+  /**
+   * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The post-processing callback function.
+   */
+  onceAfter(command, callback) {
+    this.hooker.onceAfter(command, callback);
+    return this;
+  }
+  /**
+   * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+   * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+   * @param command Only which "put", "update", "delete"
+   * @param callback Functions you want to remove.
+   */
+  offBefore(command, callback) {
+    this.hooker.offBefore(command, callback);
+    return this;
+  }
+  /**
+   * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+   * If there is no callback parameter, it removes all post-processing functions registered for that command.
+   * @param command Only which "put", "update", "delete"
+   * @param callback Functions you want to remove.
+   */
+  offAfter(command, callback) {
+    this.hooker.offAfter(command, callback);
+    return this;
   }
 };
 export {

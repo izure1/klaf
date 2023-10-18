@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 
 import type { FpeCipher } from 'node-fpe'
+import type { IHookallSync } from 'hookall'
+import { useHookallSync } from 'hookall'
 
 import { TextConverter } from './TextConverter'
 import { IntegerConverter } from './IntegerConverter'
@@ -26,6 +28,13 @@ type IRootHeader = {
   timestamp: bigint
   secretKey: bigint
   index: number
+}
+
+type IHookerRecordInformation = { recordId: string, data: string }
+type IHooker = {
+  put: (data: string) => string
+  update: (information: IHookerRecordInformation) => IHookerRecordInformation
+  delete: (recordId: string) => string
 }
 
 export class TissueRoll {
@@ -229,6 +238,7 @@ export class TissueRoll {
   protected readonly fd: number
   protected readonly secretKey: string
   protected readonly fpe: FpeCipher
+  protected readonly hooker: IHookallSync<IHooker>
 
   protected constructor(fd: number, secretKey: string, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
@@ -244,6 +254,8 @@ export class TissueRoll {
       .setSecretKey(secretKey)
       .setDomain(Base64Helper.UrlSafeDomain)
       .build()
+
+    this.hooker = useHookallSync<IHooker>(this)
   }
 
   get root(): IRootHeader {
@@ -717,8 +729,11 @@ export class TissueRoll {
    * @returns The record id.
    */
   put(data: string): string {
-    const rData = TextConverter.ToArray(data)
-    return this._put(rData)
+    return this.hooker.trigger('put', data, (data) => {
+      const rData = TextConverter.ToArray(data)
+      const id = this._put(rData)
+      return id
+    })
   }
 
   /**
@@ -734,76 +749,79 @@ export class TissueRoll {
    * @returns The record id.
    */
   update(recordId: string, data: string): string {
-    const payload = TextConverter.ToArray(data)
-    const payloadLen = IntegerConverter.ToArray32(payload.length)
-    const head = this.pickRecord(recordId, false)
-    const tail = this.pickRecord(recordId, true)
-
-    if (tail.record.header.deleted) {
-      throw ErrorBuilder.ERR_ALREADY_DELETED(recordId)
-    }
-    
-    // 최근 업데이트 레코드보다 크기가 큰 값이 들어왔을 경우 새롭게 생성해야 합니다.
-    // 최근 업데이트 레코드는 무조건 기존의 레코드보다 길이가 깁니다.
-    if (tail.record.header.maxLength < payload.length) {
-      const afterRecordId = this._put(payload)
-      const { index, order, salt } = this._normalizeRecordId(afterRecordId)
-      
-      if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
-        this._delete(
-          tail.record.header.aliasIndex,
-          tail.record.header.aliasOrder
-        )
+    const information = this.hooker.trigger('update', { recordId, data }, ({ recordId, data }) => {
+      const payload = TextConverter.ToArray(data)
+      const payloadLen = IntegerConverter.ToArray32(payload.length)
+      const head = this.pickRecord(recordId, false)
+      const tail = this.pickRecord(recordId, true)
+  
+      if (tail.record.header.deleted) {
+        throw ErrorBuilder.ERR_ALREADY_DELETED(recordId)
       }
       
-      // update head record's header
-      const headPos = this._recordPosition(head.page.index, head.order)
-      IterableView.Update(
-        head.record.rawHeader,
-        TissueRoll.RecordHeaderAliasIndexOffset,
-        IntegerConverter.ToArray32(index)
-      )
-      IterableView.Update(
-        head.record.rawHeader,
-        TissueRoll.RecordHeaderAliasOrderOffset,
-        IntegerConverter.ToArray32(order)
-      )
-      IterableView.Update(
-        head.record.rawHeader,
-        TissueRoll.RecordHeaderAliasSaltOffset,
-        IntegerConverter.ToArray32(salt)
-      )
-      FileView.Update(this.fd, headPos, head.record.rawHeader)
-
-      return recordId
-    }
-
-    // 기존의 레코드보다 짧을 경우엔 덮어쓰기합니다
-    const rawRecord = TissueRoll.CreateIterable(TissueRoll.RecordHeaderSize+payload.length, 0)
-    IterableView.Update(rawRecord, 0, tail.record.rawHeader)
-
-    const chunkSize = this.payloadSize-TissueRoll.CellSize
-    const count = Math.ceil(rawRecord.length/chunkSize)
-
-    // 업데이트할 레코드를 데이터 크기에 맞추어 새롭게 생성한 뒤
-    IterableView.Update(rawRecord, TissueRoll.RecordHeaderLengthOffset, payloadLen)
-    IterableView.Update(rawRecord, TissueRoll.RecordHeaderSize, payload)
-
-    // 각 페이지에 맞추어 재삽입합니다
-    let index = tail.page.index
-    let order = tail.order
-
-    for (let i = 0; i < count; i++) {
-      const start = i*chunkSize
-      const chunk = IterableView.Read(rawRecord, start, chunkSize)
-      this._putPagePayload(index, order, chunk)
-
-      const page = this._normalizeHeader(this._getHeader(index))
-      index = page.next
-      order = 1
-    }
-    
-    return recordId
+      // 최근 업데이트 레코드보다 크기가 큰 값이 들어왔을 경우 새롭게 생성해야 합니다.
+      // 최근 업데이트 레코드는 무조건 기존의 레코드보다 길이가 깁니다.
+      if (tail.record.header.maxLength < payload.length) {
+        const afterRecordId = this._put(payload)
+        const { index, order, salt } = this._normalizeRecordId(afterRecordId)
+        
+        if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
+          this._delete(
+            tail.record.header.aliasIndex,
+            tail.record.header.aliasOrder
+          )
+        }
+        
+        // update head record's header
+        const headPos = this._recordPosition(head.page.index, head.order)
+        IterableView.Update(
+          head.record.rawHeader,
+          TissueRoll.RecordHeaderAliasIndexOffset,
+          IntegerConverter.ToArray32(index)
+        )
+        IterableView.Update(
+          head.record.rawHeader,
+          TissueRoll.RecordHeaderAliasOrderOffset,
+          IntegerConverter.ToArray32(order)
+        )
+        IterableView.Update(
+          head.record.rawHeader,
+          TissueRoll.RecordHeaderAliasSaltOffset,
+          IntegerConverter.ToArray32(salt)
+        )
+        FileView.Update(this.fd, headPos, head.record.rawHeader)
+  
+        return { recordId, data }
+      }
+  
+      // 기존의 레코드보다 짧을 경우엔 덮어쓰기합니다
+      const rawRecord = TissueRoll.CreateIterable(TissueRoll.RecordHeaderSize+payload.length, 0)
+      IterableView.Update(rawRecord, 0, tail.record.rawHeader)
+  
+      const chunkSize = this.payloadSize-TissueRoll.CellSize
+      const count = Math.ceil(rawRecord.length/chunkSize)
+  
+      // 업데이트할 레코드를 데이터 크기에 맞추어 새롭게 생성한 뒤
+      IterableView.Update(rawRecord, TissueRoll.RecordHeaderLengthOffset, payloadLen)
+      IterableView.Update(rawRecord, TissueRoll.RecordHeaderSize, payload)
+  
+      // 각 페이지에 맞추어 재삽입합니다
+      let index = tail.page.index
+      let order = tail.order
+  
+      for (let i = 0; i < count; i++) {
+        const start = i*chunkSize
+        const chunk = IterableView.Read(rawRecord, start, chunkSize)
+        this._putPagePayload(index, order, chunk)
+  
+        const page = this._normalizeHeader(this._getHeader(index))
+        index = page.next
+        order = 1
+      }
+      
+      return { recordId, data }
+    })
+    return information.recordId
   }
 
   private _delete(index: number, order: number): void {
@@ -818,8 +836,11 @@ export class TissueRoll {
    * @param recordId The record id what you want delete.
    */
   delete(recordId: string): void {
-    const { page, order } = this.pickRecord(recordId, false)
-    this._delete(page.index, order)
+    this.hooker.trigger('delete', recordId, (recordId) => {
+      const { page, order } = this.pickRecord(recordId, false)
+      this._delete(page.index, order)
+      return recordId
+    })
   }
 
   /**
@@ -833,5 +854,211 @@ export class TissueRoll {
     } catch (e) {
       return false
     }
+  }
+
+  /**
+   * Hook into the database for pre-processing before put data.  
+   * The callback function receives the input data, and the value returned by this callback function is what actually puts into the database.
+   * 
+   * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the data returned by the previous one as a parameter.
+   * @param command Only "put"
+   * @param callback The pre-processing callback function. This function must return the string that you want to put into the database.
+   */
+  onBefore(command: 'put', callback: (data: string) => string): this
+
+  /**
+   * Hook into the database for pre-processing before updating data.  
+   * The callback function receives the record ID and the data to be updated. The data returned by this callback function, along with the record ID, is what is actually used to update the database.
+   * 
+   * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the data and record ID returned by the previous one as parameters.
+   * @param command Only "update"
+   * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
+   */
+  onBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+
+  /**
+   * Hook into the database for pre-processing before deleting a record.  
+   * The callback function receives the ID of the record to be deleted. The record ID returned by this callback function is what is actually used to delete the record from the database.
+   * 
+   * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the record ID returned by the previous one as a parameter.
+   * @param command Only "delete"
+   * @param callback The pre-processing callback function. This function must return the record ID that you want to delete from the database.
+   */
+  onBefore(command: 'delete', callback: (recordId: string) => string): this
+
+  /**
+   * Register preprocessing functions for hooking before executing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * The value returned by this callback function is what is actually applied to the database.
+   * 
+   * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the value returned by the previous one as a parameter.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The pre-processing callback function.
+   */
+  onBefore(command: 'put'|'update'|'delete', callback: (arg: any) => any): this {
+    this.hooker.onBefore(command, callback)
+    return this
+  }
+
+  /**
+   * Hook into the database after put a data.  
+   * The callback function receives the newly created record ID.
+   * 
+   * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the value returned by the previous one as a parameter.
+   * @param command Only "put"
+   * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+   */
+  onAfter(command: 'put', callback: (recordId: string) => string): this
+
+  /**
+   * Hook into the database after put data.  
+   * The callback function receives the newly created record ID and the input data.
+   * 
+   * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+   * @param command Only "update"
+   * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
+   */
+  onAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+
+  /**
+   * Hook into the database after deleting a record.  
+   * The callback function receives the deleted record ID.
+   * 
+   * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+   * @param command Only "delete"
+   * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+   */
+  onAfter(command: 'delete', callback: (recordId: string) => string): this
+
+  /**
+   * Register post-processing functions for hooking after performing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * You can use the value returned by this callback function for additional operations.
+   * 
+   * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The post-processing callback function.
+   */
+  onAfter(command: 'put'|'update'|'delete', callback: (arg: any) => any): this {
+    this.hooker.onAfter(command, callback)
+    return this
+  }
+
+  /**
+   * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+   * @param command Only "put"
+   * @param callback The pre-processing callback function. This function must return the string that you want to put into the database.
+   */
+  onceBefore(command: 'put', callback: (data: string) => string): this
+  /**
+   * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+   * @param command Only "update"
+   * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
+   */
+  onceBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  /**
+   * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+   * @param command Only "delete"
+   * @param callback The pre-processing callback function. This function must return the record ID that you want to delete from the database.
+   */
+  onceBefore(command: 'delete', callback: (recordId: string) => string): this
+  /**
+   * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The pre-processing callback function.
+   */
+  onceBefore(command: 'put'|'update'|'delete', callback: (arg: any) => any): this {
+    this.hooker.onceBefore(command, callback)
+    return this
+  }
+
+  /**
+   * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+   * @param command Only "put"
+   * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+   */
+  onceAfter(command: 'put', callback: (recordId: string) => string): this
+  /**
+   * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+   * @param command Only "update"
+   * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
+   */
+  onceAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  /**
+   * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+   * @param command Only "delete"
+   * @param callback The post-processing callback function. This function must return a string for the parameters of the following post-processing functions.
+   */
+  onceAfter(command: 'delete', callback: (recordId: string) => string): this
+  /**
+   * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+   * @param command Only which "put", "update", "delete"
+   * @param callback The post-processing callback function.
+   */
+  onceAfter(command: 'put'|'update'|'delete', callback: (arg: any) => any): this {
+    this.hooker.onceAfter(command, callback)
+    return this
+  }
+
+  /**
+   * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+   * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+   * @param command Only "put"
+   * @param callback Functions you want to remove.
+   */
+  offBefore(command: 'put', callback: (data: string) => string): this
+  /**
+   * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+   * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+   * @param command Only "update"
+   * @param callback Functions you want to remove.
+   */
+  offBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  /**
+   * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+   * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+   * @param command Only "delete"
+   * @param callback Functions you want to remove.
+   */
+  offBefore(command: 'delete', callback: (recordId: string) => string): this
+  /**
+   * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+   * If there is no callback parameter, it removes all pre-processing functions registered for that command.
+   * @param command Only which "put", "update", "delete"
+   * @param callback Functions you want to remove.
+   */
+  offBefore(command: 'put'|'update'|'delete', callback?: (arg: any) => any): this {
+    this.hooker.offBefore(command, callback)
+    return this
+  }
+
+  /**
+   * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+   * If there is no callback parameter, it removes all post-processing functions registered for that command.
+   * @param command Only "put"
+   * @param callback Functions you want to remove.
+   */
+  offAfter(command: 'put', callback: (recordId: string) => string): this
+  /**
+   * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+   * If there is no callback parameter, it removes all post-processing functions registered for that command.
+   * @param command Only "update"
+   * @param callback Functions you want to remove.
+   */
+  offAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  /**
+   * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+   * If there is no callback parameter, it removes all post-processing functions registered for that command.
+   * @param command Only "delete"
+   * @param callback Functions you want to remove.
+   */
+  offAfter(command: 'delete', callback: (recordId: string) => string): this
+  /**
+   * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+   * If there is no callback parameter, it removes all post-processing functions registered for that command.
+   * @param command Only which "put", "update", "delete"
+   * @param callback Functions you want to remove.
+   */
+  offAfter(command: 'put'|'update'|'delete', callback?: (arg: any) => any): this {
+    this.hooker.offAfter(command, callback)
+    return this
   }
 }
