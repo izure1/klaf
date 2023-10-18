@@ -107,7 +107,7 @@ describe('Record test', () => {
       return info
     })
     .onAfter('update', (info) => {
-      console.log(`Record updated: ${info.recordId}`)
+      console.log(`Record updated: ${info.id}`)
       return info
     })
     
