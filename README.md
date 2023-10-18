@@ -151,6 +151,40 @@ If you pass an incorrect record ID, it may result in returning non-existent or c
 
 It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
 
+#### onBefore(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+Register preprocessing functions for hooking before executing database operations such as `put`, `update`, and `delete` commands.  
+The value returned by this callback function is what is actually applied to the database.
+
+If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the value returned by the previous one as a parameter.
+
+#### onceBefore(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
+
+#### onAfter(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+Register post-processing functions for hooking after performing database operations such as `put`, `update`, and `delete` commands.  
+You can use the value returned by this callback function for additional operations.
+
+If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.
+
+#### onceAfter(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
+
+#### offBefore(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
+
+If there is no callback parameter, it removes all pre-processing functions registered for that command.
+
+#### offAfter(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
+
+You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
+
+If there is no callback parameter, it removes all post-processing functions registered for that command.
+
 ## License
 
 MIT LICENSE
