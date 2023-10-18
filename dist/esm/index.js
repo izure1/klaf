@@ -1181,7 +1181,7 @@ var TissueRoll = class _TissueRoll {
     }
   }
   /**
-   * Register preprocessing functions for hooking before executing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * Register preprocessing functions for hooking before executing database operations such as `put`, `update`, and `delete` commands.  
    * The value returned by this callback function is what is actually applied to the database.
    * 
    * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the value returned by the previous one as a parameter.
@@ -1193,7 +1193,7 @@ var TissueRoll = class _TissueRoll {
     return this;
   }
   /**
-   * Register post-processing functions for hooking after performing database operations such as 'put,' 'update,' and 'delete' commands.  
+   * Register post-processing functions for hooking after performing database operations such as `put`, `update`, and `delete` commands.  
    * You can use the value returned by this callback function for additional operations.
    * 
    * If multiple post-processing functions are registered, they run sequentially, with each subsequent post-processing function receiving the values returned by the previous one as parameters.

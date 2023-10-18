@@ -30,10 +30,10 @@ type IRootHeader = {
   index: number
 }
 
-type IHookerRecordInformation = { recordId: string, data: string }
+type IHookerRecordInformation = { id: string, data: string }
 type IHooker = {
   put: (data: string) => string
-  update: (information: IHookerRecordInformation) => IHookerRecordInformation
+  update: (record: IHookerRecordInformation) => IHookerRecordInformation
   delete: (recordId: string) => string
 }
 
@@ -749,14 +749,14 @@ export class TissueRoll {
    * @returns The record id.
    */
   update(recordId: string, data: string): string {
-    const information = this.hooker.trigger('update', { recordId, data }, ({ recordId, data }) => {
+    const information = this.hooker.trigger('update', { id: recordId, data }, ({ id, data }) => {
       const payload = TextConverter.ToArray(data)
       const payloadLen = IntegerConverter.ToArray32(payload.length)
-      const head = this.pickRecord(recordId, false)
-      const tail = this.pickRecord(recordId, true)
+      const head = this.pickRecord(id, false)
+      const tail = this.pickRecord(id, true)
   
       if (tail.record.header.deleted) {
-        throw ErrorBuilder.ERR_ALREADY_DELETED(recordId)
+        throw ErrorBuilder.ERR_ALREADY_DELETED(id)
       }
       
       // 최근 업데이트 레코드보다 크기가 큰 값이 들어왔을 경우 새롭게 생성해야 합니다.
@@ -791,7 +791,7 @@ export class TissueRoll {
         )
         FileView.Update(this.fd, headPos, head.record.rawHeader)
   
-        return { recordId, data }
+        return { id, data }
       }
   
       // 기존의 레코드보다 짧을 경우엔 덮어쓰기합니다
@@ -819,9 +819,9 @@ export class TissueRoll {
         order = 1
       }
       
-      return { recordId, data }
+      return { id, data }
     })
-    return information.recordId
+    return information.id
   }
 
   private _delete(index: number, order: number): void {
@@ -874,7 +874,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
    */
-  onBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  onBefore(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
 
   /**
    * Hook into the database for pre-processing before deleting a record.  
@@ -917,7 +917,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
    */
-  onAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  onAfter(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
 
   /**
    * Hook into the database after deleting a record.  
@@ -953,7 +953,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback The pre-processing callback function. This function must return the record ID and data that you want to update in the database.
    */
-  onceBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  onceBefore(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
   /**
    * Same as the `onBefore` method, but only works once. For more information, see the `onBefore` method.
    * @param command Only "delete"
@@ -981,7 +981,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback The post-processing callback function. This function must return the record ID and data for the parameters of the following post-processing function.
    */
-  onceAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  onceAfter(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
   /**
    * Same as the `onAfter` method, but only works once. For more information, see the `onAfter` method.
    * @param command Only "delete"
@@ -1011,7 +1011,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback Functions you want to remove.
    */
-  offBefore(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  offBefore(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
   /**
    * You remove the pre-processing functions added with `onBefore` or `onceBefore` methods.  
    * If there is no callback parameter, it removes all pre-processing functions registered for that command.
@@ -1043,7 +1043,7 @@ export class TissueRoll {
    * @param command Only "update"
    * @param callback Functions you want to remove.
    */
-  offAfter(command: 'update', callback: (information: IHookerRecordInformation) => IHookerRecordInformation): this
+  offAfter(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
   /**
    * You remove the post-processing functions added with `onAfter` or `onceAfter` methods.  
    * If there is no callback parameter, it removes all post-processing functions registered for that command.

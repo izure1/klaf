@@ -21,14 +21,21 @@ db.pick(id).record.payload // 'Data string you want to store'
 
 // UPDATE
 const modifiedData = 'Modified data string you want to store'
-const updatedId = db.update(id, modifiedData)
+db.update(id, modifiedData)
+db.pick(id).record.payload // 'Modified data string you want to store'
 
-db.pick(updatedId).record.payload // 'Modified data string you want to store'
+// HOOK - When updating, add '!!!' after the data.
+db.onBefore('update', (record) => {
+  record.data += '!!!'
+  return record
+})
+
+db.update(id, 'POWER')
+db.pick(id).record.payload // 'POWER!!!'
 
 // DELETE
-db.delete(updatedId)
-db.pick(updatedId) // Error! The record was destroyed.
-
+db.delete(id)
+db.pick(id) // Error! The record was destroyed.
 
 // CLOSE DB
 db.close()
@@ -54,7 +61,7 @@ It can be used, for example, to create website URLs. You save a post and insert 
 
 ### How does it differ from a `Map` object?
 
-The `Map` object is memory-based, while `tissue-roll` is file-based.
+The `Map` object is memory-based, while `tissue-roll` is file system-based.
 
 ### How does `tissue-roll` work?
 
