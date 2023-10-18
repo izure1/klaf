@@ -1,5 +1,9 @@
 # Tissue Roll
 
+<p align="center">
+  <img src="./docs/asset/image/logo_tissueroll.svg">
+</p>
+
 Very simple read/write database with a `key-value`.  
 It's written in JavaScript using pure Node.js API and pretty easy and small.
 
