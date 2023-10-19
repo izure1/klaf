@@ -28,6 +28,7 @@ const modifiedData = 'Modified data string you want to store'
 db.update(id, modifiedData)
 db.pick(id).record.payload // 'Modified data string you want to store'
 
+
 // HOOK - When updating, add '!!!' after the data.
 db.onBefore('update', (record) => {
   record.data += '!!!'
@@ -36,6 +37,7 @@ db.onBefore('update', (record) => {
 
 db.update(id, 'POWER')
 db.pick(id).record.payload // 'POWER!!!'
+
 
 // DELETE
 db.delete(id)
