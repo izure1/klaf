@@ -593,6 +593,25 @@ export class TissueRoll {
   }
 
   /**
+   * It takes a page index as a parameter and returns a list of all records recorded on that page.  
+   * The page index should be within the range of `1` to `instance.root.index`.
+   * @param index The page index.
+   */
+  getRecords(index: number): ReturnType<TissueRoll['_normalizeRecord']>[] {
+    const headIndex = this._getHeadPageIndex(index)
+    const header = this._normalizeHeader(this._getHeader(headIndex))
+
+    const records = []
+    for (let i = 0; i < header.count; i++) {
+      const order = i+1
+      const rawRecord = this._getRecord(header.index, order)
+      const record = this._normalizeRecord(rawRecord)
+      records.push(record)
+    }
+    return records
+  }
+
+  /**
    * Get record from database with a id.  
    * Don't pass an incorrect record ID. This does not ensure the validity of the record.
    * If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
