@@ -164,6 +164,11 @@ If you pass an incorrect record ID, it may result in returning non-existent or c
 
 It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
 
+#### getRecords(index: `number`): `RecordInformation.record`
+
+It takes a page index as a parameter and returns a list of all records recorded on that page.  
+The page index should be within the range of `1` to `instance.root.index`.
+
 #### onBefore(command: `'put'`|`'update'`|`'delete'`, callback: (arg: `any`) => `any`): `this`
 
 Register preprocessing functions for hooking before executing database operations such as `put`, `update`, and `delete` commands.  
