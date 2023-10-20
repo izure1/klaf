@@ -38,7 +38,7 @@ type IHooker = {
 }
 
 export class TissueRoll {
-  protected static DB_VERSION                   = '2.0.0'
+  protected static DB_VERSION                   = '2.3.0'
   protected static DB_NAME                      = 'TissueRoll'
   protected static RootValidStringOffset        = 0
   protected static RootValidStringSize          = 10
