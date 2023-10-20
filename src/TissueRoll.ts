@@ -597,7 +597,7 @@ export class TissueRoll {
    * The page index should be within the range of `1` to `instance.root.index`.
    * @param index The page index.
    */
-  getRecords(index: number): ReturnType<TissueRoll['_normalizeRecord']>[] {
+  getRecords(index: number): ReturnType<TissueRoll['pick']>['record'][] {
     const headIndex = this._getHeadPageIndex(index)
     const header = this._normalizeHeader(this._getHeader(headIndex))
 

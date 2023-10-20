@@ -20,7 +20,7 @@ describe('Create test', () => {
 
 describe('Record test', () => {
   let db: TissueRoll
-  beforeAll(() => db = TissueRoll.Open('./tissue.db'))
+  beforeEach(() => db = TissueRoll.Open('./tissue.db'))
   afterAll(() => db.close())
 
   test('put record that shorter than page size', () => {
@@ -154,5 +154,25 @@ describe('Record test', () => {
 
     expect(db.exists(correctId)).toBe(true)
     expect(db.exists(invalidId)).toBe(false)
+  })
+
+  test('getRecords', () => {
+    const largeData = ' '.repeat(10000)
+    db.put(largeData)
+
+    const guessData1 = 'a'
+    const guessData2 = 'b'
+    const guessData3 = 'c'
+
+    const id = db.put(guessData1)
+    db.put(guessData2)
+    db.put(guessData3)
+
+    const record = db.pick(id)
+    const records = db.getRecords(record.page.index)
+
+    expect(records[0].payload).toBe(guessData1)
+    expect(records[1].payload).toBe(guessData2)
+    expect(records[2].payload).toBe(guessData3)
   })
 })
