@@ -1,5 +1,7 @@
 # Tissue Roll
 
+![node.js workflow](https://github.com/izure1/tissue-roll/actions/workflows/node.js.yml/badge.svg)
+
 <p align="center">
   <img src="./docs/asset/image/logo_tissue.svg">
 </p>
