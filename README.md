@@ -130,7 +130,7 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 
 It creates a new database file.
 
-#### TissueRoll.Open(file: `string`, payloadSize = `0`): `TissueRoll`
+#### TissueRoll.Open(file: `string`, payloadSize = `8192`): `TissueRoll`
 
 It opens or creates a database file at the specified path. If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one.
 
