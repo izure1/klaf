@@ -135,11 +135,11 @@ export class TissueRoll {
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one.
+   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `0`.
+   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    */
-  static Open(file: string, payloadSize = 0) {
+  static Open(file: string, payloadSize = 8192) {
     // 파일이 존재하지 않을 경우
     if (!fs.existsSync(file)) {
       if (!payloadSize) {
