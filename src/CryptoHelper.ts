@@ -1,8 +1,8 @@
-import { randomBytes, getRandomValues, createCipheriv, createDecipheriv } from 'node:crypto'
+import { randomBytes, webcrypto, createCipheriv, createDecipheriv } from 'node:crypto'
 
 export class CryptoHelper {
   static RandomBytes(size: number): Uint8Array {
-    return getRandomValues(new Uint8Array(size))
+    return webcrypto.getRandomValues(new Uint8Array(size))
   }
   
   static EncryptAES256(text: string, secret: Buffer): string {
