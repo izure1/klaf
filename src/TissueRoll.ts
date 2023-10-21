@@ -614,7 +614,7 @@ export class TissueRoll {
   /**
    * Get record from database with a id.  
    * Don't pass an incorrect record ID. This does not ensure the validity of the record.
-   * If you pass an incorrect record ID, it may result in returning non-existent or corrupted records.
+   * Use the `exists` method to validate the record id.
    * @param recordId The record id what you want pick.
    */
   pick(recordId: string) {
