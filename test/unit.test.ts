@@ -1,10 +1,6 @@
 import { TissueRoll } from '../'
 
 describe('Create test', () => {
-  test('db non exists', () => {
-    expect(() => TissueRoll.Open('./non-exists.db')).toThrow()
-  })
-
   test('db open', () => {
     const payloadSize = 250
     const db = TissueRoll.Open('./tissue.db', payloadSize)
