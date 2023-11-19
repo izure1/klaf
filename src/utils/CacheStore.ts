@@ -9,7 +9,11 @@ export class CacheStore<T> {
     this._cache = cache
   }
 
-  get(key: string, generator: () => T): any {
+  set(key: string, value: T): void {
+    this._cache[key] = value
+  }
+
+  get(key: string, generator: () => T): T {
     if (!this.has(key)) {
       this._cache[key] = generator()
     }

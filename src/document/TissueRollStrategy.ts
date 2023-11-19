@@ -1,15 +1,19 @@
 import { BPTreeNode, SerializeStrategy, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
+
 import { TissueRoll } from '../core'
+import { DelayedExecution } from '../utils/DelayedExecution'
 
 export class TissueRollStrategy extends SerializeStrategy<string, SupportedType> {
   protected readonly property: string
   protected readonly db: TissueRoll
+  private readonly _delayedExecution: DelayedExecution
 
-  constructor(order: number, property: string, db: TissueRoll) {
+  constructor(order: number, property: string, db: TissueRoll, delay = 0) {
     super(order)
     this.property = property
     this.db = db
+    this._delayedExecution = new DelayedExecution(delay)
   }
 
   private _addOverflowRecord(): string {
@@ -42,9 +46,12 @@ export class TissueRollStrategy extends SerializeStrategy<string, SupportedType>
   }
 
   write(id: number, node: BPTreeNode<string, SupportedType>): void {
-    const record = this._getRecordOwnNode(id)
-    const stringify = JSON.stringify(node)
-    this.db.update(record.header.id, stringify)
+    const key = `write:${id}`
+    this._delayedExecution.execute(key, () => {
+      const record = this._getRecordOwnNode(id)
+      const stringify = JSON.stringify(node)
+      this.db.update(record.header.id, stringify)
+    })
   }
 
   readHead(): SerializeStrategyHead|null {
@@ -54,9 +61,11 @@ export class TissueRollStrategy extends SerializeStrategy<string, SupportedType>
   }
 
   writeHead(head: SerializeStrategyHead): void {
-    const record = this._getRecordOwnRoot()
-    const root = JSON.parse(record.payload) as TissueRollDocumentRoot
-    root.head[this.property] = head
-    this.db.update(record.header.id, JSON.stringify(root))
+    this._delayedExecution.execute('write:head', () => {
+      const record = this._getRecordOwnRoot()
+      const root = JSON.parse(record.payload) as TissueRollDocumentRoot
+      root.head[this.property] = head
+      this.db.update(record.header.id, JSON.stringify(root))
+    })
   }
 }
