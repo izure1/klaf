@@ -4,7 +4,7 @@ This document covers the usage of the `key-value` database in `tissue-roll`.
 
 Unlike typical `key-value` databases, the key is automatically generated upon data insertion and **cannot** be directly specified by the user. Please take note of this distinction.
 
-If this is not the database you were looking for, please check the `document-oriented` database.
+This database is suitable for a website that simply stores values in the database, generates URLs based on the retrieved key, and returns them to the user. If you need the ability to specify keys directly, consider using a [document-oriented](../document/README.md) database.
 
 ## Usage
 
