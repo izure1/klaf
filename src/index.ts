@@ -1,1 +1,2 @@
-export { TissueRoll } from './TissueRoll'
+export { TissueRoll } from './core/index'
+export { TissueRollDocument } from './document/index'

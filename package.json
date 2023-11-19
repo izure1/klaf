@@ -1,7 +1,7 @@
 {
   "name": "tissue-roll",
-  "version": "2.3.0",
-  "description": "Very simple read/write database with a key-value.",
+  "version": "2.4.0",
+  "description": "Very simple read/write database with a no-sql.",
   "types": "dist/typings/index.d.ts",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "hookall": "^2.0.2",
-    "node-fpe": "^2.0.2"
+    "node-fpe": "^2.0.2",
+    "serializable-bptree": "^1.0.2"
   }
 }

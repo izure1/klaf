@@ -1,4 +1,4 @@
-import { TissueRoll } from '../'
+import { TissueRoll, TissueRollDocument } from '../'
 
 describe('Create test', () => {
   test('db open', () => {
@@ -69,10 +69,10 @@ describe('Record test', () => {
   test('update', () => {
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
-    const longerContent2 = longerContent+'1'
+    const longerContent2 = 'more more longer text'.repeat(100)
     const shorterContent = 'shorter token'
-    const longerContent3 = longerContent+'2'
-    const longestContent = longerContent3.repeat(2)
+    const longerContent3 = 'very more more longer text'.repeat(100)
+    const longestContent = 'very more more longest text'.repeat(100)
 
     const id = db.put(content)
     
@@ -96,6 +96,8 @@ describe('Record test', () => {
     db.update(id, longestContent)
     const res5 = db.pick(id)
     expect(res5.record.payload).toBe(longestContent)
+    
+    expect(res5.record.header.id).toBe(res1.record.header.id)
 
     db
     .onBefore('update', (info) => {
@@ -170,5 +172,197 @@ describe('Record test', () => {
     expect(records[0].payload).toBe(guessData1)
     expect(records[1].payload).toBe(guessData2)
     expect(records[2].payload).toBe(guessData3)
+  })
+})
+
+describe('DOCUMENT', () => {
+  let sql: TissueRollDocument<{
+    name: string
+    age: number
+    sex?: 'male'|'female'
+    more?: any
+  }>
+
+  beforeEach(() => {
+    sql = TissueRollDocument.Create('./sql.db', 512, true)
+  
+    sql.put({ name: 'kim', age: 10 })
+    sql.put({ name: 'tomas', age: 80, sex: 'male' })
+    sql.put({ name: 'john', age: 20, sex: 'male' })
+    sql.put({ name: 'lee', age: 50, sex: 'female' })
+  })
+
+  test('DOCUMENT:put', () => {
+    const result1 = sql.pick({
+      age: {
+        gt: 15
+      }
+    })
+    const expect1 = [
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'john', age: 20, sex: 'male' },
+      { name: 'lee', age: 50, sex: 'female' },
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+
+    const result2 = sql.pick({
+      name: {
+        notEqual: 'lee'
+      },
+      age: {
+        gt: 15,
+        lt: 75
+      }
+    })
+    const expect2 = [
+      { name: 'john', age: 20, sex: 'male' },
+    ]
+    result2.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect2[i]))
+    })
+  })
+
+  test('DOCUMENT:delete', () => {
+    sql.delete({
+      name: {
+        equal: 'tomas'
+      }
+    })
+    const result1 = sql.pick({})
+    const expect1 = [
+      { name: 'kim', age: 10 },
+      { name: 'john', age: 20, sex: 'male' },
+      { name: 'lee', age: 50, sex: 'female' },
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+
+    sql.delete({})
+    expect(sql.pick({})).toEqual([])
+  })
+
+  test('DOCUMENT:update:partial', () => {
+    sql.partialUpdate({
+      name: {
+        equal: 'kim'
+      }
+    }, {
+      age: 22,
+      sex: 'female'
+    })
+
+    const result1 = sql.pick({
+      name: {
+        equal: 'kim'
+      }
+    })
+    const expect1 = [
+      { name: 'kim', age: 22, sex: 'female' }
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+  })
+
+  test('DOCUMENT:update:full-1', () => {
+    sql.fullUpdate({
+      age: {
+        gt: 15,
+        lt: 75
+      }
+    }, { name: 'unknown', age: 0, sex: 'male' })
+
+    const result1 = sql.pick({})
+    const expect1 = [
+      { name: 'kim', age: 10 },
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'unknown', age: 0, sex: 'male' },
+      { name: 'unknown', age: 0, sex: 'male' },
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+  })
+
+  test('DOCUMENT:update:full-2', () => {
+    sql.fullUpdate({
+      age: {
+        gt: 15,
+        lt: 75
+      }
+    }, (record) => ({
+      name: record.name,
+      age: 0,
+      sex: record.sex
+    }))
+
+    const result1 = sql.pick({})
+    const expect1 = [
+      { name: 'kim', age: 10 },
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'john', age: 0, sex: 'male' },
+      { name: 'lee', age: 0, sex: 'female' },
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+  })
+
+  test('DOCUMENT:pick:range-1', () => {
+    const result1 = sql.pick({
+      age: {
+        gt: 15
+      }
+    }, {
+      order: 'age',
+      desc: true
+    })
+    const expect1 = [
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'lee', age: 50, sex: 'female' },
+      { name: 'john', age: 20, sex: 'male' },
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+
+    const result2 = sql.pick({}, {
+      order: 'sex',
+    })
+    const expect2 = [
+      { name: 'kim', age: 10 },
+      { name: 'lee', age: 50, sex: 'female' },
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'john', age: 20, sex: 'male' },
+    ]
+    result2.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect2[i]))
+    })
+  })
+
+  test('DOCUMENT:pick:range-2', () => {
+    for (let i = 0; i < 100; i++) {
+      sql.put({ name: 'unknown', age: i })
+    }
+
+    const result1 = sql.pick({
+      name: {
+        equal: 'unknown'
+      },
+      age: {
+        gt: 30
+      }
+    }, {
+      start: 0,
+      end: 10,
+      order: 'age'
+    })
+    const expect1 = new Array(10).fill(0).map((v, i) => ({ name: 'unknown', age: 31+i }))
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
   })
 })
