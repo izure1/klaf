@@ -41,6 +41,12 @@ const result = db.where({
 console.log(result) // [{ name: 'park', age: 25 }]
 ```
 
+The `TissueRollDocument` manages files in logical blocks called pages. The payload size determines the size of these blocks, measured in bytes.
+
+If there are many write/update operations in the database, it's recommended to set this value to a smaller size, around the size of one document. However, this may result in a larger overall database file size. On the other hand, if there are many read operations, it's advised to set this value to a larger size, but keep in mind that it might slow down write/update speeds.
+
+*Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is `8192`.
+
 ## How to work
 
 ### Explicit Type Specification
@@ -83,7 +89,7 @@ However, keep in mind that this might not be performance-efficient as it involve
 
 For example, you can insert a document like the following:
 
-```json
+```typescript
 {
   name: 'pit',
   color: 'gold',
@@ -104,7 +110,7 @@ However, there's an important point to note. The properties more and `products` 
 
 If you want to use `more.price` as a query condition, you need to make it a top-level property of the document. See the example below:
 
-```json
+```typescript
 {
   name: 'pit',
   color: 'gold',
