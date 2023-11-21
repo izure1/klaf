@@ -81,7 +81,26 @@ If you want to retrieve documents where the `age` property does not exist, you c
 db.pick({}).filter((doc) => !('age' in doc))
 ```
 
-However, keep in mind that this might not be performance-efficient as it involves querying all documents.
+However, keep in mind that this might not be performance-efficient as it involves querying all documents. Therefore, if you often need to search by `age`, it is better to initialize the value of the `age` property explicitly to `null`, not as an optional property, for optimization of `age` lookups.
+
+If you want to explicitly initialize this property to `null` in all existing documents, please update the database. The following is a code that queries all documents and initializes the `age` property to `null` if it is not in the document.
+
+```typescript
+// Ensure the age property in all documents
+db.partialUpdate({}, (document) => ({
+  age: 'age' in document ? document.age : null
+}))
+```
+
+Now, you can quickly search only for documents where the `age` property value is `null`.
+
+```typescript
+db.pick({
+  age: {
+    equal: null
+  }
+})
+```
 
 ### Optimization
 
@@ -155,6 +174,28 @@ const result = db.pick({
 This query retrieves values where the name is `pit` and the `price` is above `100` but below `3000`. The `gt` and `lt` operators, when applied to strings, compare based on Unicode code point values. For boolean values, `false` is treated as `0`, and `true` is treated as `1`. `Null` values are treated as `0` for computation.
 
 For other types, the behavior depends on the result of the `toString()` method. For example, an array like `[0, 1, 2, 3]` will be converted to `0,1,2,3` based on JavaScript's array toString implementation. If an object is encountered, it might result in `[object Object]`. In such cases, proper comparison might not work as expected, so caution is advised.
+
+If the query conditional is `equal`, you can directly input this value as a property value and use it in a shortened form.
+
+```typescript
+const result = db.pick({
+  name: {
+    equal: 'pit'
+  },
+  price: {
+    gt: 100,
+    lt: 3000
+  }
+})
+// The above code works the same as below.
+const result = db.pick({
+  name: 'pit',
+  price: {
+    gt: 100,
+    lt: 3000
+  }
+})
+```
 
 `TissueRollDocument` is inherently greedy, attempting to retrieve as many documents as possible. Therefore, if no query is specified, it will retrieve all inserted documents.
 
