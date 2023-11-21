@@ -291,10 +291,7 @@ export class TissueRoll {
   }
   
   private _createEmptyPage(header: Partial<IPageHeader>): number[] {
-    return [
-      ...this._createEmptyHeader(header),
-      ...this._createEmptyPayload()
-    ]
+    return this._createEmptyHeader(header).concat(this._createEmptyPayload())
   }
 
   private _addEmptyPage(header: Partial<IPageHeader>): number {
@@ -304,7 +301,7 @@ export class TissueRoll {
     FileView.Update(this.fd, TissueRoll.RootIndexOffset, IntegerConverter.ToArray32(index))
 
     // extend payload
-    const page = this._createEmptyPage({ ...header, index })
+    const page = this._createEmptyPage(Object.assign({}, header, { index }))
     FileView.Append(this.fd, page)
 
     return index
@@ -367,11 +364,10 @@ export class TissueRoll {
 
   private _rawRecordId(recordId: string): number[] {
     const { index, order, salt } = this._normalizeRecordId(recordId)
-    return [
-      ...IntegerConverter.ToArray32(index),
-      ...IntegerConverter.ToArray32(order),
-      ...IntegerConverter.ToArray32(salt),
-    ]
+    return IntegerConverter.ToArray32(index).concat(
+      IntegerConverter.ToArray32(order),
+      IntegerConverter.ToArray32(salt)
+    )
   }
 
   private _createRecord(id: string, data: number[]): number[] {
@@ -386,7 +382,7 @@ export class TissueRoll {
     // insert record max length
     IterableView.Update(recordHeader, TissueRoll.RecordHeaderMaxLengthOffset, length)
     
-    const record = [...recordHeader, ...data]
+    const record = recordHeader.concat(data)
     return record
   }
 
@@ -411,7 +407,7 @@ export class TissueRoll {
     // internal 페이지일 경우
     if (!header.next) {
       const recordPayload = FileView.Read(this.fd, recordPayloadPos, recordPayloadLength)
-      return [...recordHeader, ...recordPayload]
+      return recordHeader.concat(recordPayload)
     }
 
     // overflow 페이지로 나뉘어져 있을 경우
@@ -520,7 +516,7 @@ export class TissueRoll {
       maxLength,
       deleted,
     }
-    const rawRecord = [...rawHeader, ...rawPayload]
+    const rawRecord = rawHeader.concat(rawPayload)
     const payload = TextConverter.FromArray(rawPayload)
     return {
       rawRecord,
@@ -848,7 +844,7 @@ export class TissueRoll {
           free: 0,
           count: 1
         })
-        this._putPageHeader({ ...page, next: index })
+        this._putPageHeader(Object.assign({}, page, { next: index }))
       }
     }
     

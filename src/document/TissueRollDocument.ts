@@ -5,8 +5,9 @@ import { BPTree, SerializeStrategyHead } from 'serializable-bptree'
 import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollComparator } from './TissueRollComparator'
 import { TissueRollStrategy } from './TissueRollStrategy'
-import { ObjectHelper } from '../utils/ObjectHelper'
 import { ErrorBuilder } from './ErrorBuilder'
+import { ObjectHelper } from '../utils/ObjectHelper'
+import { IterableSet } from '../utils/IterableSet'
 
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
@@ -16,28 +17,30 @@ export interface TissueRollDocumentRoot {
   head: Record<string, SerializeStrategyHead|null>
 }
 
+type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
+  /**
+   * Includes if this value matches the document's property value.
+   */
+  equal?: T[K],
+  /**
+   * Includes if this value does not match the document's property value.
+   */
+  notEqual?: T[K],
+  /** 
+   * Includes if this value is greater than the document's property value.
+   */
+  gt?: T[K],
+  /**
+   * Includes if this value is less than the document's property value.
+   */
+  lt?: T[K],
+}
+
 type TissueRollDocumentQuery<T extends Record<string, SupportedType>> = {
   /**
    * The property of the document to be searched.
    */
-  [K in keyof T]?: {
-    /**
-     * Includes if this value matches the document's property value.
-     */
-    equal?: T[K],
-    /**
-     * Includes if this value does not match the document's property value.
-     */
-    notEqual?: T[K],
-    /** 
-     * Includes if this value is greater than the document's property value.
-     */
-    gt?: T[K],
-    /**
-     * Includes if this value is less than the document's property value.
-     */
-    lt?: T[K],
-  }
+  [K in keyof T]?: T[K]|TissueRollDocumentQueryCondition<T, K>
 }
 
 type TissueRollDocumentRecord<T extends Record<string, SupportedType>> = T&{
@@ -171,21 +174,29 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       order: 'createdAt',
       desc: false
     }
-    const merged: Required<TissueRollDocumentOption<T>> = {
-      ...def,
-      ...option
-    }
+    const merged: Required<TissueRollDocumentOption<T>> = Object.assign({}, def, option)
     return merged
   }
 
-  private _normalizeQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
-    query = {
-      createdAt: {
-        gt: 0
-      },
-      ...query
+  private _normalizeFlatQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
+    query = Object.assign({}, query)
+    for (const property in query) {
+      const condition = query[property]
+      if (typeof condition !== 'object' || condition === null) {
+        query[property] = {
+          equal: condition
+        } as any
+      }
     }
     return query
+  }
+
+  private _normalizeQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
+    return Object.assign({}, {
+      createdAt: {
+        gt: 0
+      }
+    }, this._normalizeFlatQuery(query))
   }
 
   /**
@@ -199,11 +210,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    */
   put(document: T): TissueRollDocumentRecord<T> {
     const now = Date.now()
-    const record = {
-      ...document,
+    const record = Object.assign({}, document, {
       createdAt: now,
       updatedAt: now,
-    }
+    })
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
     for (const property in record) {
@@ -292,11 +302,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
         const before = beforeRecord[property]
         tree.delete(id, before)
       }
-      const afterRecord: TissueRollDocumentRecord<T> = {
-        ...recordUpdate,
+      const afterRecord: TissueRollDocumentRecord<T> = Object.assign({}, recordUpdate, {
         createdAt: beforeRecord.createdAt,
         updatedAt: Date.now()
-      }
+      })
       for (const property in afterRecord) {
         const tree = this.getTree(property)
         const after = afterRecord[property]
@@ -309,29 +318,13 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   
   protected findRecordIds(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): string[] {
     query = this._normalizeQuery(query)
-    const found: Record<string, ReturnType<typeof BPTree.prototype.where>> = {}
+    const found: Set<string>[] = []
     for (const property in query) {
       const tree = this.getTree(property)
-      const pairs = tree.where(query[property]!)
-      found[property] = pairs
+      const keys = tree.keys(query[property]! as TissueRollDocumentQueryCondition<T>)
+      found.push(keys)
     }
-    const count: Record<string, number> = {}
-    const intersections = new Set<string>()
-    const max = Object.keys(found).length
-    for (const property in found) {
-      const pairs = found[property]
-      for (const pair of pairs) {
-        const k = pair.key
-        if (!(k in count)) {
-          count[k] = 0
-        }
-        count[k]++
-        if (count[k] === max) {
-          intersections.add(pair.key)
-        }
-      }
-    }
-    return [...intersections]
+    return IterableSet.Intersections(found)
   }
 
   /**
@@ -350,14 +343,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       return JSON.parse(payload)
     })
     if (desc) {
-      records.sort((a, b) => {
-        return this.comparator.asc(b[order], a[order])
-      })
+      records.sort((a, b) => this.comparator.asc(b[order], a[order]))
     }
     else {
-      records.sort((a, b) => {
-        return this.comparator.asc(a[order], b[order])
-      })
+      records.sort((a, b) => this.comparator.asc(a[order], b[order]))
     }
     return records.slice(start, end)
   }

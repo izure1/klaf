@@ -1,5 +1,6 @@
+type CacheKey = string|number|symbol
 type CacheData<T> = {
-  [key: string]: T
+  [key: CacheKey]: T
 }
 
 export class CacheStore<T> {
@@ -9,18 +10,18 @@ export class CacheStore<T> {
     this._cache = cache
   }
 
-  set(key: string, value: T): void {
+  set(key: CacheKey, value: T): void {
     this._cache[key] = value
   }
 
-  get(key: string, generator: () => T): T {
+  get(key: CacheKey, generator: () => T): T {
     if (!this.has(key)) {
       this._cache[key] = generator()
     }
     return this._cache[key];
   }
 
-  delete(key: string): void {
+  delete(key: CacheKey): void {
     delete this._cache[key];
   }
 
@@ -28,7 +29,7 @@ export class CacheStore<T> {
     this._cache = {};
   }
 
-  has(key: string): boolean {
+  has(key: CacheKey): boolean {
     return key in this._cache;
   }
 

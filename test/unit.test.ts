@@ -311,6 +311,35 @@ describe('DOCUMENT', () => {
     })
   })
 
+  test('DOCUMENT:pick:query', () => {
+    const result1 = sql.pick({
+      name: 'kim'
+    })
+    const expect1 = [
+      { name: 'kim', age: 10 }
+    ]
+    result1.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect1[i]))
+    })
+
+    const result2 = sql.pick({
+      name: 'kim',
+      age: 10
+    })
+    const expect2 = [
+      { name: 'kim', age: 10 }
+    ]
+    result2.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect2[i]))
+    })
+
+    const result3 = sql.pick({
+      name: 'kim',
+      age: 11
+    })
+    expect(result3).toEqual([])
+  })
+
   test('DOCUMENT:pick:range-1', () => {
     const result1 = sql.pick({
       age: {
