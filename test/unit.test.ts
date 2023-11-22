@@ -192,8 +192,10 @@ describe('DOCUMENT', () => {
     sql.put({ name: 'lee', age: 50, sex: 'female' })
     
     const close = () => {
-      sql.close()
-      unlinkSync(dbName)
+      setTimeout(() => {
+        sql.close()
+        unlinkSync(dbName)
+      }, 1000)
     }
 
     return {
