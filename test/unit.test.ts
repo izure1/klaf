@@ -1,3 +1,4 @@
+import { unlinkSync } from 'fs'
 import { TissueRoll, TissueRollDocument } from '../'
 
 describe('Create test', () => {
@@ -176,23 +177,34 @@ describe('Record test', () => {
 })
 
 describe('DOCUMENT', () => {
-  let sql: TissueRollDocument<{
-    name: string
-    age: number
-    sex?: 'male'|'female'
-    more?: any
-  }>
-
-  beforeEach(() => {
-    sql = TissueRollDocument.Create('./sql.db', 512, true)
-  
+  const createDocumentDatabase = (name: string) => {
+    const dbName = `./sql-${name}.db`
+    const sql = TissueRollDocument.Create<{
+      name: string
+      age: number
+      sex?: 'male'|'female'
+      more?: any
+    }>(dbName, 512, true)
+    
     sql.put({ name: 'kim', age: 10 })
     sql.put({ name: 'tomas', age: 80, sex: 'male' })
     sql.put({ name: 'john', age: 20, sex: 'male' })
     sql.put({ name: 'lee', age: 50, sex: 'female' })
-  })
+    
+    const close = () => {
+      sql.close()
+      unlinkSync(dbName)
+    }
+
+    return {
+      sql,
+      close
+    }
+  }
 
   test('DOCUMENT:put', () => {
+    const { sql, close } = createDocumentDatabase('put')
+
     const result1 = sql.pick({
       age: {
         gt: 15
@@ -222,9 +234,13 @@ describe('DOCUMENT', () => {
     result2.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect2[i]))
     })
+
+    close()
   })
 
   test('DOCUMENT:delete', () => {
+    const { sql, close } = createDocumentDatabase('delete') 
+
     sql.delete({
       name: {
         equal: 'tomas'
@@ -242,9 +258,13 @@ describe('DOCUMENT', () => {
 
     sql.delete({})
     expect(sql.pick({})).toEqual([])
+
+    close()
   })
 
   test('DOCUMENT:update:partial', () => {
+    const { sql, close } = createDocumentDatabase('update-partial')
+
     sql.partialUpdate({
       name: {
         equal: 'kim'
@@ -265,9 +285,13 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+
+    close()
   })
 
   test('DOCUMENT:update:full-1', () => {
+    const { sql, close } = createDocumentDatabase('update-full-1')
+
     sql.fullUpdate({
       age: {
         gt: 15,
@@ -285,9 +309,13 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+
+    close()
   })
 
   test('DOCUMENT:update:full-2', () => {
+    const { sql, close } = createDocumentDatabase('update-full-2')
+
     sql.fullUpdate({
       age: {
         gt: 15,
@@ -309,9 +337,13 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+
+    close()
   })
 
   test('DOCUMENT:pick:query', () => {
+    const { sql, close } = createDocumentDatabase('pick-query')
+
     const result1 = sql.pick({
       name: 'kim'
     })
@@ -338,9 +370,13 @@ describe('DOCUMENT', () => {
       age: 11
     })
     expect(result3).toEqual([])
+
+    close()
   })
 
   test('DOCUMENT:pick:range-1', () => {
+    const { sql, close } = createDocumentDatabase('pick-range-1')
+
     const result1 = sql.pick({
       age: {
         gt: 15
@@ -370,9 +406,13 @@ describe('DOCUMENT', () => {
     result2.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect2[i]))
     })
+
+    close()
   })
 
   test('DOCUMENT:pick:range-2', () => {
+    const { sql, close } = createDocumentDatabase('pick-range-2')
+
     for (let i = 0; i < 100; i++) {
       sql.put({ name: 'unknown', age: i })
     }
@@ -393,5 +433,7 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+
+    close()
   })
 })

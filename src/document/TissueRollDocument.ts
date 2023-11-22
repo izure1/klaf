@@ -8,6 +8,7 @@ import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { IterableSet } from '../utils/IterableSet'
+import { CacheStore } from '../utils/CacheStore'
 
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
@@ -141,28 +142,24 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly db: TissueRoll
   protected readonly order: number
   protected readonly root: TissueRollDocumentRoot
-  protected readonly trees: Map<string, BPTree<string, SupportedType>>
+  protected readonly trees: CacheStore<BPTree<string, SupportedType>>
   protected readonly comparator: TissueRollComparator
 
   protected constructor(db: TissueRoll, root: TissueRollDocumentRoot) {
     this.db = db
     this.root = root
     this.order = Math.max(Math.ceil(db.root.payloadSize/50), 4)
-    this.trees = new Map()
+    this.trees = new CacheStore()
     this.comparator = new TissueRollComparator()
   }
 
   protected getTree(property: string): BPTree<string, SupportedType> {
-    if (!this.trees.has(property)) {
-      this.trees.set(
-        property,
-        new BPTree<string, SupportedType>(
-          new TissueRollStrategy(this.order, property, this.db),
-          this.comparator
-        )
+    return this.trees.get(property, () => {
+      return new BPTree<string, SupportedType>(
+        new TissueRollStrategy(this.order, property, this.db),
+        this.comparator
       )
-    }
-    return this.trees.get(property)!
+    })
   }
 
   private _normalizeOption(

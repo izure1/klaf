@@ -238,7 +238,8 @@ export class TissueRoll {
   protected readonly secretKey: string
   protected readonly fpe: FpeCipher
   protected readonly hooker: IHookallSync<IHooker>
-  private readonly _cachedId: CacheStore<{ index: number, order: number, salt: number }>
+  private readonly _cachedId: CacheStore<string>
+  private readonly _cachedIdInfo: CacheStore<{ index: number, order: number, salt: number }>
 
   protected constructor(fd: number, secretKey: string, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
@@ -257,6 +258,7 @@ export class TissueRoll {
     
     this.hooker = useHookallSync<IHooker>(this)
     this._cachedId = new CacheStore()
+    this._cachedIdInfo = new CacheStore()
   }
 
   get root(): IRootHeader {
@@ -339,16 +341,18 @@ export class TissueRoll {
   }
 
   private _recordId(index: number, order: number, salt: number): string {
-    const sIndex  = index.toString(16).padStart(8, '0')
-    const sOrder  = order.toString(16).padStart(8, '0')
-    const sSalt   = salt.toString(16).padStart(8, '0')
-    const base64  = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`)
-    const result  = this.fpe.encrypt(base64)
-    return result
+    return this._cachedId.get(`${index}:${order}:${salt}`, () => {
+      const sIndex  = index.toString(16).padStart(8, '0')
+      const sOrder  = order.toString(16).padStart(8, '0')
+      const sSalt   = salt.toString(16).padStart(8, '0')
+      const base64  = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`)
+      const result  = this.fpe.encrypt(base64)
+      return result
+    })
   }
 
   private _normalizeRecordId(recordId: string) {
-    return this._cachedId.get(recordId, () => {
+    return this._cachedIdInfo.get(recordId, () => {
       const base64 = this.fpe.decrypt(recordId)
       const plain = Base64Helper.UrlSafeDecode(base64)
       const index = parseInt(plain.slice(0, 8), 16)

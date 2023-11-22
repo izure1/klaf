@@ -4,7 +4,7 @@ This document covers the usage of the `document-oriented` database in `tissue-ro
 
 The document database in `tissue-roll` allows you to insert data in `JSON` format. Specify each field in TypeScript.
 
-If this is not the database you were looking for, please check the `key-value` database.
+If this is not the database you were looking for, please check the [key-value](../core/README.md) database.
 
 ## Usage
 

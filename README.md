@@ -47,7 +47,10 @@ When you insert data, the ID you get back includes information about where the d
 
 ## Performance Test
 
-The test result is the average value from 10 attempts.  
+The test result is the average value from 10 attempts.
+
+`tissue-roll` supports two databases, and this test tested the core functions of data reading/writing of the two databases. Therefore, it's not a perfect test result, but it's enough to show the time complexity.
+
 If you're adding data to the database in real-time, the results would be as follows:
 
 ### WRITE
@@ -79,7 +82,9 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 ![WRITE](./docs/asset/image/svg_perf_write.svg)
 ![READ](./docs/asset/image/svg_perf_read.svg)
 
-**NOTICE!** *This is the usual case, but the results can be different depending on programming optimizations.*
+**NOTICE!**
+
+*This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and tissue-roll has a speed of **O(1)**.*
 
 ## Install
 
