@@ -32,7 +32,7 @@ db.put({
   age: 10
 })
 
-const result = db.where({
+const result = db.pick({
   age: {
     gt: 15
   }
