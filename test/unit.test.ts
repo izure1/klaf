@@ -191,11 +191,9 @@ describe('DOCUMENT', () => {
     sql.put({ name: 'john', age: 20, sex: 'male' })
     sql.put({ name: 'lee', age: 50, sex: 'female' })
     
-    const close = () => {
-      setTimeout(() => {
-        sql.close()
-        unlinkSync(dbName)
-      }, 1000)
+    const close = async() => {
+      await sql.close()
+      unlinkSync(dbName)
     }
 
     return {
@@ -204,7 +202,7 @@ describe('DOCUMENT', () => {
     }
   }
 
-  test('DOCUMENT:put', () => {
+  test('DOCUMENT:put', async () => {
     const { sql, close } = createDocumentDatabase('put')
 
     const result1 = sql.pick({
@@ -237,10 +235,10 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect2[i]))
     })
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:delete', () => {
+  test('DOCUMENT:delete', async () => {
     const { sql, close } = createDocumentDatabase('delete') 
 
     sql.delete({
@@ -261,10 +259,10 @@ describe('DOCUMENT', () => {
     sql.delete({})
     expect(sql.pick({})).toEqual([])
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:update:partial', () => {
+  test('DOCUMENT:update:partial', async () => {
     const { sql, close } = createDocumentDatabase('update-partial')
 
     sql.partialUpdate({
@@ -288,10 +286,10 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:update:full-1', () => {
+  test('DOCUMENT:update:full-1', async () => {
     const { sql, close } = createDocumentDatabase('update-full-1')
 
     sql.fullUpdate({
@@ -312,10 +310,10 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:update:full-2', () => {
+  test('DOCUMENT:update:full-2', async () => {
     const { sql, close } = createDocumentDatabase('update-full-2')
 
     sql.fullUpdate({
@@ -340,10 +338,10 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:pick:query', () => {
+  test('DOCUMENT:pick:query', async () => {
     const { sql, close } = createDocumentDatabase('pick-query')
 
     const result1 = sql.pick({
@@ -373,10 +371,10 @@ describe('DOCUMENT', () => {
     })
     expect(result3).toEqual([])
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:pick:range-1', () => {
+  test('DOCUMENT:pick:range-1', async () => {
     const { sql, close } = createDocumentDatabase('pick-range-1')
 
     const result1 = sql.pick({
@@ -409,10 +407,10 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect2[i]))
     })
 
-    close()
+    await close()
   })
 
-  test('DOCUMENT:pick:range-2', () => {
+  test('DOCUMENT:pick:range-2', async () => {
     const { sql, close } = createDocumentDatabase('pick-range-2')
 
     for (let i = 0; i < 100; i++) {
@@ -436,6 +434,6 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
 
-    close()
+    await close()
   })
 })

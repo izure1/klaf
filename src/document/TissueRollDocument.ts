@@ -9,6 +9,7 @@ import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { IterableSet } from '../utils/IterableSet'
 import { CacheStore } from '../utils/CacheStore'
+import { DelayedExecution } from '../utils/DelayedExecution'
 
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
@@ -113,7 +114,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const stringify = JSON.stringify(docRoot)
     db.update(rootId, stringify)
 
-    return new TissueRollDocument(db, docRoot)
+    return new TissueRollDocument(db, docRoot, 0)
   }
 
   /**
@@ -136,7 +137,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const record = db.getRecords(1).pop()!
     const docRoot = TissueRollDocument.Verify(file, record.payload)
 
-    return new TissueRollDocument(db, docRoot)
+    return new TissueRollDocument(db, docRoot, 0)
   }
 
   protected readonly db: TissueRoll
@@ -144,19 +145,28 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly root: TissueRollDocumentRoot
   protected readonly trees: CacheStore<BPTree<string, SupportedType>>
   protected readonly comparator: TissueRollComparator
+  protected readonly locker: DelayedExecution
+  protected readonly writeBack: number
+  protected lock: boolean
 
-  protected constructor(db: TissueRoll, root: TissueRollDocumentRoot) {
+  protected constructor(db: TissueRoll, root: TissueRollDocumentRoot, writeBack: number) {
     this.db = db
     this.root = root
     this.order = Math.max(Math.ceil(db.root.payloadSize/50), 4)
     this.trees = new CacheStore()
     this.comparator = new TissueRollComparator()
+    this.writeBack = writeBack
+    this.locker = new DelayedExecution(writeBack)
+    this.lock = false
   }
 
   protected getTree(property: string): BPTree<string, SupportedType> {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     return this.trees.get(property, () => {
       return new BPTree<string, SupportedType>(
-        new TissueRollStrategy(this.order, property, this.db),
+        new TissueRollStrategy(this.order, property, this.db, this.writeBack),
         this.comparator
       )
     })
@@ -206,6 +216,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * @param document The document to be inserted.
    */
   put(document: T): TissueRollDocumentRecord<T> {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     const now = Date.now()
     const record = Object.assign({}, document, {
       createdAt: now,
@@ -226,6 +239,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * @param query The scope of the documents to be deleted.
    */
   delete(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): void {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     const ids = this.findRecordIds(query)
     for (const id of ids) {
       const payload = this.db.pick(id).record.payload
@@ -254,6 +270,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     update: Partial<T>|((record: TissueRollDocumentRecord<T>) => Partial<T>)
   ): void {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     for (const id of this.findRecordIds(query)) {
       const payload = this.db.pick(id).record.payload
       const record = JSON.parse(payload)
@@ -287,6 +306,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     update: T|((record: TissueRollDocumentRecord<T>) => T)
   ): void {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     for (const id of this.findRecordIds(query)) {
       const payload = this.db.pick(id).record.payload
       const beforeRecord = JSON.parse(payload) as TissueRollDocumentRecord<T>
@@ -314,6 +336,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   }
   
   protected findRecordIds(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): string[] {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     query = this._normalizeQuery(query)
     const found: Set<string>[] = []
     for (const property in query) {
@@ -334,6 +359,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     option: TissueRollDocumentOption<TissueRollDocumentRecord<T>> = {}
   ): TissueRollDocumentRecord<T>[] {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
     const { start, end, order, desc } = this._normalizeOption(option)
     const records = this.findRecordIds(query).map((id) => {
       const payload = this.db.pick(id).record.payload
@@ -350,8 +378,21 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
   /**
    * Shut down the database to close file input and output.
+   * The database does not close immediately due to delayed writing.
+   * Therefore, this function operates asynchronously, and when the database is closed, the promise is resolved.
+   * 
+   * While the database is closing, it is locked, and during this period, you cannot perform read/write operations on the database.
    */
-  close(): void {
-    this.db.close()
+  close(): Promise<void> {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
+    this.lock = true
+    return new Promise((resolve) => {
+      this.locker.execute('database-close', () => {
+        this.db.close()
+        resolve()
+      })
+    })
   }
 }
