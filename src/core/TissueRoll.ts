@@ -28,6 +28,7 @@ type IRootHeader = {
   payloadSize: number
   timestamp: bigint
   secretKey: bigint
+  autoIncrement: bigint
   index: number
 }
 
@@ -39,53 +40,55 @@ type IHooker = {
 }
 
 export class TissueRoll {
-  protected static readonly DB_VERSION                   = '2.4.0'
-  protected static readonly DB_NAME                      = 'TissueRoll'
-  protected static readonly RootValidStringOffset        = 0
-  protected static readonly RootValidStringSize          = TissueRoll.DB_NAME.length
-  protected static readonly RootMajorVersionOffset       = TissueRoll.RootValidStringOffset+TissueRoll.RootValidStringSize
-  protected static readonly RootMajorVersionSize         = 1
-  protected static readonly RootMinorVersionOffset       = TissueRoll.RootMajorVersionOffset+TissueRoll.RootMajorVersionSize
-  protected static readonly RootMinorVersionSize         = 1
-  protected static readonly RootPatchVersionOffset       = TissueRoll.RootMinorVersionOffset+TissueRoll.RootMinorVersionSize
-  protected static readonly RootPatchVersionSize         = 1
-  protected static readonly RootIndexOffset              = TissueRoll.RootPatchVersionOffset+TissueRoll.RootPatchVersionSize
-  protected static readonly RootIndexSize                = 4
-  protected static readonly RootPayloadSizeOffset        = TissueRoll.RootIndexOffset+TissueRoll.RootIndexSize
-  protected static readonly RootPayloadSizeSize          = 4
-  protected static readonly RootTimestampOffset          = TissueRoll.RootPayloadSizeOffset+TissueRoll.RootPayloadSizeSize
-  protected static readonly RootTimestampSize            = 8
-  protected static readonly RootSecretKeyOffset          = TissueRoll.RootTimestampOffset+TissueRoll.RootTimestampSize
-  protected static readonly RootSecretKeySize            = 8
+  protected static readonly DB_VERSION                    = '2.5.0'
+  protected static readonly DB_NAME                       = 'TissueRoll'
+  protected static readonly RootValidStringOffset         = 0
+  protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
+  protected static readonly RootMajorVersionOffset        = TissueRoll.RootValidStringOffset+TissueRoll.RootValidStringSize
+  protected static readonly RootMajorVersionSize          = 1
+  protected static readonly RootMinorVersionOffset        = TissueRoll.RootMajorVersionOffset+TissueRoll.RootMajorVersionSize
+  protected static readonly RootMinorVersionSize          = 1
+  protected static readonly RootPatchVersionOffset        = TissueRoll.RootMinorVersionOffset+TissueRoll.RootMinorVersionSize
+  protected static readonly RootPatchVersionSize          = 1
+  protected static readonly RootIndexOffset               = TissueRoll.RootPatchVersionOffset+TissueRoll.RootPatchVersionSize
+  protected static readonly RootIndexSize                 = 4
+  protected static readonly RootPayloadSizeOffset         = TissueRoll.RootIndexOffset+TissueRoll.RootIndexSize
+  protected static readonly RootPayloadSizeSize           = 4
+  protected static readonly RootTimestampOffset           = TissueRoll.RootPayloadSizeOffset+TissueRoll.RootPayloadSizeSize
+  protected static readonly RootTimestampSize             = 8
+  protected static readonly RootSecretKeyOffset           = TissueRoll.RootTimestampOffset+TissueRoll.RootTimestampSize
+  protected static readonly RootSecretKeySize             = 8
+  protected static readonly RootAutoIncrementOffset       = TissueRoll.RootSecretKeyOffset+TissueRoll.RootSecretKeySize
+  protected static readonly RootAutoIncrementSize         = 8
 
-  protected static readonly RootChunkSize                = 200
-  protected static readonly HeaderSize                   = 100
-  protected static readonly CellSize                     = 4
-  protected static readonly RecordHeaderSize             = 40
-  protected static readonly RecordHeaderIndexOffset      = 0
-  protected static readonly RecordHeaderIndexSize        = 4
-  protected static readonly RecordHeaderOrderOffset      = TissueRoll.RecordHeaderIndexOffset+TissueRoll.RecordHeaderIndexSize
-  protected static readonly RecordHeaderOrderSize        = 4
-  protected static readonly RecordHeaderSaltOffset       = TissueRoll.RecordHeaderOrderOffset+TissueRoll.RecordHeaderOrderSize
-  protected static readonly RecordHeaderSaltSize         = 4
-  protected static readonly RecordHeaderLengthOffset     = TissueRoll.RecordHeaderSaltOffset+TissueRoll.RecordHeaderSaltSize
-  protected static readonly RecordHeaderLengthSize       = 4
-  protected static readonly RecordHeaderMaxLengthOffset  = TissueRoll.RecordHeaderLengthOffset+TissueRoll.RecordHeaderLengthSize
-  protected static readonly RecordHeaderMaxLengthSize    = 4
-  protected static readonly RecordHeaderDeletedOffset    = TissueRoll.RecordHeaderMaxLengthOffset+TissueRoll.RecordHeaderMaxLengthSize
-  protected static readonly RecordHeaderDeletedSize      = 1
-  protected static readonly RecordHeaderAliasIndexOffset = TissueRoll.RecordHeaderDeletedOffset+TissueRoll.RecordHeaderDeletedSize
-  protected static readonly RecordHeaderAliasIndexSize   = 4
-  protected static readonly RecordHeaderAliasOrderOffset = TissueRoll.RecordHeaderAliasIndexOffset+TissueRoll.RecordHeaderAliasIndexSize
-  protected static readonly RecordHeaderAliasOrderSize   = 4
-  protected static readonly RecordHeaderAliasSaltOffset  = TissueRoll.RecordHeaderAliasOrderOffset+TissueRoll.RecordHeaderAliasOrderSize
-  protected static readonly RecordHeaderAliasSaltSize    = 4
+  protected static readonly RootChunkSize                 = 200
+  protected static readonly HeaderSize                    = 100
+  protected static readonly CellSize                      = 4
+  protected static readonly RecordHeaderSize              = 40
+  protected static readonly RecordHeaderIndexOffset       = 0
+  protected static readonly RecordHeaderIndexSize         = 4
+  protected static readonly RecordHeaderOrderOffset       = TissueRoll.RecordHeaderIndexOffset+TissueRoll.RecordHeaderIndexSize
+  protected static readonly RecordHeaderOrderSize         = 4
+  protected static readonly RecordHeaderSaltOffset        = TissueRoll.RecordHeaderOrderOffset+TissueRoll.RecordHeaderOrderSize
+  protected static readonly RecordHeaderSaltSize          = 4
+  protected static readonly RecordHeaderLengthOffset      = TissueRoll.RecordHeaderSaltOffset+TissueRoll.RecordHeaderSaltSize
+  protected static readonly RecordHeaderLengthSize        = 4
+  protected static readonly RecordHeaderMaxLengthOffset   = TissueRoll.RecordHeaderLengthOffset+TissueRoll.RecordHeaderLengthSize
+  protected static readonly RecordHeaderMaxLengthSize     = 4
+  protected static readonly RecordHeaderDeletedOffset     = TissueRoll.RecordHeaderMaxLengthOffset+TissueRoll.RecordHeaderMaxLengthSize
+  protected static readonly RecordHeaderDeletedSize       = 1
+  protected static readonly RecordHeaderAliasIndexOffset  = TissueRoll.RecordHeaderDeletedOffset+TissueRoll.RecordHeaderDeletedSize
+  protected static readonly RecordHeaderAliasIndexSize    = 4
+  protected static readonly RecordHeaderAliasOrderOffset  = TissueRoll.RecordHeaderAliasIndexOffset+TissueRoll.RecordHeaderAliasIndexSize
+  protected static readonly RecordHeaderAliasOrderSize    = 4
+  protected static readonly RecordHeaderAliasSaltOffset   = TissueRoll.RecordHeaderAliasOrderOffset+TissueRoll.RecordHeaderAliasOrderSize
+  protected static readonly RecordHeaderAliasSaltSize     = 4
 
 
-  protected static readonly UnknownType                  = 0
-  protected static readonly InternalType                 = 1
-  protected static readonly OverflowType                 = 2
-  protected static readonly SystemReservedType           = 3
+  protected static readonly UnknownType                   = 0
+  protected static readonly InternalType                  = 1
+  protected static readonly OverflowType                  = 2
+  protected static readonly SystemReservedType            = 3
 
 
   /**
@@ -112,6 +115,7 @@ export class TissueRoll {
       RootTimestampOffset,
       RootSecretKeyOffset,
       RootSecretKeySize,
+      RootAutoIncrementOffset
     } = TissueRoll
     const [
       majorVersion,
@@ -119,13 +123,14 @@ export class TissueRoll {
       patchVersion
     ] = DB_VERSION.split('.')
     const secretKey = CryptoHelper.RandomBytes(RootSecretKeySize)
-    IterableView.Update(root, RootValidStringOffset,  TextConverter.ToArray(DB_NAME))
-    IterableView.Update(root, RootMajorVersionOffset, IntegerConverter.ToArray8(Number(majorVersion)))
-    IterableView.Update(root, RootMinorVersionOffset, IntegerConverter.ToArray8(Number(minorVersion)))
-    IterableView.Update(root, RootPatchVersionOffset, IntegerConverter.ToArray8(Number(patchVersion)))
-    IterableView.Update(root, RootPayloadSizeOffset,  IntegerConverter.ToArray32(payloadSize))
-    IterableView.Update(root, RootTimestampOffset,    IntegerConverter.ToArray64(BigInt(Date.now())))
-    IterableView.Update(root, RootSecretKeyOffset,    Array.from(secretKey))
+    IterableView.Update(root, RootValidStringOffset,    TextConverter.ToArray(DB_NAME))
+    IterableView.Update(root, RootMajorVersionOffset,   IntegerConverter.ToArray8(Number(majorVersion)))
+    IterableView.Update(root, RootMinorVersionOffset,   IntegerConverter.ToArray8(Number(minorVersion)))
+    IterableView.Update(root, RootPatchVersionOffset,   IntegerConverter.ToArray8(Number(patchVersion)))
+    IterableView.Update(root, RootPayloadSizeOffset,    IntegerConverter.ToArray32(payloadSize))
+    IterableView.Update(root, RootTimestampOffset,      IntegerConverter.ToArray64(BigInt(Date.now())))
+    IterableView.Update(root, RootSecretKeyOffset,      Array.from(secretKey))
+    IterableView.Update(root, RootAutoIncrementOffset,  IntegerConverter.ToArray64(0n))
 
     fs.writeFileSync(file, Buffer.from(root))
 
@@ -183,6 +188,8 @@ export class TissueRoll {
       RootTimestampSize,
       RootSecretKeyOffset,
       RootSecretKeySize,
+      RootAutoIncrementOffset,
+      RootAutoIncrementSize,
     } = TissueRoll
     const majorVersion  = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
@@ -205,6 +212,9 @@ export class TissueRoll {
     const secretKey     = IntegerConverter.FromArray64(
       IterableView.Read(rHeader, RootSecretKeyOffset, RootSecretKeySize)
     )
+    const autoIncrement = IntegerConverter.FromArray64(
+      IterableView.Read(rHeader, RootAutoIncrementOffset, RootAutoIncrementSize)
+    )
     return {
       majorVersion,
       minorVersion,
@@ -212,6 +222,7 @@ export class TissueRoll {
       payloadSize,
       timestamp,
       secretKey,
+      autoIncrement,
       index,
     }
   }
@@ -668,13 +679,26 @@ export class TissueRoll {
     return recordId
   }
 
-  private _put(data: number[]): string {
+  private _put(data: number[], autoIncrement: boolean): string {
     let index   = this.root.index
     let header  = this._normalizeHeader(this._getHeader(index))
 
     if (header.type !== TissueRoll.InternalType) {
       index   = this._addEmptyPage({ type: TissueRoll.InternalType })
       header  = this._normalizeHeader(this._getHeader(index))
+    }
+
+    if (autoIncrement) {
+      const num = IntegerConverter.FromArray64(FileView.Read(
+        this.fd,
+        TissueRoll.RootAutoIncrementOffset,
+        TissueRoll.RootAutoIncrementSize
+      ))
+      FileView.Update(
+        this.fd,
+        TissueRoll.RootAutoIncrementOffset,
+        IntegerConverter.ToArray64(num+1n)
+      )
     }
     
     // 1. 이전 페이지의 공간이 넉넉하여 단일 페이지에 넣을 수 있는 경우
@@ -747,14 +771,20 @@ export class TissueRoll {
   }
 
   /**
-   * You store data in the database and receive a record ID for the saved data. This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
+   * You store data in the database and receive a record ID for the saved data.
+   * This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
    * @param data The data string what you want store.
+   * @param autoIncrement Increases `this.root.autoIncrement` by 1.
+   * This value is non-volatile and permanently stored in the database.
+   * Therefore, you can track how many times data has been inserted into the database.
+   * This increment is not inserted into the rows of the data.
+   * The default value is `true`, and if you set this to `false`, the autoIncrement value will not increase.
    * @returns The record id.
    */
-  put(data: string): string {
+  put(data: string, autoIncrement = true): string {
     return this.hooker.trigger('put', data, (data) => {
       const rData = TextConverter.ToArray(data)
-      const id = this._put(rData)
+      const id = this._put(rData, autoIncrement)
       return id
     })
   }
@@ -775,7 +805,7 @@ export class TissueRoll {
     if (tail.record.header.maxLength < payload.length) {
       // Overflow 타입의 페이지가 아닐 경우엔 새롭게 삽입해야 합니다.
       if (!tail.page.next) {
-        const afterRecordId = this._put(payload)
+        const afterRecordId = this._put(payload, false)
         const { index, order, salt } = this._normalizeRecordId(afterRecordId)
         
         if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
@@ -895,7 +925,8 @@ export class TissueRoll {
   }
 
   /**
-   * It returns whether the record exists in the database. If it has been deleted or has an invalid record ID, it returns `false`.
+   * It returns whether the record exists in the database.
+   * If it has been deleted or has an invalid record ID, it returns `false`.
    * @param recordId The record id what you want verify.
    */
   exists(recordId: string): boolean {
@@ -918,7 +949,8 @@ export class TissueRoll {
   onBefore(command: 'put', callback: (data: string) => string): this
   /**
    * Hook into the database for pre-processing before updating data.  
-   * The callback function receives the record ID and the data to be updated. The data returned by this callback function, along with the record ID, is what is actually used to update the database.
+   * The callback function receives the record ID and the data to be updated.
+   * The data returned by this callback function, along with the record ID, is what is actually used to update the database.
    * 
    * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the data and record ID returned by the previous one as parameters.
    * @param command Only "update"
@@ -927,7 +959,8 @@ export class TissueRoll {
   onBefore(command: 'update', callback: (record: IHookerRecordInformation) => IHookerRecordInformation): this
   /**
    * Hook into the database for pre-processing before deleting a record.  
-   * The callback function receives the ID of the record to be deleted. The record ID returned by this callback function is what is actually used to delete the record from the database.
+   * The callback function receives the ID of the record to be deleted.
+   * The record ID returned by this callback function is what is actually used to delete the record from the database.
    * 
    * If multiple pre-processing functions are registered, they run sequentially, with each subsequent pre-processing function receiving the record ID returned by the previous one as a parameter.
    * @param command Only "delete"

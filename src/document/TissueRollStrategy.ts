@@ -1,29 +1,27 @@
 import { BPTreeNode, SerializeStrategy, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
-
 import { TissueRoll } from '../core'
 import { DelayedExecution } from '../utils/DelayedExecution'
 
-export class TissueRollStrategy extends SerializeStrategy<string, SupportedType> {
+export class TissueRollStrategy<T extends Record<string, SupportedType>> extends SerializeStrategy<string, SupportedType> {
   protected readonly property: string
+  protected readonly rootId: string
   protected readonly db: TissueRoll
-  private readonly _delayedExecution: DelayedExecution
+  protected readonly locker: DelayedExecution
+  protected readonly root: TissueRollDocumentRoot
 
-  constructor(order: number, property: string, db: TissueRoll, delay = 0) {
+  constructor(order: number, property: string, db: TissueRoll, locker: DelayedExecution, rootId: string, root: TissueRollDocumentRoot) {
     super(order)
     this.property = property
+    this.rootId = rootId
     this.db = db
-    this._delayedExecution = new DelayedExecution(delay)
+    this.locker = locker
+    this.root = root
   }
 
   private _addOverflowRecord(): string {
     const reserved = '\x00'.repeat(this.db.root.payloadSize)
-    return this.db.put(reserved)
-  }
-
-  private _getRecordOwnRoot() {
-    const record = this.db.getRecords(1).pop()!
-    return record
+    return this.db.put(reserved, false)
   }
 
   private _getRecordOwnNode(id: number) {
@@ -47,7 +45,7 @@ export class TissueRollStrategy extends SerializeStrategy<string, SupportedType>
 
   write(id: number, node: BPTreeNode<string, SupportedType>): void {
     const key = `write:${id}`
-    this._delayedExecution.execute(key, () => {
+    this.locker.execute(key, () => {
       const record = this._getRecordOwnNode(id)
       const stringify = JSON.stringify(node)
       this.db.update(record.header.id, stringify)
@@ -55,17 +53,16 @@ export class TissueRollStrategy extends SerializeStrategy<string, SupportedType>
   }
 
   readHead(): SerializeStrategyHead|null {
-    const record = this._getRecordOwnRoot()
-    const root = JSON.parse(record.payload) as TissueRollDocumentRoot
-    return root.head[this.property] ?? null
+    return this.root.head[this.property] ?? null
   }
 
   writeHead(head: SerializeStrategyHead): void {
-    this._delayedExecution.execute('write:head', () => {
-      const record = this._getRecordOwnRoot()
-      const root = JSON.parse(record.payload) as TissueRollDocumentRoot
-      root.head[this.property] = head
-      this.db.update(record.header.id, JSON.stringify(root))
+    this.locker.execute('write:head', () => {
+      this.root.head[this.property] = head
+      this.db.update(
+        this.rootId,
+        JSON.stringify(this.root)
+      )
     })
   }
 }

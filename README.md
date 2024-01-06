@@ -22,7 +22,7 @@ For details on how to use each database, please refer to the links below.
 ### Why use **tissue-roll**?
 
 JavaScript has numerous fantastic database libraries available, but at times, they can seem overly complex.  
-This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure. Or when it's annoying.
+This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure. Or, when everything is too bothersome.
 
 ### Why should I use this instead of **JSON**?
 

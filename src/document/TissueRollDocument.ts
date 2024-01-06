@@ -23,19 +23,21 @@ type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   /**
    * Includes if this value matches the document's property value.
    */
-  equal?: T[K],
+  equal: T[K]
+}|{
   /**
    * Includes if this value does not match the document's property value.
    */
-  notEqual?: T[K],
+  notEqual: T[K]
+}|{
   /** 
    * Includes if this value is greater than the document's property value.
    */
-  gt?: T[K],
+  gt?: T[K]
   /**
    * Includes if this value is less than the document's property value.
    */
-  lt?: T[K],
+  lt?: T[K]
 }
 
 type TissueRollDocumentQuery<T extends Record<string, SupportedType>> = {
@@ -107,14 +109,14 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
     const docRoot: TissueRollDocumentRoot = {
       verify: TissueRollDocument.DB_NAME,
-      head: {}
+      head: {},
     }
     const reserved = '\x00'.repeat(db.root.payloadSize)
-    const rootId = db.put(reserved)
+    const rootId = db.put(reserved, false)
     const stringify = JSON.stringify(docRoot)
     db.update(rootId, stringify)
 
-    return new TissueRollDocument(db, docRoot, 0)
+    return new TissueRollDocument(db, rootId, docRoot, 0)
   }
 
   /**
@@ -137,36 +139,38 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const record = db.getRecords(1).pop()!
     const docRoot = TissueRollDocument.Verify(file, record.payload)
 
-    return new TissueRollDocument(db, docRoot, 0)
+    return new TissueRollDocument(db, record.header.id, docRoot, 0)
   }
 
   protected readonly db: TissueRoll
+  protected readonly rootId: string
   protected readonly order: number
-  protected readonly root: TissueRollDocumentRoot
-  protected readonly trees: CacheStore<BPTree<string, SupportedType>>
   protected readonly comparator: TissueRollComparator
   protected readonly locker: DelayedExecution
-  protected readonly writeBack: number
   protected lock: boolean
+  private readonly _root: TissueRollDocumentRoot
+  private readonly _trees: CacheStore<BPTree<string, SupportedType>>
+  private _autoIncrement: bigint
 
-  protected constructor(db: TissueRoll, root: TissueRollDocumentRoot, writeBack: number) {
+  protected constructor(db: TissueRoll, rootId: string, root: TissueRollDocumentRoot, writeBack: number) {
     this.db = db
-    this.root = root
+    this.rootId = rootId
     this.order = Math.max(Math.ceil(db.root.payloadSize/50), 4)
-    this.trees = new CacheStore()
     this.comparator = new TissueRollComparator()
-    this.writeBack = writeBack
     this.locker = new DelayedExecution(writeBack)
     this.lock = false
+    this._root = root
+    this._trees = new CacheStore()
+    this._autoIncrement = db.root.autoIncrement
   }
 
   protected getTree(property: string): BPTree<string, SupportedType> {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
-    return this.trees.get(property, () => {
+    return this._trees.get(property, () => {
       return new BPTree<string, SupportedType>(
-        new TissueRollStrategy(this.order, property, this.db, this.writeBack),
+        new TissueRollStrategy(this.order, property, this.db, this.locker, this.rootId, this._root),
         this.comparator
       )
     })
@@ -207,6 +211,20 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   }
 
   /**
+   * Returns the metadata of the database.
+   * This value is a state variable and any modifications will not be reflected in the database.
+   * 
+   * This metadata contains brief information about the database.
+   * For example, the `metadata.autoIncrement` property indicates how many documents have been inserted into the database so far.
+   */
+  get metadata() {
+    const autoIncrement = this._autoIncrement
+    return {
+      autoIncrement
+    }
+  }
+
+  /**
    * Insert values into the database. These values must follow the JSON format and are referred to as documents.
    * 
    * A document consists of key-value pairs, for example, `{ name: 'john' }`. While documents can be nested, nested structures are not searchable.
@@ -231,14 +249,16 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       const value = record[property]
       tree.insert(recordId, value)
     }
+    this._autoIncrement++
     return record
   }
 
   /**
    * Deletes the document(s) inserted into the database. The data to be deleted can be specified using queries to define the scope.
    * @param query The scope of the documents to be deleted.
+   * @returns The number of documents deleted.
    */
-  delete(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): void {
+  delete(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
@@ -253,6 +273,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       }
       this.db.delete(id)
     }
+    return ids.length
   }
 
   /**
@@ -265,15 +286,17 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * For instance, with `{ student: true }`, the document will become `{ name: 'john', age: 20, student: true }`.
    * @param query The scope of the documents to be updated.
    * @param update The properties of the documents to be updated.
+   * @returns The number of documents updated.
    */
   partialUpdate(
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     update: Partial<T>|((record: TissueRollDocumentRecord<T>) => Partial<T>)
-  ): void {
+  ): number {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
-    for (const id of this.findRecordIds(query)) {
+    const ids = this.findRecordIds(query)
+    for (const id of ids) {
       const payload = this.db.pick(id).record.payload
       const record = JSON.parse(payload)
       const updater = typeof update === 'function' ? update(record) : update
@@ -290,8 +313,8 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       record.updatedAt = Date.now()
       const stringify = JSON.stringify(record)
       this.db.update(id, stringify)
-      return record
     }
+    return ids.length
   }
 
   /**
@@ -301,15 +324,17 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * For example, if there is a document `{ name: 'john', age: 20 }`, and you provide `{ name: 'park' }` for updating, the document will become `{ name: 'park' }`.
    * @param query The scope of the documents to be updated.
    * @param update The properties of the documents to be updated.
+   * @returns The number of documents updated.
    */
   fullUpdate(
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     update: T|((record: TissueRollDocumentRecord<T>) => T)
-  ): void {
+  ): number {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
-    for (const id of this.findRecordIds(query)) {
+    const ids = this.findRecordIds(query)
+    for (const id of ids) {
       const payload = this.db.pick(id).record.payload
       const beforeRecord = JSON.parse(payload) as TissueRollDocumentRecord<T>
       let recordUpdate = update
@@ -333,6 +358,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       const stringify = JSON.stringify(afterRecord)
       this.db.update(id, stringify)
     }
+    return ids.length
   }
   
   protected findRecordIds(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): string[] {

@@ -1,26 +1,61 @@
 import { unlinkSync } from 'fs'
 import { TissueRoll, TissueRollDocument } from '../'
 
+const createDatabase = (name: string) => {
+  const dbName = `./db-${name}.db`
+  const db = TissueRoll.Create(dbName, 512, true)
+  
+  const close = () => {
+    db.close()
+    unlinkSync(dbName)
+  }
+
+  return {
+    db,
+    close
+  }
+}
+
+const createDocumentDatabase = (name: string) => {
+  const dbName = `./sql-${name}.db`
+  const sql = TissueRollDocument.Create<{
+    name: string
+    age: number
+    sex?: 'male'|'female'
+    more?: any
+  }>(dbName, 512, true)
+  
+  sql.put({ name: 'kim', age: 10 })
+  sql.put({ name: 'tomas', age: 80, sex: 'male' })
+  sql.put({ name: 'john', age: 20, sex: 'male' })
+  sql.put({ name: 'lee', age: 50, sex: 'female' })
+  
+  const close = async () => {
+    await sql.close()
+    unlinkSync(dbName)
+  }
+
+  return {
+    sql,
+    close
+  }
+}
+
 describe('Create test', () => {
   test('db open', () => {
-    const payloadSize = 250
-    const db = TissueRoll.Open('./tissue.db', payloadSize)
+    const { db, close } = createDatabase('db-open')
     expect(typeof db.root.index).toBe('number')
     expect(typeof db.root.majorVersion).toBe('number')
     expect(typeof db.root.minorVersion).toBe('number')
     expect(typeof db.root.patchVersion).toBe('number')
     expect(db.root.timestamp > Date.now()).toBeFalsy()
-    expect(db.root.payloadSize).toBe(payloadSize)
-    db.close()
+    close()
   })
 })
 
 describe('Record test', () => {
-  let db: TissueRoll
-  beforeEach(() => db = TissueRoll.Open('./tissue.db'))
-  afterAll(() => db.close())
-
   test('put record that shorter than page size', () => {
+    const { db, close } = createDatabase('shorter')
     const max = 10
     const ids: string[] = []
     for (let i = 0; i < max; i++) {
@@ -35,9 +70,12 @@ describe('Record test', () => {
 
     const res = db.pick(target)
     expect(res.record.payload).toBe(guess)
+    close()
   })
 
   test('put record that longer than page size', () => {
+    const { db, close } = createDatabase('longer')
+
     const content = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer eros augue, commodo sed laoreet id, euismod id turpis. Vivamus id euismod sapien, vel venenatis turpis. Aliquam at ante odio. Curabitur quis nunc orci. Morbi nibh turpis, placerat quis gravida vestibulum, sollicitudin vel nunc. Curabitur in augue sit amet nibh consectetur posuere. Aliquam erat volutpat. Phasellus nec turpis augue. Cras ut eros nibh. Aenean elementum scelerisque maximus. Cras id nulla at felis molestie suscipit eu ac erat. Nulla tincidunt ornare nulla. Etiam vitae est sed arcu congue dignissim. Nam at odio eget velit hendrerit tincidunt. Sed posuere porttitor volutpat.
 
     Praesent molestie feugiat lectus, sed molestie odio pulvinar a. Sed vitae ullamcorper dui, sit amet lobortis ipsum. Curabitur orci risus, mattis eget elit a, ornare egestas justo. Morbi vitae convallis ex. Nulla id nisi ultricies, rutrum nulla nec, consequat velit. Maecenas eleifend quis felis in fringilla. In nec risus dapibus, bibendum nunc quis, commodo ex. Donec urna quam, pharetra eu nisl vel, vestibulum feugiat sem. Fusce sodales, odio a aliquet vestibulum, nisi nulla interdum nisi, nec aliquam est tortor quis metus. Sed eu metus venenatis, fringilla lacus a, pharetra lectus.
@@ -65,9 +103,12 @@ describe('Record test', () => {
 
     const res2 = db.pick(db.put('test'))
     expect(res2.record.payload).toBe('test!!')
+    close()
   })
 
   test('update', () => {
+    const { db, close } = createDatabase('update')
+
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
     const longerContent2 = 'more more longer text'.repeat(100)
@@ -113,9 +154,12 @@ describe('Record test', () => {
     db.update(id, 'test')
     const res6 = db.pick(id)
     expect(res6.record.payload).toBe('test!')
+    close()
   })
 
   test('delete', () => {
+    const { db, close } = createDatabase('delete')
+
     const content = 'you should can not read this'
 
     const id = db.put(content)
@@ -138,24 +182,33 @@ describe('Record test', () => {
     const id2 = db.put('test content')
     expect(() => db.delete('incorrected id')).toThrow()
     db.delete(id2)
+    close()
   })
 
   test('invalid record', () => {
+    const { db, close } = createDatabase('invalid-record')
+
     const invalidId = btoa('1928399199299331123')
     expect(() => db.pick(invalidId)).toThrow()
     expect(() => db.update(invalidId, 'test')).toThrow()
     expect(() => db.delete(invalidId)).toThrow()
+    close()
   })
 
   test('exists', () => {
+    const { db, close } = createDatabase('exists')
+
     const correctId = db.put('test')
     const invalidId = correctId+'1'
 
     expect(db.exists(correctId)).toBe(true)
     expect(db.exists(invalidId)).toBe(false)
+    close()
   })
 
   test('getRecords', () => {
+    const { db, close } = createDatabase('get-records')
+
     const largeData = ' '.repeat(10000)
     db.put(largeData)
 
@@ -173,35 +226,31 @@ describe('Record test', () => {
     expect(records[0].payload).toBe(guessData1)
     expect(records[1].payload).toBe(guessData2)
     expect(records[2].payload).toBe(guessData3)
+    close()
+  })
+
+  test('autoIncrement', () => {
+    const { db, close } = createDatabase('auto-increment')
+
+    const sampleId = db.put('a')
+    db.put('b')
+    db.put('c')
+    db.put('longer'.repeat(1000))
+    db.put('d', false)
+    db.put('e')
+    expect(Number(db.root.autoIncrement)).toBe(5)
+
+    db.update(sampleId, 'more longer')
+    expect(Number(db.root.autoIncrement)).toBe(5)
+
+    db.delete(sampleId)
+    expect(Number(db.root.autoIncrement)).toBe(5)
+
+    close()
   })
 })
 
 describe('DOCUMENT', () => {
-  const createDocumentDatabase = (name: string) => {
-    const dbName = `./sql-${name}.db`
-    const sql = TissueRollDocument.Create<{
-      name: string
-      age: number
-      sex?: 'male'|'female'
-      more?: any
-    }>(dbName, 512, true)
-    
-    sql.put({ name: 'kim', age: 10 })
-    sql.put({ name: 'tomas', age: 80, sex: 'male' })
-    sql.put({ name: 'john', age: 20, sex: 'male' })
-    sql.put({ name: 'lee', age: 50, sex: 'female' })
-    
-    const close = async() => {
-      await sql.close()
-      unlinkSync(dbName)
-    }
-
-    return {
-      sql,
-      close
-    }
-  }
-
   test('DOCUMENT:put', async () => {
     const { sql, close } = createDocumentDatabase('put')
 
@@ -241,7 +290,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:delete', async () => {
     const { sql, close } = createDocumentDatabase('delete') 
 
-    sql.delete({
+    const delCount = sql.delete({
       name: {
         equal: 'tomas'
       }
@@ -257,6 +306,7 @@ describe('DOCUMENT', () => {
     })
 
     sql.delete({})
+    expect(delCount).toBe(1)
     expect(sql.pick({})).toEqual([])
 
     await close()
@@ -265,7 +315,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:partial', async () => {
     const { sql, close } = createDocumentDatabase('update-partial')
 
-    sql.partialUpdate({
+    const updatedCount = sql.partialUpdate({
       name: {
         equal: 'kim'
       }
@@ -285,6 +335,7 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+    expect(updatedCount).toBe(1)
 
     await close()
   })
@@ -292,7 +343,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:full-1', async () => {
     const { sql, close } = createDocumentDatabase('update-full-1')
 
-    sql.fullUpdate({
+    const updatedCount = sql.fullUpdate({
       age: {
         gt: 15,
         lt: 75
@@ -309,6 +360,7 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+    expect(updatedCount).toBe(2)
 
     await close()
   })
@@ -316,7 +368,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:full-2', async () => {
     const { sql, close } = createDocumentDatabase('update-full-2')
 
-    sql.fullUpdate({
+    const updatedCount = sql.fullUpdate({
       age: {
         gt: 15,
         lt: 75
@@ -337,6 +389,7 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+    expect(updatedCount).toBe(2)
 
     await close()
   })
@@ -433,6 +486,19 @@ describe('DOCUMENT', () => {
     result1.forEach((record, i) => {
       expect(record).toEqual(expect.objectContaining(expect1[i]))
     })
+
+    await close()
+  })
+
+  test('DOCUMENT:autoIncrement', async () => {
+    const { sql, close } = createDocumentDatabase('auto-increment')
+    expect(sql.metadata.autoIncrement).toBe(4n)
+
+    sql.partialUpdate({ name: 'kim' }, { name: 'kim'.repeat(10000) })
+    expect(sql.metadata.autoIncrement).toBe(4n)
+
+    sql.delete({ name: 'kim' })
+    expect(sql.metadata.autoIncrement).toBe(4n)
 
     await close()
   })
