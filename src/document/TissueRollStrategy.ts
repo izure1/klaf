@@ -57,8 +57,8 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
   }
 
   writeHead(head: SerializeStrategyHead): void {
+    this.root.head[this.property] = head
     this.locker.execute('write:head', () => {
-      this.root.head[this.property] = head
       this.db.update(
         this.rootId,
         JSON.stringify(this.root)
