@@ -536,4 +536,33 @@ describe('DOCUMENT', () => {
 
     await close()
   })
+
+  test('DOCUMENT:count method', async () => {
+    const { sql, close } = createDocumentDatabase('count')
+    expect(sql.count({
+      age: {
+        gt: 10
+      }
+    })).toBe(3)
+
+    sql.delete({ sex: 'male' })
+    expect(sql.count({
+      age: {
+        gt: 10
+      }
+    })).toBe(1)
+    
+    sql.partialUpdate({
+      age: {
+        lt: 15
+      }
+    }, { age: 15 })
+    expect(sql.count({
+      age: {
+        gt: 10
+      }
+    })).toBe(2)
+    
+    await close()
+  })
 })

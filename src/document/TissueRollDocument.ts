@@ -420,6 +420,16 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   }
 
   /**
+   * It searches for and returns the number of documents that match the conditions.
+   * Unlike the `pick` method, this method does not go through the parsing and sorting of documents, so it is much faster.
+   * @param query The range of documents to be queried.
+   * @returns The number of documents matched.
+   */
+  count(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
+    return this.findRecordIds(query).length
+  }
+
+  /**
    * Shut down the database to close file input and output.
    * The database does not close immediately due to delayed writing.
    * Therefore, this function operates asynchronously, and when the database is closed, the promise is resolved.

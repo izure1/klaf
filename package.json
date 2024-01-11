@@ -1,6 +1,6 @@
 {
   "name": "tissue-roll",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Very simple read/write database with a no-sql.",
   "types": "dist/typings/index.d.ts",
   "main": "dist/cjs/index.js",
