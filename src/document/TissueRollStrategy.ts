@@ -1,7 +1,9 @@
 import { BPTreeNode, SerializeStrategy, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
-import { TissueRoll } from '../core'
+import { TissueRoll } from '../core/TissueRoll'
+import { TissueRollMediator } from '../core/TissueRollMediator'
 import { DelayedExecution } from '../utils/DelayedExecution'
+import { TextConverter } from '../utils/TextConverter'
 
 export class TissueRollStrategy<T extends Record<string, SupportedType>> extends SerializeStrategy<string, SupportedType> {
   protected readonly property: string
@@ -21,7 +23,11 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
 
   private _addOverflowRecord(): string {
     const reserved = '\x00'.repeat(this.db.root.payloadSize)
-    return this.db.put(reserved, false)
+    return TissueRollMediator.Put(
+      this.db,
+      TextConverter.ToArray(reserved),
+      false
+    )
   }
 
   private _getRecordOwnNode(id: number) {

@@ -39,6 +39,9 @@ const result = db.pick({
 })
 
 console.log(result) // [{ name: 'park', age: 25 }]
+
+db.metadata.autoIncrement // 3
+db.metadata.count // 3
 ```
 
 The **TissueRollDocument** manages files in logical blocks called pages. The payload size determines the size of these blocks, measured in bytes.
@@ -219,3 +222,19 @@ The default value for **start** is **0**, and the default value for **end** is *
 **order** determines which property to use as the basis for sorting the retrieved documents. The default is **createdAt**, so the documents are sorted in the order they were inserted.
 
 **desc** determines whether to sort the retrieved array in descending order. The default value is **false**. If this value is set to **true**, the array of retrieved documents will be sorted in descending order based on the order property.
+
+### Metadata
+
+You can obtain some information related to the database using the **db.metadata** property. The **metadata.count** property signifies the number of documents currently stored in the database. The **metadata.autoIncrement** property represents the total number of documents that have been inserted into the database so far. This value does not decrease even if documents are deleted.
+
+```typescript
+db.put({ name: 'john' })
+
+db.metadata.autoIncrement // 1
+db.metadata.count // 1
+
+db.delete({ name: 'john' })
+
+db.metadata.autoIncrement // 1
+db.metadata.count // 0
+```

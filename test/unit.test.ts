@@ -236,7 +236,6 @@ describe('Record test', () => {
     db.put('b')
     db.put('c')
     db.put('longer'.repeat(1000))
-    db.put('d', false)
     db.put('e')
     expect(Number(db.root.autoIncrement)).toBe(5)
 
@@ -245,6 +244,25 @@ describe('Record test', () => {
 
     db.delete(sampleId)
     expect(Number(db.root.autoIncrement)).toBe(5)
+
+    close()
+  })
+
+  test('count', () => {
+    const { db, close } = createDatabase('count')
+
+    const sampleId = db.put('a')
+    db.put('b')
+    db.put('c')
+    db.put('longer'.repeat(1000))
+    db.put('e')
+    expect(Number(db.root.count)).toBe(5)
+
+    db.update(sampleId, 'more longer')
+    expect(Number(db.root.count)).toBe(5)
+
+    db.delete(sampleId)
+    expect(Number(db.root.count)).toBe(4)
 
     close()
   })
@@ -499,6 +517,22 @@ describe('DOCUMENT', () => {
 
     sql.delete({ name: 'kim' })
     expect(sql.metadata.autoIncrement).toBe(4n)
+
+    await close()
+  })
+
+  test('DOCUMENT:count', async () => {
+    const { sql, close } = createDocumentDatabase('count')
+    expect(sql.metadata.count).toBe(4)
+
+    sql.partialUpdate({ name: 'kim' }, { name: 'kim'.repeat(10000) })
+    expect(sql.metadata.count).toBe(4)
+
+    sql.delete({ name: 'kim' })
+    expect(sql.metadata.count).toBe(4)
+
+    sql.delete({ sex: 'male' })
+    expect(sql.metadata.count).toBe(2)
 
     await close()
   })

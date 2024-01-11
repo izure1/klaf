@@ -29,6 +29,7 @@ type IRootHeader = {
   timestamp: bigint
   secretKey: bigint
   autoIncrement: bigint
+  count: number
   index: number
 }
 
@@ -60,6 +61,8 @@ export class TissueRoll {
   protected static readonly RootSecretKeySize             = 8
   protected static readonly RootAutoIncrementOffset       = TissueRoll.RootSecretKeyOffset+TissueRoll.RootSecretKeySize
   protected static readonly RootAutoIncrementSize         = 8
+  protected static readonly RootCountOffset               = TissueRoll.RootAutoIncrementOffset+TissueRoll.RootAutoIncrementSize
+  protected static readonly RootCountSize                 = 4
 
   protected static readonly RootChunkSize                 = 200
   protected static readonly HeaderSize                    = 100
@@ -115,7 +118,8 @@ export class TissueRoll {
       RootTimestampOffset,
       RootSecretKeyOffset,
       RootSecretKeySize,
-      RootAutoIncrementOffset
+      RootAutoIncrementOffset,
+      RootCountOffset,
     } = TissueRoll
     const [
       majorVersion,
@@ -131,6 +135,7 @@ export class TissueRoll {
     IterableView.Update(root, RootTimestampOffset,      IntegerConverter.ToArray64(BigInt(Date.now())))
     IterableView.Update(root, RootSecretKeyOffset,      Array.from(secretKey))
     IterableView.Update(root, RootAutoIncrementOffset,  IntegerConverter.ToArray64(0n))
+    IterableView.Update(root, RootCountOffset,          IntegerConverter.ToArray32(0))
 
     fs.writeFileSync(file, Buffer.from(root))
 
@@ -190,6 +195,8 @@ export class TissueRoll {
       RootSecretKeySize,
       RootAutoIncrementOffset,
       RootAutoIncrementSize,
+      RootCountOffset,
+      RootCountSize,
     } = TissueRoll
     const majorVersion  = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
@@ -215,6 +222,9 @@ export class TissueRoll {
     const autoIncrement = IntegerConverter.FromArray64(
       IterableView.Read(rHeader, RootAutoIncrementOffset, RootAutoIncrementSize)
     )
+    const count = IntegerConverter.FromArray32(
+      IterableView.Read(rHeader, RootCountOffset, RootCountSize)
+    )
     return {
       majorVersion,
       minorVersion,
@@ -223,6 +233,7 @@ export class TissueRoll {
       timestamp,
       secretKey,
       autoIncrement,
+      count,
       index,
     }
   }
@@ -239,6 +250,21 @@ export class TissueRoll {
     )
     const text = TextConverter.FromArray(chunk)
     return text === TissueRoll.DB_NAME
+  }
+
+  protected static CallInternalPut(db: TissueRoll, data: number[], autoIncrement: boolean): string {
+    return db.callInternalPut(data, autoIncrement)
+  }
+
+  protected static CallInternalUpdate(db: TissueRoll, id: string, data: string): {
+    id: string
+    data: string
+  } {
+    return db.callInternalUpdate(id, data)
+  }
+
+  protected static CallInternalDelete(db: TissueRoll, index: number, order: number, countDecrement: boolean): void {
+    return db.callInternalDelete(index, order, countDecrement)
   }
 
 
@@ -679,7 +705,7 @@ export class TissueRoll {
     return recordId
   }
 
-  private _put(data: number[], autoIncrement: boolean): string {
+  protected callInternalPut(data: number[], autoIncrement: boolean): string {
     let index   = this.root.index
     let header  = this._normalizeHeader(this._getHeader(index))
 
@@ -689,15 +715,16 @@ export class TissueRoll {
     }
 
     if (autoIncrement) {
-      const num = IntegerConverter.FromArray64(FileView.Read(
-        this.fd,
-        TissueRoll.RootAutoIncrementOffset,
-        TissueRoll.RootAutoIncrementSize
-      ))
+      let { autoIncrement: increment, count } = this.root
       FileView.Update(
         this.fd,
         TissueRoll.RootAutoIncrementOffset,
-        IntegerConverter.ToArray64(num+1n)
+        IntegerConverter.ToArray64(increment+1n)
+      )
+      FileView.Update(
+        this.fd,
+        TissueRoll.RootCountOffset,
+        IntegerConverter.ToArray32(count+1)
       )
     }
     
@@ -764,32 +791,20 @@ export class TissueRoll {
   }
 
   /**
-   * Shut down the database to close file input and output.
-   */
-  close(): void {
-    fs.closeSync(this.fd)
-  }
-
-  /**
    * You store data in the database and receive a record ID for the saved data.
    * This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
    * @param data The data string what you want store.
-   * @param autoIncrement Increases `this.root.autoIncrement` by 1.
-   * This value is non-volatile and permanently stored in the database.
-   * Therefore, you can track how many times data has been inserted into the database.
-   * This increment is not inserted into the rows of the data.
-   * The default value is `true`, and if you set this to `false`, the autoIncrement value will not increase.
    * @returns The record id.
    */
-  put(data: string, autoIncrement = true): string {
+  put(data: string): string {
     return this.hooker.trigger('put', data, (data) => {
       const rData = TextConverter.ToArray(data)
-      const id = this._put(rData, autoIncrement)
+      const id = this.callInternalPut(rData, true)
       return id
     })
   }
 
-  private _update(id: string, data: string) {
+  protected callInternalUpdate(id: string, data: string) {
     const payload = TextConverter.ToArray(data)
     const payloadLen = IntegerConverter.ToArray32(payload.length)
     const head = this.pickRecord(id, false)
@@ -805,13 +820,14 @@ export class TissueRoll {
     if (tail.record.header.maxLength < payload.length) {
       // Overflow 타입의 페이지가 아닐 경우엔 새롭게 삽입해야 합니다.
       if (!tail.page.next) {
-        const afterRecordId = this._put(payload, false)
+        const afterRecordId = this.callInternalPut(payload, false)
         const { index, order, salt } = this._normalizeRecordId(afterRecordId)
         
         if (tail.record.header.aliasIndex && tail.record.header.aliasOrder) {
-          this._delete(
+          this.callInternalDelete(
             tail.record.header.aliasIndex,
-            tail.record.header.aliasOrder
+            tail.record.header.aliasOrder,
+            false
           )
         }
         
@@ -901,14 +917,21 @@ export class TissueRoll {
     const information = this.hooker.trigger('update', {
       id: recordId,
       data
-    }, ({ id, data }) => this._update(id, data))
+    }, ({ id, data }) => this.callInternalUpdate(id, data))
     return information.id
   }
 
-  private _delete(index: number, order: number): void {
+  protected callInternalDelete(index: number, order: number, countDecrement: boolean): void {
     const pos = this._recordPosition(index, order)+TissueRoll.RecordHeaderDeletedOffset
     const buf = IntegerConverter.ToArray8(1)
-    
+    if (countDecrement) {
+      const { count } = this.root
+      FileView.Update(
+        this.fd,
+        TissueRoll.RootCountOffset,
+        IntegerConverter.ToArray32(count-1)
+      )
+    }
     FileView.Update(this.fd, pos, buf)
   }
 
@@ -919,7 +942,7 @@ export class TissueRoll {
   delete(recordId: string): void {
     this.hooker.trigger('delete', recordId, (recordId) => {
       const { page, order } = this.pickRecord(recordId, false)
-      this._delete(page.index, order)
+      this.callInternalDelete(page.index, order, true)
       return recordId
     })
   }
@@ -936,6 +959,13 @@ export class TissueRoll {
     } catch (e) {
       return false
     }
+  }
+
+  /**
+   * Shut down the database to close file input and output.
+   */
+  close(): void {
+    fs.closeSync(this.fd)
   }
 
   /**

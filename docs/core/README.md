@@ -42,6 +42,10 @@ db.pick(id).record.payload // 'POWER!!!'
 db.delete(id)
 db.pick(id) // Error! The record was destroyed.
 
+
+db.root.autoIncrement // 1
+db.root.count // 0
+
 // CLOSE DB
 db.close()
 ```

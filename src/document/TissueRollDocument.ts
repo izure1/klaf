@@ -3,12 +3,14 @@ import fs from 'node:fs'
 import { BPTree, SerializeStrategyHead } from 'serializable-bptree'
 
 import { TissueRoll } from '../core/TissueRoll'
+import { TissueRollMediator } from '../core/TissueRollMediator'
 import { TissueRollComparator } from './TissueRollComparator'
 import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { IterableSet } from '../utils/IterableSet'
 import { CacheStore } from '../utils/CacheStore'
+import { TextConverter } from '../utils/TextConverter'
 import { DelayedExecution } from '../utils/DelayedExecution'
 
 export type PrimitiveType = string|number|boolean|null
@@ -112,7 +114,11 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       head: {},
     }
     const reserved = '\x00'.repeat(db.root.payloadSize)
-    const rootId = db.put(reserved, false)
+    const rootId = TissueRollMediator.Put(
+      db,
+      TextConverter.ToArray(reserved),
+      false
+    )
     const stringify = JSON.stringify(docRoot)
     db.update(rootId, stringify)
 
@@ -150,7 +156,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected lock: boolean
   private readonly _root: TissueRollDocumentRoot
   private readonly _trees: CacheStore<BPTree<string, SupportedType>>
-  private _autoIncrement: bigint
+  private _metadata: {
+    autoIncrement: bigint
+    count: number
+  }
 
   protected constructor(db: TissueRoll, rootId: string, root: TissueRollDocumentRoot, writeBack: number) {
     this.db = db
@@ -161,7 +170,12 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     this.lock = false
     this._root = root
     this._trees = new CacheStore()
-    this._autoIncrement = db.root.autoIncrement
+
+    const { autoIncrement, count } = db.root
+    this._metadata = {
+      autoIncrement,
+      count,
+    }
   }
 
   protected getTree(property: string): BPTree<string, SupportedType> {
@@ -218,9 +232,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * For example, the `metadata.autoIncrement` property indicates how many documents have been inserted into the database so far.
    */
   get metadata() {
-    const autoIncrement = this._autoIncrement
+    const { autoIncrement, count } = this._metadata
     return {
-      autoIncrement
+      autoIncrement,
+      count,
     }
   }
 
@@ -249,7 +264,8 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       const value = record[property]
       tree.insert(recordId, value)
     }
-    this._autoIncrement++
+    this._metadata.autoIncrement++
+    this._metadata.count++
     return record
   }
 
@@ -273,6 +289,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       }
       this.db.delete(id)
     }
+    this._metadata.count -= ids.length
     return ids.length
   }
 
