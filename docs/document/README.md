@@ -91,7 +91,7 @@ If you want to explicitly initialize this property to **null** in all existing d
 ```typescript
 // Ensure the age property in all documents
 db.partialUpdate({}, (document) => ({
-  age: 'age' in document ? document.age : null
+  age: document.age ?? null
 }))
 ```
 
@@ -200,6 +200,33 @@ const result = db.pick({
     lt: 3000
   }
 })
+```
+
+#### Using the **LIKE** Clause for Search Conditions
+
+When searching for strings, you may want to retrieve only records that satisfy specific patterns. Unfortunately, **tissue-roll does not support LIKE search by default**. However, you can achieve similar functionality as follows:
+
+```typescript
+// WHERE email LIKE 'admin%'
+const result = db.pick({
+  email: {
+    gt: 'admin'
+  }
+})
+```
+
+Prefix searches can still yield results fairly quickly. However, infix and suffix searches are not indexed, so they require executing searches across all documents, which can lead to performance issues with a large number of documents.
+
+```typescript
+// WHERE EMAIL LIKE '%@gmail.com'
+const result = db.pick({
+  email: { gt: '' }
+}).filter((d) => d.email.endsWith('@gmail.com'))
+
+// WHERE EMAIL LIKE '%min@gmail%'
+const result = db.pick({
+  email: { gt: '' }
+}).filter((d) => e.email.includes('min@gmail'))
 ```
 
 ### Search option

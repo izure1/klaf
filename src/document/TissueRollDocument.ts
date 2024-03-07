@@ -25,21 +25,31 @@ type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   /**
    * Includes if this value matches the document's property value.
    */
-  equal: T[K]
-}|{
+  equal?: T[K]
   /**
    * Includes if this value does not match the document's property value.
    */
-  notEqual: T[K]
-}|{
+  notEqual?: T[K]
   /** 
    * Includes if this value is greater than the document's property value.
    */
   gt?: T[K]
+  /** 
+   * Includes if this value is greater than or equal to the document's property value.
+   */
+  gte?: T[K]
   /**
    * Includes if this value is less than the document's property value.
    */
   lt?: T[K]
+  /**
+   * Includes if this value is less than or equal to the document's property value.
+   */
+  lte?: T[K]
+  /**
+   * Searches for documents matching the given pattern. '%' matches zero or more characters, and '_' matches exactly one character.
+   */
+  like?: string
 }
 
 type TissueRollDocumentQuery<T extends Record<string, SupportedType>> = {
