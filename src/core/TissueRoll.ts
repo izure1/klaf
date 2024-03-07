@@ -635,7 +635,7 @@ export class TissueRoll {
 
   /**
    * It takes a page index as a parameter and returns a list of all records recorded on that page.  
-   * The page index should be within the range of `1` to `instance.root.index`.
+   * The page index should be within the range of `1` to `instance.metadata.index`.
    * @param index The page index.
    */
   getRecords(index: number): ReturnType<TissueRoll['pick']>['record'][] {

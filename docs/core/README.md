@@ -43,8 +43,8 @@ db.delete(id)
 db.pick(id) // Error! The record was destroyed.
 
 
-db.root.autoIncrement // 1
-db.root.count // 0
+db.metadata.autoIncrement // 1
+db.metadata.count // 0
 
 // CLOSE DB
 db.close()

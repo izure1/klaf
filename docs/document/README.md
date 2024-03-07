@@ -204,30 +204,37 @@ const result = db.pick({
 
 #### Using the **LIKE** Clause for Search Conditions
 
-When searching for strings, you may want to retrieve only records that satisfy specific patterns. Unfortunately, **tissue-roll does not support LIKE search by default**. However, you can achieve similar functionality as follows:
+Starting from version 3.0.0, **like** search is supported. **Like** search retrieves all documents matching the pattern provided. It behaves similar to regular expressions. **'%'** matches zero or more characters, and **'_'** matches exactly one character. For example, you can use it like this:
 
 ```typescript
-// WHERE email LIKE 'admin%'
 const result = db.pick({
-  email: {
-    gt: 'admin'
+  name: {
+    like: 'p%t'
   }
 })
 ```
 
-Prefix searches can still yield results fairly quickly. However, infix and suffix searches are not indexed, so they require executing searches across all documents, which can lead to performance issues with a large number of documents.
+This searches for all documents that start with **'p'** and end with **'t'**. If you want to search for all documents starting with **'p'**, you can use it like this:
 
 ```typescript
-// WHERE EMAIL LIKE '%@gmail.com'
 const result = db.pick({
-  email: { gt: '' }
-}).filter((d) => d.email.endsWith('@gmail.com'))
-
-// WHERE EMAIL LIKE '%min@gmail%'
-const result = db.pick({
-  email: { gt: '' }
-}).filter((d) => e.email.includes('min@gmail'))
+  name: {
+    like: 'p%'
+  }
+})
 ```
+
+If you want to select only **'pit'** and **'put'** from the values **'pit'**, **'put'**, **'pint'**, and **'post'**, you can use the **'_'** wildcard, which represents a single character, like this:
+
+```typescript
+const result = db.pick({
+  name: {
+    like: 'p_t'
+  }
+})
+```
+
+However, **like** search queries require scanning through all documents in the database. Therefore, indiscriminate use should be avoided as it can have a negative impact on performance.
 
 ### Search option
 
