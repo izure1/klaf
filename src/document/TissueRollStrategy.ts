@@ -22,7 +22,7 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
   }
 
   private _addOverflowRecord(): string {
-    const reserved = '\x00'.repeat(this.db.root.payloadSize)
+    const reserved = '\x00'.repeat(this.db.metadata.payloadSize)
     return TissueRollMediator.Put(
       this.db,
       TextConverter.ToArray(reserved),

@@ -123,7 +123,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       verify: TissueRollDocument.DB_NAME,
       head: {},
     }
-    const reserved = '\x00'.repeat(db.root.payloadSize)
+    const reserved = '\x00'.repeat(db.metadata.payloadSize)
     const rootId = TissueRollMediator.Put(
       db,
       TextConverter.ToArray(reserved),
@@ -174,14 +174,14 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected constructor(db: TissueRoll, rootId: string, root: TissueRollDocumentRoot, writeBack: number) {
     this.db = db
     this.rootId = rootId
-    this.order = Math.max(Math.ceil(db.root.payloadSize/50), 4)
+    this.order = Math.max(Math.ceil(db.metadata.payloadSize/50), 4)
     this.comparator = new TissueRollComparator()
     this.locker = new DelayedExecution(writeBack)
     this.lock = false
     this._root = root
     this._trees = new CacheStore()
 
-    const { autoIncrement, count } = db.root
+    const { autoIncrement, count } = db.metadata
     this._metadata = {
       autoIncrement,
       count,

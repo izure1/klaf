@@ -298,7 +298,7 @@ export class TissueRoll {
     this._cachedIdInfo = new CacheStore()
   }
 
-  get root(): IRootHeader {
+  get metadata(): IRootHeader {
     return TissueRoll.ParseRootChunk(this.fd)
   }
 
@@ -335,7 +335,7 @@ export class TissueRoll {
 
   private _addEmptyPage(header: Partial<IPageHeader>): number {
     // update root
-    let { index } = this.root
+    let { index } = this.metadata
     index++
     FileView.Update(this.fd, TissueRoll.RootIndexOffset, IntegerConverter.ToArray32(index))
 
@@ -706,7 +706,7 @@ export class TissueRoll {
   }
 
   protected callInternalPut(data: number[], autoIncrement: boolean): string {
-    let index   = this.root.index
+    let index   = this.metadata.index
     let header  = this._normalizeHeader(this._getHeader(index))
 
     if (header.type !== TissueRoll.InternalType) {
@@ -715,7 +715,7 @@ export class TissueRoll {
     }
 
     if (autoIncrement) {
-      let { autoIncrement: increment, count } = this.root
+      let { autoIncrement: increment, count } = this.metadata
       FileView.Update(
         this.fd,
         TissueRoll.RootAutoIncrementOffset,
@@ -925,7 +925,7 @@ export class TissueRoll {
     const pos = this._recordPosition(index, order)+TissueRoll.RecordHeaderDeletedOffset
     const buf = IntegerConverter.ToArray8(1)
     if (countDecrement) {
-      const { count } = this.root
+      const { count } = this.metadata
       FileView.Update(
         this.fd,
         TissueRoll.RootCountOffset,
