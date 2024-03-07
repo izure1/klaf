@@ -44,11 +44,11 @@ const createDocumentDatabase = (name: string) => {
 describe('Create test', () => {
   test('db open', () => {
     const { db, close } = createDatabase('db-open')
-    expect(typeof db.root.index).toBe('number')
-    expect(typeof db.root.majorVersion).toBe('number')
-    expect(typeof db.root.minorVersion).toBe('number')
-    expect(typeof db.root.patchVersion).toBe('number')
-    expect(db.root.timestamp > Date.now()).toBeFalsy()
+    expect(typeof db.metadata.index).toBe('number')
+    expect(typeof db.metadata.majorVersion).toBe('number')
+    expect(typeof db.metadata.minorVersion).toBe('number')
+    expect(typeof db.metadata.patchVersion).toBe('number')
+    expect(db.metadata.timestamp > Date.now()).toBeFalsy()
     close()
   })
 })
@@ -237,13 +237,13 @@ describe('Record test', () => {
     db.put('c')
     db.put('longer'.repeat(1000))
     db.put('e')
-    expect(Number(db.root.autoIncrement)).toBe(5)
+    expect(Number(db.metadata.autoIncrement)).toBe(5)
 
     db.update(sampleId, 'more longer')
-    expect(Number(db.root.autoIncrement)).toBe(5)
+    expect(Number(db.metadata.autoIncrement)).toBe(5)
 
     db.delete(sampleId)
-    expect(Number(db.root.autoIncrement)).toBe(5)
+    expect(Number(db.metadata.autoIncrement)).toBe(5)
 
     close()
   })
@@ -256,13 +256,13 @@ describe('Record test', () => {
     db.put('c')
     db.put('longer'.repeat(1000))
     db.put('e')
-    expect(Number(db.root.count)).toBe(5)
+    expect(Number(db.metadata.count)).toBe(5)
 
     db.update(sampleId, 'more longer')
-    expect(Number(db.root.count)).toBe(5)
+    expect(Number(db.metadata.count)).toBe(5)
 
     db.delete(sampleId)
-    expect(Number(db.root.count)).toBe(4)
+    expect(Number(db.metadata.count)).toBe(4)
 
     close()
   })
