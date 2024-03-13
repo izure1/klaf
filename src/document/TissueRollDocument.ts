@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import { BPTree, SerializeStrategyHead } from 'serializable-bptree'
+import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 
 import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from '../core/TissueRollMediator'
@@ -165,7 +165,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly locker: DelayedExecution
   protected lock: boolean
   private readonly _root: TissueRollDocumentRoot
-  private readonly _trees: CacheStore<BPTree<string, SupportedType>>
+  private readonly _trees: CacheStore<BPTreeSync<string, SupportedType>>
   private _metadata: {
     autoIncrement: bigint
     count: number
@@ -188,15 +188,17 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
   }
 
-  protected getTree(property: string): BPTree<string, SupportedType> {
+  protected getTree(property: string): BPTreeSync<string, SupportedType> {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     return this._trees.get(property, () => {
-      return new BPTree<string, SupportedType>(
+      const tree = new BPTreeSync<string, SupportedType>(
         new TissueRollStrategy(this.order, property, this.db, this.locker, this.rootId, this._root),
         this.comparator
       )
+      tree.init()
+      return tree
     })
   }
 

@@ -478,6 +478,31 @@ describe('DOCUMENT', () => {
       expect(record).toEqual(expect.objectContaining(expect2[i]))
     })
 
+    const result3 = sql.pick({
+      name: {
+        like: 'l%'
+      }
+    })
+    const expect3 = [
+      { name: 'lee', age: 50, sex: 'female' },
+    ]
+    result3.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect3[i]))
+    })
+
+    const result4 = sql.pick({
+      name: {
+        like: '%o%'
+      }
+    })
+    const expect4 = [
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'john', age: 20, sex: 'male' },
+    ]
+    result4.forEach((record, i) => {
+      expect(record).toEqual(expect.objectContaining(expect4[i]))
+    })
+
     await close()
   })
 

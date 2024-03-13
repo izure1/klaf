@@ -20,4 +20,8 @@ export class TissueRollComparator extends ValueComparator<PrimitiveType> {
     b = b.toString()
     return a.localeCompare(b)
   }
+
+  match(value: PrimitiveType): string {
+    return this._normalize(value).toString()
+  }
 }
