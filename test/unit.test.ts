@@ -3,7 +3,7 @@ import { TissueRoll, TissueRollDocument } from '../'
 
 const createDatabase = (name: string) => {
   const dbName = `./db-${name}.db`
-  const db = TissueRoll.Create(dbName, 512, true)
+  const db = TissueRoll.Create(dbName, undefined, true)
   
   const close = () => {
     db.close()
@@ -23,7 +23,7 @@ const createDocumentDatabase = (name: string) => {
     age: number
     sex?: 'male'|'female'
     more?: any
-  }>(dbName, 512, true)
+  }>(dbName, undefined, true)
   
   sql.put({ name: 'kim', age: 10 })
   sql.put({ name: 'tomas', age: 80, sex: 'male' })

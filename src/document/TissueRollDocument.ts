@@ -113,10 +113,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create<T extends Record<string, SupportedType>>(file: string, payloadSize = 8192, overwrite = false): TissueRollDocument<T> {
+  static Create<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024, overwrite = false): TissueRollDocument<T> {
     const db = TissueRoll.Create(file, payloadSize, overwrite)
 
     const docRoot: TissueRollDocumentRoot = {
@@ -137,11 +137,11 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
+   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
+   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    */
-  static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 8192): TissueRollDocument<T> {
+  static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024): TissueRollDocument<T> {
     // 파일이 존재하지 않을 경우
     if (!fs.existsSync(file)) {
       if (!payloadSize) {

@@ -12,7 +12,7 @@ If this is not the database you were looking for, please check the [key-value](.
 import { TissueRollDocument } from 'tissue-roll'
 
 // OPEN DB
-const payloadSize = 8192
+const payloadSize = 1024
 const db = TissueRollDocument.Open<{
   name: string
   age?: number
@@ -48,7 +48,7 @@ The **TissueRollDocument** manages files in logical blocks called pages. The pay
 
 If there are many write/update operations in the database, it's recommended to set this value to a smaller size, around the size of one document. However, this may result in a larger overall database file size. On the other hand, if there are many read operations, it's advised to set this value to a larger size, but keep in mind that it might slow down write/update speeds.
 
-*Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **8192**.
+*Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **1024**.
 
 ## How to work
 
@@ -57,7 +57,7 @@ If there are many write/update operations in the database, it's recommended to s
 If you are using TypeScript, specifying clear types in the database allows you to benefit from type inference.
 
 ```typescript
-const payloadSize = 8192
+const payloadSize = 1024
 const db = const db = TissueRollDocument.Open<{
   student: boolean
   name: string
