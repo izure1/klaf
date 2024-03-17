@@ -25,7 +25,7 @@ export class DelayedExecution {
   cancel(id: string): boolean {
     const has = this._executions.has(id)
     if (has) {
-      clearTimeout(this._executions.get(id, this._defGetter))
+      clearTimeout(this._executions.ensure(id, this._defGetter))
       this._executions.delete(id)
     }
     return has

@@ -35,6 +35,6 @@
   "dependencies": {
     "hookall": "^2.0.2",
     "node-fpe": "^2.0.2",
-    "serializable-bptree": "^3.1.0"
+    "serializable-bptree": "^3.2.2"
   }
 }

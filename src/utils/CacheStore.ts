@@ -3,37 +3,23 @@ type CacheData<T> = {
   [key: CacheKey]: T
 }
 
-export class CacheStore<T> {
-  private _cache: CacheData<T>
-
-  constructor(cache: CacheData<T> = {}) {
-    this._cache = cache
+export class CacheStore<T> extends Map<CacheKey, T> {
+  set(key: CacheKey, value: T): this {
+    return super.set(key, value)
   }
 
-  set(key: CacheKey, value: T): void {
-    this._cache[key] = value
-  }
-
-  get(key: CacheKey, generator: () => T): T {
+  ensure(key: CacheKey, generator: () => T): T {
     if (!this.has(key)) {
-      this._cache[key] = generator()
+      super.set(key, generator())
     }
-    return this._cache[key];
+    return super.get(key)!
   }
 
-  delete(key: CacheKey): void {
-    delete this._cache[key];
-  }
-
-  clear(): void {
-    this._cache = {};
+  delete(key: CacheKey): boolean {
+    return super.delete(key)
   }
 
   has(key: CacheKey): boolean {
-    return key in this._cache;
-  }
-
-  size(): number {
-    return Object.keys(this._cache).length;
+    return super.has(key)
   }
 }

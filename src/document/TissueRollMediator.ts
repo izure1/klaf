@@ -1,4 +1,4 @@
-import { TissueRoll } from './TissueRoll'
+import { TissueRoll } from '../core/TissueRoll'
 
 export class TissueRollMediator extends TissueRoll {
   static Put(db: TissueRoll, data: number[], autoIncrement: boolean): string {
@@ -12,7 +12,7 @@ export class TissueRollMediator extends TissueRoll {
     return TissueRoll.CallInternalUpdate(db, id, data)
   }
 
-  static Delete(db: TissueRoll, index: number, order: number, countDecrement: boolean): void {
-    return TissueRoll.CallInternalDelete(db, index, order, countDecrement)
+  static Delete(db: TissueRoll, id: string, countDecrement: boolean): void {
+    return TissueRoll.CallInternalDelete(db, id, countDecrement)
   }
 }

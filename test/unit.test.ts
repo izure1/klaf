@@ -97,7 +97,6 @@ describe('Record test', () => {
       .onBefore('put', (data) => data+'!')
       .onBefore('put', (data) => data+'!')
       .onAfter('put', (recordId) => {
-        console.log(`Record created: ${recordId}`)
         return recordId
       })
 
@@ -147,7 +146,6 @@ describe('Record test', () => {
       return info
     })
     .onAfter('update', (info) => {
-      console.log(`Record updated: ${info.id}`)
       return info
     })
     
@@ -175,7 +173,6 @@ describe('Record test', () => {
         return recordId
       })
       .onAfter('delete', (recordId) => {
-        console.log(`Record deleted: ${recordId}`)
         return recordId
       })
 

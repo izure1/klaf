@@ -1,21 +1,19 @@
 export class IterableSet {
   static Intersections<T>(iterables: Iterable<T>[]): T[] {
-    const count = new Map<T, number>()
-    const intersections: T[] = []
-    const max = iterables.length
-    for (const keys of iterables) {
-      for (const k of keys) {
-        let v = count.get(k) ?? 0
-        if (v >= max) {
-          continue
-        }
-        count.set(k, ++v)
-        if (v === max) {
-          intersections.push(k)
+    let intersection = new Set(iterables.shift() ?? [])
+    for (const iterable of iterables) {
+      const found = []
+      for (const t of iterable) {
+        for (const guess of intersection) {
+          if (t === guess) {
+            found.push(t)
+            break
+          }
         }
       }
+      intersection = new Set(found)
     }
-    return intersections
+    return Array.from(intersection)
   }
 
   static Union<T>(iterables: Iterable<T>[]): T[] {

@@ -1,13 +1,24 @@
-export class TextConverter {
-  protected static Encoder = new TextEncoder()
-  protected static Decoder = new TextDecoder()
+import { CacheStore } from '../utils/CacheStore'
 
-  static FromArray(array: Iterable<number>): string {
-    const r = Uint8Array.from(array)
-    return TextConverter.Decoder.decode(r)
+export class TextConverter {
+  protected static readonly Encoder = new TextEncoder()
+  protected static readonly Decoder = new TextDecoder()
+  private static readonly _CachedText = new CacheStore<string>() 
+  private static readonly _CachedRaw = new CacheStore<number[]>() 
+
+  static FromArray(array: number[]): string {
+    return TextConverter._CachedText.ensure(array.join(','), () => (
+      TextConverter.Decoder.decode(Uint8Array.from(array))
+    ))
   }
 
   static ToArray(str: string): number[] {
-    return Array.from(TextConverter.Encoder.encode(str))
+    const numerics = [] as number[]
+    return numerics.concat(
+      TextConverter._CachedRaw.ensure(
+        str,
+        () => Array.from(TextConverter.Encoder.encode(str))
+      )
+    )
   }
 }

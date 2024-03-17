@@ -272,3 +272,9 @@ db.delete({ name: 'john' })
 db.metadata.autoIncrement // 1
 db.metadata.count // 0
 ```
+
+## Performance Comparison between **sqlite3** and **TissueRollDocument**
+
+The following values compare the speed with **sqlite3** written in C/C++. These are the average of **5** tests. In data retrieval, **sqlite3** demonstrates speeds approximately **3-5** times faster. **TissueRollDocument** will strive to narrow this gap further.
+
+![COMPARISON](../asset/image/svg_perf_compare.svg)

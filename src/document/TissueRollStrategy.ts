@@ -1,7 +1,7 @@
 import { BPTreeNode, SerializeStrategySync, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
 import { TissueRoll } from '../core/TissueRoll'
-import { TissueRollMediator } from '../core/TissueRollMediator'
+import { TissueRollMediator } from './TissueRollMediator'
 import { DelayedExecution } from '../utils/DelayedExecution'
 import { TextConverter } from '../utils/TextConverter'
 
