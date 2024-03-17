@@ -158,14 +158,29 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     return new TissueRollDocument(db, record.header.id, docRoot, 0)
   }
 
-  static Migrate(before: string, after: string, payloadSize = 1024): void {
-    const db1 = TissueRollDocument.Open(before, payloadSize)
-    const db2 = TissueRollDocument.Create(after, payloadSize, false)
-
+  /**
+   * When TissueRollDocument is updated and becomes incompatible with the existing database, this function is used.  
+   * It inserts all records from the existing database into the new one.
+   * 
+   * Directly inserting all records may result in issues where the `createdAt` and `updatedAt` fields of each document are set to the current time,
+   * causing records to be considered updated.
+   * However, this function preserves all content during insertion.
+   * In this process, documents that have been deleted but are still occupying space in the database are not inserted, potentially reducing the size of the database file.
+   * 
+   * Developers will strive to utilize this function as much as possible to maintain compatibility of the database.
+   * However, it may not be able to handle updates that involve changes to the entire structure, such as changes to the database header.
+   * @param before The path where the previous database file exists.
+   * @param after The path where the new database file will be created.
+   * @param payloadSize The payload size of the new database to be created. The default value is `1024`.
+   */
+  static Migrate<T extends Record<string, SupportedType>>(before: string, after: string, payloadSize = 1024): TissueRollDocument<T> {
+    const db1 = TissueRollDocument.Open<T>(before, payloadSize)
+    const db2 = TissueRollDocument.Create<T>(after, payloadSize, false)
     const records = db1.pick({})
     for (const record of records) {
-      db2.put(record)
+      db2._callInternalPut(record)
     }
+    return db2
   }
  
   protected readonly db: TissueRoll
@@ -263,6 +278,21 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
   }
 
+  private _callInternalPut(document: T, ...overwrite: Partial<TissueRollDocumentRecord<T>>[]): TissueRollDocumentRecord<T> {
+    const record = Object.assign({}, document, ...overwrite) as TissueRollDocumentRecord<T>
+    const stringify = JSON.stringify(record)
+    const recordId = this.db.put(stringify)
+    for (const property in record) {
+      const tree = this.getTree(property)
+      const value = record[property]
+      tree.insert(recordId, value)
+    }
+    this._document.set(recordId, record)
+    this._metadata.autoIncrement++
+    this._metadata.count++
+    return record
+  }
+
   /**
    * Insert values into the database. These values must follow the JSON format and are referred to as documents.
    * 
@@ -277,21 +307,11 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     const now = Date.now()
-    const record = Object.assign({}, document, {
+    const overwrite = {
       createdAt: now,
       updatedAt: now,
-    })
-    const stringify = JSON.stringify(record)
-    const recordId = this.db.put(stringify)
-    for (const property in record) {
-      const tree = this.getTree(property)
-      const value = record[property]
-      tree.insert(recordId, value)
-    }
-    this._document.set(recordId, record)
-    this._metadata.autoIncrement++
-    this._metadata.count++
-    return record
+    } as TissueRollDocumentRecord<T>
+    return this._callInternalPut(document, overwrite)
   }
 
   /**
