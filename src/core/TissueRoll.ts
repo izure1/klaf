@@ -97,10 +97,10 @@ export class TissueRoll {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create(file: string, payloadSize = 1024, overwrite = false): TissueRoll {
+  static Create(file: string, payloadSize = 8192, overwrite = false): TissueRoll {
     if (fs.existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
     }
@@ -146,11 +146,11 @@ export class TissueRoll {
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    */
-  static Open(file: string, payloadSize = 1024) {
+  static Open(file: string, payloadSize = 8192) {
     // 파일이 존재하지 않을 경우
     if (!fs.existsSync(file)) {
       if (!payloadSize) {

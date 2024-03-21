@@ -110,13 +110,23 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     return docRoot as unknown as TissueRollDocumentRoot
   }
 
+  private static OrderN(payloadSize: number, meanValueSize: number): number {
+    const reserved = TissueRollMediator.HeaderSize + TissueRollMediator.RecordHeaderSize
+    const keySize = 36
+    let n = 0
+    while ((meanValueSize + keySize) * n + reserved + 2 * n <= payloadSize) {
+      n++
+    }
+    return n - 1
+  }
+
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024, overwrite = false): TissueRollDocument<T> {
+  static Create<T extends Record<string, SupportedType>>(file: string, payloadSize = 8192, overwrite = false): TissueRollDocument<T> {
     const db = TissueRoll.Create(file, payloadSize, overwrite)
 
     const docRoot: TissueRollDocumentRoot = {
@@ -137,11 +147,11 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
    */
-  static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024): TissueRollDocument<T> {
+  static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 8192): TissueRollDocument<T> {
     // 파일이 존재하지 않을 경우
     if (!fs.existsSync(file)) {
       if (!payloadSize) {
@@ -169,16 +179,29 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    * 
    * Developers will strive to utilize this function as much as possible to maintain compatibility of the database.
    * However, it may not be able to handle updates that involve changes to the entire structure, such as changes to the database header.
+   * 
+   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
    * @param before The path where the previous database file exists.
    * @param after The path where the new database file will be created.
-   * @param payloadSize The payload size of the new database to be created. The default value is `1024`.
+   * @param payloadSize The payload size of the new database to be created. The default value is `8192`.
+   * @param silent Determines whether the migration progress will be printed to the console.
+   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
    */
-  static Migrate<T extends Record<string, SupportedType>>(before: string, after: string, payloadSize = 1024): TissueRollDocument<T> {
+  static Migrate<T extends Record<string, SupportedType>>(before: string, after: string, payloadSize = 8192, silent = false): TissueRollDocument<T> {
     const db1 = TissueRollDocument.Open<T>(before, payloadSize)
     const db2 = TissueRollDocument.Create<T>(after, payloadSize, false)
     const records = db1.pick({})
+    const max = db1.metadata.count
+    const per = max/100
+    let count = 0
     for (const record of records) {
       db2._callInternalPut(record)
+      if (!silent) {
+        count++
+        if (count % per === 0) {
+          console.log(`migrate: ${count/per}%`)
+        }
+      }
     }
     return db2
   }
@@ -200,7 +223,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected constructor(db: TissueRoll, rootId: string, root: TissueRollDocumentRoot, writeBack: number) {
     this.db = db
     this.rootId = rootId
-    this.order = Math.max(Math.ceil(db.metadata.payloadSize/50), 4)
+    this.order = Math.max(TissueRollDocument.OrderN(db.metadata.payloadSize, 40), 4)
     this.comparator = new TissueRollComparator()
     this.locker = new DelayedExecution(writeBack)
     this.lock = false

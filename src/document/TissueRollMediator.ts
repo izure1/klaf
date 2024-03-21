@@ -15,4 +15,7 @@ export class TissueRollMediator extends TissueRoll {
   static Delete(db: TissueRoll, id: string, countDecrement: boolean): void {
     return TissueRoll.CallInternalDelete(db, id, countDecrement)
   }
+
+  static readonly HeaderSize = 100
+  static readonly RecordHeaderSize = 40
 }
