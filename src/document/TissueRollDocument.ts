@@ -295,9 +295,12 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    */
   get metadata() {
     const { autoIncrement, count } = this._metadata
+    const { payloadSize, timestamp } = this.db.metadata
     return {
       autoIncrement,
       count,
+      payloadSize,
+      timestamp,
     }
   }
 
