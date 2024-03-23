@@ -33,6 +33,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
+    "cachebranch": "^1.0.4",
     "hookall": "^2.0.2",
     "node-fpe": "^2.0.2",
     "serializable-bptree": "^3.2.2"

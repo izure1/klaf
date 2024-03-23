@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
+import { CacheBranchSync } from 'cachebranch'
 
 import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from './TissueRollMediator'
@@ -9,7 +10,6 @@ import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { IterableSet } from '../utils/IterableSet'
-import { CacheStore } from '../utils/CacheStore'
 import { TextConverter } from '../utils/TextConverter'
 import { DelayedExecution } from '../utils/DelayedExecution'
 
@@ -213,8 +213,8 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly locker: DelayedExecution
   protected lock: boolean
   private readonly _root: TissueRollDocumentRoot
-  private readonly _trees: CacheStore<BPTreeSync<string, SupportedType>>
-  private readonly _document: CacheStore<TissueRollDocumentRecord<T>>
+  private readonly _trees: CacheBranchSync<BPTreeSync<string, SupportedType>>
+  private readonly _document: CacheBranchSync<TissueRollDocumentRecord<T>>
   private _metadata: {
     autoIncrement: bigint
     count: number
@@ -228,8 +228,8 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     this.locker = new DelayedExecution(writeBack)
     this.lock = false
     this._root = root
-    this._trees = new CacheStore()
-    this._document = new CacheStore()
+    this._trees = new CacheBranchSync()
+    this._document = new CacheBranchSync()
 
     const { autoIncrement, count } = db.metadata
     this._metadata = {
@@ -249,7 +249,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       )
       tree.init()
       return tree
-    })
+    }).raw
   }
 
   private _normalizeOption(
@@ -313,7 +313,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       const value = record[property]
       tree.insert(recordId, value)
     }
-    this._document.set(recordId, record)
+    this._document.set(recordId, () => record)
     this._metadata.autoIncrement++
     this._metadata.count++
     return record
@@ -352,7 +352,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const ids = this.findRecordIds(query)
     for (const id of ids) {
       const payload = this.db.pick(id).record.payload
-      const record = this._document.ensure(payload, () => JSON.parse(payload)) as TissueRollDocumentRecord<T>
+      const record = this._document.ensure(payload, () => JSON.parse(payload)).raw
       for (const property in record) {
         const tree = this.getTree(property)
         const value = record[property]
@@ -386,10 +386,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
     const ids = this.findRecordIds(query)
     for (const id of ids) {
-      const cachedDocument = this._document.ensure(id, () => (
+      const document = this._document.ensure(id, () => (
         JSON.parse(this.db.pick(id).record.payload)
-      ))
-      const document = Object.assign({}, cachedDocument) as TissueRollDocumentRecord<any>
+      )).clone() as TissueRollDocumentRecord<any>
       const updater = typeof update === 'function' ? update(document) : update
       for (const property in updater) {
         const tree = this.getTree(property)
@@ -404,7 +403,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       document.updatedAt = Date.now()
       const stringify = JSON.stringify(document)
       this.db.update(id, stringify)
-      this._document.set(id, document)
+      this._document.set(id, () => document)
     }
     return ids.length
   }
@@ -427,10 +426,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
     const ids = this.findRecordIds(query)
     for (const id of ids) {
-      const beforeCachedDocument = this._document.ensure(id, () => (
+      const beforeDocument = this._document.ensure(id, () => (
         JSON.parse(this.db.pick(id).record.payload)
-      ))
-      const beforeDocument = Object.assign({}, beforeCachedDocument) as TissueRollDocumentRecord<T>
+      )).clone() as TissueRollDocumentRecord<T>
       let recordUpdate = update
       if (typeof recordUpdate === 'function') {
         recordUpdate = recordUpdate(beforeDocument)
@@ -451,7 +449,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       }
       const stringify = JSON.stringify(afterDocument)
       this.db.update(id, stringify)
-      this._document.set(id, afterDocument)
+      this._document.set(id, () => afterDocument)
     }
     return ids.length
   }
@@ -485,10 +483,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
     const { start, end, order, desc } = this._normalizeOption(option)
     const records = this.findRecordIds(query).map((id) => (
-      Object.assign({}, this._document.ensure(id, () => (
+      this._document.ensure(id, () => (
         JSON.parse(this.db.pick(id).record.payload)
-      )) as TissueRollDocumentRecord<any>
-    )))
+      )).clone() as TissueRollDocumentRecord<any>
+    ))
     if (desc) {
       records.sort((a, b) => this.comparator.asc(b[order], a[order]))
     }
