@@ -1,6 +1,6 @@
 {
   "name": "tissue-roll",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "Very simple read/write database with a no-sql.",
   "types": "dist/typings/index.d.ts",
   "main": "dist/cjs/index.js",
@@ -33,7 +33,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "cachebranch": "^1.0.4",
+    "cachebranch": "^1.0.5",
     "hookall": "^2.0.2",
     "node-fpe": "^2.0.2",
     "serializable-bptree": "^3.2.2"

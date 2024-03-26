@@ -606,9 +606,11 @@ export class TissueRoll {
   }
 
   private _getHeader(index: number): number[] {
-    const page    = this._get(index)
-    const header  = IterableView.Read(page, 0, this.headerSize)
-    return header
+    return this._cachedRecord.ensure(`${index}/_header`, () => {
+      const page    = this._get(index)
+      const header  = IterableView.Read(page, 0, this.headerSize)
+      return header
+    }).clone('array-shallow-copy') as number[]
   }
 
   private _normalizeHeader(header: number[]): IPageHeader {
@@ -694,14 +696,15 @@ export class TissueRoll {
     return this.pickRecord(recordId, true)
   }
 
-  private _putPageHeader(header: IPageHeader): void {
+  private _setPageHeader(header: IPageHeader): void {
     const pos = this._pagePosition(header.index)
     const rHeader = this._createEmptyHeader(header)
 
     FileView.Update(this.fd, pos, rHeader)
+    this._cachedRecord.cache(`${header.index}`, 'top-down')
   }
 
-  private _putPagePayload(index: number, order: number, record: number[]): void {
+  private _setPagePayload(index: number, order: number, record: number[]): void {
     const payloadPos  = this._pagePayloadPosition(index)
     const prevOrder   = order-1
 
@@ -721,6 +724,7 @@ export class TissueRoll {
     FileView.Update(this.fd, recordPos, record)
     // update cell
     FileView.Update(this.fd, cellPos, cell)
+    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
   }
 
   private _putJustOnePage(header: IPageHeader, data: number[]): string {
@@ -728,15 +732,24 @@ export class TissueRoll {
     const recordId  = this._recordId(header.index, header.count+1, salt)
     const record    = this._createRecord(recordId, data)
 
-    this._putPagePayload(header.index, header.count+1, record)
+    this._setPagePayload(header.index, header.count+1, record)
     
     const usage = TissueRoll.RecordHeaderSize+TissueRoll.CellSize+data.length
     header.count += 1
     header.free -= usage
 
-    this._putPageHeader(header)
+    this._setPageHeader(header)
 
     return recordId
+  }
+
+  private _setRecordHeader(index: number, order: number, rHeader: number[]): void {
+    FileView.Update(
+      this.fd,
+      this._recordPosition(index, order),
+      rHeader
+    )
+    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
   }
 
   protected callInternalPut(data: number[], autoIncrement: boolean): string {
@@ -767,7 +780,8 @@ export class TissueRoll {
     const recordSize  = TissueRoll.RecordHeaderSize+data.length
     const recordUsage = TissueRoll.CellSize+recordSize
     if (header.free >= recordUsage) {
-      return this._putJustOnePage(header, data)
+      const recordId = this._putJustOnePage(header, data)
+      return recordId
     }
     
     // 2. 이전 페이지의 공간이 넉넉하지 않을 경우
@@ -801,7 +815,7 @@ export class TissueRoll {
       const chunk = IterableView.Read(record, start, chunkSize)
       
       const currentHeader = this._normalizeHeader(this._getHeader(index))
-      this._putPagePayload(currentHeader.index, currentHeader.count+1, chunk)
+      this._setPagePayload(currentHeader.index, currentHeader.count+1, chunk)
       
       if (!last) {
         index = this._addEmptyPage({ type: TissueRoll.OverflowType })
@@ -813,13 +827,13 @@ export class TissueRoll {
       if (last) {
         currentHeader.next = 0
       }
-      this._putPageHeader(currentHeader)
+      this._setPageHeader(currentHeader)
     }
     const headHeader = this._normalizeHeader(this._getHeader(headIndex))
     headHeader.type = TissueRoll.InternalType
     headHeader.count = 1
     headHeader.free = 0
-    this._putPageHeader(headHeader)
+    this._setPageHeader(headHeader)
 
     return recordId
   }
@@ -865,7 +879,6 @@ export class TissueRoll {
         }
         
         // update head record's header
-        const headPos = this._recordPosition(head.page.index, head.order)
         IterableView.Update(
           head.record.rawHeader,
           TissueRoll.RecordHeaderAliasIndexOffset,
@@ -881,10 +894,7 @@ export class TissueRoll {
           TissueRoll.RecordHeaderAliasSaltOffset,
           IntegerConverter.ToArray32(salt)
         )
-        FileView.Update(this.fd, headPos, head.record.rawHeader)
-
-        // re-cache record
-        this._cachedRecord.cache(`${head.page.index}/${head.order}`, 'top-down')
+        this._setRecordHeader(head.page.index, head.order, head.record.rawHeader)
   
         return { id, data }
       }
@@ -917,7 +927,7 @@ export class TissueRoll {
       const last = i === count-1
       const start = i*chunkSize
       const chunk = IterableView.Read(rawRecord, start, chunkSize)
-      this._putPagePayload(index, order, chunk)
+      this._setPagePayload(index, order, chunk)
 
       const page = this._normalizeHeader(this._getHeader(index))
       index = page.next
@@ -930,11 +940,9 @@ export class TissueRoll {
           free: 0,
           count: 1
         })
-        this._putPageHeader(Object.assign({}, page, { next: index }))
+        this._setPageHeader(Object.assign({}, page, { next: index }))
       }
     }
-
-    this._cachedRecord.cache(`${tail.page.index}/${tail.order}`, 'top-down')
     
     return { id, data }
   }
@@ -961,8 +969,7 @@ export class TissueRoll {
 
   protected callInternalDelete(recordId: string, countDecrement: boolean): void {
     const { index, order } = this._normalizeRecordId(recordId)
-    this._cachedRecord.delete(`${index}/${order}`)
-
+    
     const pos = this._recordPosition(index, order)+TissueRoll.RecordHeaderDeletedOffset
     const buf = IntegerConverter.ToArray8(1)
     if (countDecrement) {
@@ -974,6 +981,7 @@ export class TissueRoll {
       )
     }
     FileView.Update(this.fd, pos, buf)
+    this._cachedRecord.delete(`${index}/${order}`)
   }
 
   /**
