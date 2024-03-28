@@ -301,11 +301,21 @@ export class TissueRoll {
   protected readonly secretKey: string
   protected readonly fpe: FpeCipher
   protected readonly hooker: IHookallSync<IHooker>
-  private readonly _cachedId: CacheBranchSync<string>
-  private readonly _cachedIdInfo: CacheBranchSync<{ index: number, order: number, salt: number }>
-  private readonly _cachedRecord: CacheBranchSync<number[]|PickResult>
-  private readonly _cachedRecordHeader: CacheBranchSync<ReturnType<TissueRoll['_normalizeRecord']>['header']>
-  private readonly _cachedRecordPosition: CacheBranchSync<number>
+  private readonly _cachedId: CacheBranchSync<{
+    [key: string]: string
+  }>
+  private readonly _cachedIdInfo: CacheBranchSync<{
+    [key: string]: { index: number, order: number, salt: number }
+  }>
+  private readonly _cachedRecord: CacheBranchSync<{
+    [key: string]: number[]|PickResult
+  }>
+  private readonly _cachedRecordHeader: CacheBranchSync<{
+    [key: string]: NormalizedRecord['header']
+  }>
+  private readonly _cachedRecordPosition: CacheBranchSync<{
+    [key: string]: number
+  }>
 
   protected constructor(fd: number, secretKey: string, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {

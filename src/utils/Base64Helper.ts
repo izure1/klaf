@@ -4,8 +4,12 @@ import { h64 } from 'xxhashjs'
 export class Base64Helper {
   static readonly UrlDomain = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=+/'.split('')
   static readonly UrlSafeDomain = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=-_'.split('')
-  private static readonly _CachedEncodedUrl = new CacheBranchSync<string>()
-  private static readonly _CachedDecodedUrl = new CacheBranchSync<string>()
+  private static readonly _CachedEncodedUrl = new CacheBranchSync<{
+    [key: string]: string
+  }>()
+  private static readonly _CachedDecodedUrl = new CacheBranchSync<{
+    [key: string]: string
+  }>()
 
   static UrlSafeEncode(plain: string): string {
     const hashKey = h64(plain, 0).toString(16)

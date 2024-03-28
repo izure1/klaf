@@ -223,8 +223,12 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly locker: DelayedExecution
   protected lock: boolean
   private readonly _root: TissueRollDocumentRoot
-  private readonly _trees: CacheBranchSync<BPTreeSync<string, SupportedType>>
-  private readonly _document: CacheBranchSync<TissueRollDocumentRecord<T>>
+  private readonly _trees: CacheBranchSync<{
+    [key: string]: BPTreeSync<string, SupportedType>
+  }>
+  private readonly _document: CacheBranchSync<{
+    [key: string]: TissueRollDocumentRecord<T>
+  }>
   private _metadata: {
     autoIncrement: bigint
     count: number
@@ -289,7 +293,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   }
 
   private _normalizeQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
-    return Object.assign({}, {
+    return Object.assign({
       createdAt: {
         gt: 0
       }
@@ -470,13 +474,12 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     query = this._normalizeQuery(query)
-    const sets = []
+    let result: Set<string>|undefined
     for (const property in query) {
       const tree = this.getTree(property)
-      const keys = tree.keys(query[property]! as TissueRollDocumentQueryCondition<T>)
-      sets.push(keys)
+      result = tree.keys(query[property]! as TissueRollDocumentQueryCondition<T>, result)
     }
-    return IterableSet.Intersections(sets)
+    return Array.from(result ?? [])
   }
 
   /**

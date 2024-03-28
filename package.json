@@ -38,10 +38,10 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
-    "cachebranch": "^1.0.5",
+    "cachebranch": "^1.1.0",
     "hookall": "^2.0.2",
     "node-fpe": "^2.0.2",
-    "serializable-bptree": "^3.2.2",
+    "serializable-bptree": "^3.2.3",
     "xxhashjs": "^0.2.2"
   }
 }
