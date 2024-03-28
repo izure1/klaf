@@ -18,4 +18,5 @@ export class TissueRollMediator extends TissueRoll {
 
   static readonly HeaderSize = 100
   static readonly RecordHeaderSize = 40
+  static readonly CellSize = 4
 }

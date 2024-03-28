@@ -41,9 +41,29 @@ type IHooker = {
 }
 
 type PickResult = {
-  page: ReturnType<TissueRoll['_normalizeHeader']>
-  record: ReturnType<TissueRoll['_normalizeRecord']>
+  page: IPageHeader
+  record: NormalizedRecord
   order: number
+}
+
+type NormalizedRecord = {
+  rawRecord: number[],
+  rawHeader: number[],
+  rawPayload: number[],
+  header: {
+    id: string,
+    aliasId: string,
+    index: number,
+    order: number,
+    salt: number,
+    aliasIndex: number,
+    aliasOrder: number,
+    aliasSalt: number,
+    length: number,
+    maxLength: number,
+    deleted: number,
+  },
+  payload: string,
 }
 
 export class TissueRoll {
@@ -489,25 +509,7 @@ export class TissueRoll {
     }).clone('array-shallow-copy') as number[]
   }
 
-  private _normalizeRecord(record: number[]): {
-    rawRecord: number[],
-    rawHeader: number[],
-    rawPayload: number[],
-    header: {
-      id: string,
-      aliasId: string,
-      index: number,
-      order: number,
-      salt: number,
-      aliasIndex: number,
-      aliasOrder: number,
-      aliasSalt: number,
-      length: number,
-      maxLength: number,
-      deleted: number,
-    },
-    payload: string,
-  } {
+  private _normalizeRecord(record: number[]): NormalizedRecord {
     const rawHeader   = IterableView.Read(record, 0, TissueRoll.RecordHeaderSize)
     const rawPayload  = IterableView.Read(record, TissueRoll.RecordHeaderSize)
 
@@ -672,7 +674,7 @@ export class TissueRoll {
    * The page index should be within the range of `1` to `instance.metadata.index`.
    * @param index The page index.
    */
-  getRecords(index: number): ReturnType<TissueRoll['pick']>['record'][] {
+  getRecords(index: number): PickResult['record'][] {
     const headIndex = this._getHeadPageIndex(index)
     const header = this._normalizeHeader(this._getHeader(headIndex))
 

@@ -1,4 +1,5 @@
 import { CacheBranchSync } from 'cachebranch'
+import { h64 } from 'xxhashjs'
 
 export class Base64Helper {
   static readonly UrlDomain = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=+/'.split('')
@@ -7,13 +8,15 @@ export class Base64Helper {
   private static readonly _CachedDecodedUrl = new CacheBranchSync<string>()
 
   static UrlSafeEncode(plain: string): string {
-    return Base64Helper._CachedEncodedUrl.ensure(plain, () => (
+    const hashKey = h64(plain, 0).toString(16)
+    return Base64Helper._CachedEncodedUrl.ensure(hashKey, () => (
       btoa(plain).replaceAll('+', '-').replaceAll('/', '_')
     )).raw
   }
 
   static UrlSafeDecode(base64: string): string {
-    return Base64Helper._CachedDecodedUrl.ensure(base64, () => (
+    const hashKey = h64(base64, 0).toString(16)
+    return Base64Helper._CachedDecodedUrl.ensure(hashKey, () => (
       atob(base64.replaceAll('-', '+').replaceAll('_', '/'))
     )).raw
   }

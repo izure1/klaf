@@ -1,320 +1,127 @@
-import fs from 'fs'
-import { TissueRoll } from '../'
+import { unlink } from 'node:fs/promises'
+import Chance from 'chance'
+import { TissueRoll, TissueRollDocument } from '../'
 
-describe('write', () => {
-  let db: TissueRoll
+function createDatabase(name: string) {
+  const db = TissueRoll.Create(`perf-${name}.db`, undefined, true)
+  const close = () => {
+    db.close()
+    unlink(`perf-${name}.db`)
+  }
 
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
+  return {
+    db,
+    close,
+  }
+}
 
-  const data = 'Simple test string'
+function createSqlDatabase(name: string) {
+  const db = TissueRollDocument.Create<{
+    id: string
+    name: string
+    age: number
+  }>(`perf-${name}.db`, undefined, true)
+  const close = async () => {
+    await db.close()
+    await unlink(`perf-${name}.db`)
+  }
 
-  beforeEach(() => {
-    db = TissueRoll.Create(dbFile, undefined, true)
-    fs.writeFileSync(jsonFile, JSON.stringify([]), 'utf-8')
-  })
-  
+  return {
+    db,
+    close,
+  }
+}
+
+const chance = new Chance()
+function createFakeUser() {
+  const id = chance.guid()
+  const name = chance.name()
+  const age = chance.age()
+  return {
+    id,
+    name,
+    age,
+  }
+}
+
+describe('perf:core', () => {
+  const { db, close } = createDatabase('tissue-roll')
+
   afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
+    close()
   })
 
-  test('tissue-write:1', () => {
+  test('write:1000', () => {
     for (let i = 0; i < 1000; i++) {
-      db.put(`${data}-${i}`)
+      db.put(`Simple Text - ${i}`)
     }
   })
+  test('read:1000', () => {
+    db.pick(db.getRecords(1)[0].header.id)
+  })
+  test('write:2000', () => {
+    for (let i = 1000; i < 2000; i++) {
+      db.put(`Simple Text - ${i}`)
+    }
+  })
+  test('read:2000', () => {
+    db.pick(db.getRecords(2)[0].header.id)
+  })
+  test('write:4000', () => {
+    for (let i = 2000; i < 4000; i++) {
+      db.put(`Simple Text - ${i}`)
+    }
+  })
+  test('read:4000', () => {
+    db.pick(db.getRecords(3)[0].header.id)
+  })
+  test('write:8000', () => {
+    for (let i = 4000; i < 8000; i++) {
+      db.put(`Simple Text - ${i}`)
+    }
+  })
+  test('read:8000', () => {
+    db.pick(db.getRecords(4)[0].header.id)
+  })
+})
 
-  test('json-write:1', () => {
+describe('perf:document', () => {
+  const { db, close } = createSqlDatabase('tissue-roll-sql')
+
+  afterAll(() => {
+    close()
+  })
+
+  test('write:1000', () => {
     for (let i = 0; i < 1000; i++) {
-      const raw = fs.readFileSync(jsonFile, 'utf-8')
-      const json = JSON.parse(raw)
-      json.push(`${data}-${i}`)
-      fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
+      db.put(createFakeUser())
     }
   })
-
-  test('tissue-write:2', () => {
-    for (let i = 0; i < 2000; i++) {
-      db.put(`${data}-${i}`)
+  test('read:1000', () => {
+    db.pick({ age: 30 })
+  })
+  test('write:2000', () => {
+    for (let i = 1000; i < 2000; i++) {
+      db.put(createFakeUser())
     }
   })
-
-  test('json-write:2', () => {
-    for (let i = 0; i < 2000; i++) {
-      const raw = fs.readFileSync(jsonFile, 'utf-8')
-      const json = JSON.parse(raw)
-      json.push(`${data}-${i}`)
-      fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
+  test('read:2000', () => {
+    db.pick({ age: 31 })
+  })
+  test('write:4000', () => {
+    for (let i = 2000; i < 4000; i++) {
+      db.put(createFakeUser())
     }
   })
-
-  test('tissue-write:3', () => {
-    for (let i = 0; i < 4000; i++) {
-      db.put(`${data}-${i}`)
+  test('read:4000', () => {
+    db.pick({ age: 32 })
+  })
+  test('write:8000', () => {
+    for (let i = 4000; i < 8000; i++) {
+      db.put(createFakeUser())
     }
   })
-
-  test('json-write:3', () => {
-    for (let i = 0; i < 4000; i++) {
-      const raw = fs.readFileSync(jsonFile, 'utf-8')
-      const json = JSON.parse(raw)
-      json.push(`${data}-${i}`)
-      fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-    }
-  })
-
-  test('tissue-write:4', () => {
-    for (let i = 0; i < 8000; i++) {
-      db.put(`${data}-${i}`)
-    }
-  })
-
-  test('json-write:4', () => {
-    for (let i = 0; i < 8000; i++) {
-      const raw = fs.readFileSync(jsonFile, 'utf-8')
-      const json = JSON.parse(raw)
-      json.push(`${data}-${i}`)
-      fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-    }
-  })
-
-  test('tissue-write:5', () => {
-    for (let i = 0; i < 16000; i++) {
-      db.put(`${data}-${i}`)
-    }
-  })
-
-  test('json-write:5', () => {
-    for (let i = 0; i < 16000; i++) {
-      const raw = fs.readFileSync(jsonFile, 'utf-8')
-      const json = JSON.parse(raw)
-      json.push(`${data}-${i}`)
-      fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-    }
-  })
-})
-
-
-describe('read:1', () => {
-  let db: TissueRoll
-
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
-
-  const data = 'Simple test string'
-  const max = 8000
-  const ids: string[] = new Array(max)
-  const r = Math.floor(Math.random()*ids.length)
-
-  beforeAll(() => {
-    db = TissueRoll.Create(dbFile)
-
-    const json: Record<string, string> = {}
-    for (let i = 0; i < max; i++) {
-      const content = `${data}-${i}`
-      const id = db.put(content)
-      ids[i] = id
-      json[i.toString()] = content
-    }
-
-    fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-  })
-  
-  afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
-  })
-
-  test('tissue-read:1', () => {
-    expect(db.pick(ids[r]).record.payload).toBe(`${data}-${r}`)
-  })
-
-  test('json-read:1', () => {
-    const raw = fs.readFileSync(jsonFile, 'utf-8')
-    const json = JSON.parse(raw)
-    expect(json[r]).toBe(`${data}-${r}`)
-  })
-})
-
-describe('read:2', () => {
-  let db: TissueRoll
-
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
-
-  const data = 'Simple test string'
-  const max = 16000
-  const ids: string[] = new Array(max)
-  const r = Math.floor(Math.random()*ids.length)
-
-  beforeAll(() => {
-    db = TissueRoll.Create(dbFile)
-
-    const json: Record<string, string> = {}
-    for (let i = 0; i < max; i++) {
-      const content = `${data}-${i}`
-      const id = db.put(content)
-      ids[i] = id
-      json[i.toString()] = content
-    }
-
-    fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-  })
-  
-  afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
-  })
-
-  test('tissue-read:2', () => {
-    expect(db.pick(ids[r]).record.payload).toBe(`${data}-${r}`)
-  })
-
-  test('json-read:2', () => {
-    const raw = fs.readFileSync(jsonFile, 'utf-8')
-    const json = JSON.parse(raw)
-    expect(json[r]).toBe(`${data}-${r}`)
-  })
-})
-
-describe('read:3', () => {
-  let db: TissueRoll
-
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
-
-  const data = 'Simple test string'
-  const max = 32000
-  const ids: string[] = new Array(max)
-  const r = Math.floor(Math.random()*ids.length)
-
-  beforeAll(() => {
-    db = TissueRoll.Create(dbFile)
-
-    const json: Record<string, string> = {}
-    for (let i = 0; i < max; i++) {
-      const content = `${data}-${i}`
-      const id = db.put(content)
-      ids[i] = id
-      json[i.toString()] = content
-    }
-
-    fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-  })
-  
-  afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
-  })
-
-  test('tissue-read:3', () => {
-    expect(db.pick(ids[r]).record.payload).toBe(`${data}-${r}`)
-  })
-
-  test('json-read:3', () => {
-    const raw = fs.readFileSync(jsonFile, 'utf-8')
-    const json = JSON.parse(raw)
-    expect(json[r]).toBe(`${data}-${r}`)
-  })
-})
-
-describe('read:4', () => {
-  let db: TissueRoll
-
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
-
-  const data = 'Simple test string'
-  const max = 64000
-  const ids: string[] = new Array(max)
-  const r = Math.floor(Math.random()*ids.length)
-
-  beforeAll(() => {
-    db = TissueRoll.Create(dbFile)
-
-    const json: Record<string, string> = {}
-    for (let i = 0; i < max; i++) {
-      const content = `${data}-${i}`
-      const id = db.put(content)
-      ids[i] = id
-      json[i.toString()] = content
-    }
-
-    fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-  })
-  
-  afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
-  })
-
-  test('tissue-read:4', () => {
-    expect(db.pick(ids[r]).record.payload).toBe(`${data}-${r}`)
-  })
-
-  test('json-read:4', () => {
-    const raw = fs.readFileSync(jsonFile, 'utf-8')
-    const json = JSON.parse(raw)
-    expect(json[r]).toBe(`${data}-${r}`)
-  })
-})
-
-describe('read:5', () => {
-  let db: TissueRoll
-
-  const dbFile    = 'performance-test-tissue.db'
-  const jsonFile  = 'performance-test-json.json'
-
-  const data = 'Simple test string'
-  const max = 128000
-  const ids: string[] = new Array(max)
-  const r = Math.floor(Math.random()*ids.length)
-
-  beforeAll(() => {
-    db = TissueRoll.Create(dbFile)
-
-    const json: Record<string, string> = {}
-    for (let i = 0; i < max; i++) {
-      const content = `${data}-${i}`
-      const id = db.put(content)
-      ids[i] = id
-      json[i.toString()] = content
-    }
-
-    fs.writeFileSync(jsonFile, JSON.stringify(json), 'utf-8')
-  })
-  
-  afterAll(() => {
-    if (db) {
-      db.close()
-    }
-    fs.unlinkSync(dbFile)
-    fs.unlinkSync(jsonFile)
-  })
-
-  test('tissue-read:5', () => {
-    expect(db.pick(ids[r]).record.payload).toBe(`${data}-${r}`)
-  })
-
-  test('json-read:5', () => {
-    const raw = fs.readFileSync(jsonFile, 'utf-8')
-    const json = JSON.parse(raw)
-    expect(json[r]).toBe(`${data}-${r}`)
+  test('read:8000', () => {
+    db.pick({ age: 33 })
   })
 })

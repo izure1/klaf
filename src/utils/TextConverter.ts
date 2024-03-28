@@ -1,4 +1,5 @@
 import { CacheBranchSync } from 'cachebranch'
+import { h64 } from 'xxhashjs'
 
 export class TextConverter {
   protected static readonly Encoder = new TextEncoder()
@@ -13,7 +14,8 @@ export class TextConverter {
   }
 
   static ToArray(str: string): number[] {
-    return TextConverter._CachedRaw.ensure(str, () => (
+    const hashKey = h64(str, 0).toString(16)
+    return TextConverter._CachedRaw.ensure(hashKey, () => (
       Array.from(TextConverter.Encoder.encode(str))
     )).clone() as number[]
   }

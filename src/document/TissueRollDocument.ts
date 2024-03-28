@@ -2,7 +2,7 @@ import fs from 'node:fs'
 
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheBranchSync } from 'cachebranch'
-
+import { h64 } from 'xxhashjs'
 import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from './TissueRollMediator'
 import { TissueRollComparator } from './TissueRollComparator'
@@ -111,10 +111,20 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   }
 
   private static OrderN(payloadSize: number, meanValueSize: number): number {
-    const reserved = TissueRollMediator.HeaderSize + TissueRollMediator.RecordHeaderSize
+    const reserved = 150
     const keySize = 36
     let n = 0
-    while ((meanValueSize + keySize) * n + reserved + 2 * n <= payloadSize) {
+    while (
+      reserved +
+      TissueRollMediator.HeaderSize +
+      (
+        TissueRollMediator.CellSize +
+        TissueRollMediator.RecordHeaderSize +
+        meanValueSize +
+        keySize +
+        3 // comma, quotation
+      ) * n <= payloadSize
+    ) {
       n++
     }
     return n - 1
@@ -352,7 +362,8 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const ids = this.findRecordIds(query)
     for (const id of ids) {
       const payload = this.db.pick(id).record.payload
-      const record = this._document.ensure(payload, () => JSON.parse(payload)).raw
+      const hashKey = h64(payload, 0).toString(16)
+      const record = this._document.ensure(hashKey, () => JSON.parse(payload)).raw
       for (const property in record) {
         const tree = this.getTree(property)
         const value = record[property]

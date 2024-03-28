@@ -1,17 +1,17 @@
 export class IterableSet {
   static Intersections<T>(iterables: Iterable<T>[]): T[] {
-    let intersection = new Set(iterables.shift() ?? [])
-    for (const iterable of iterables) {
-      const found = []
-      for (const t of iterable) {
+    let intersection = new Set<T>(iterables.shift() ?? [])
+    for (const set of iterables) {
+      const found = new Set<T>()
+      for (const element of set) {
         for (const guess of intersection) {
-          if (t === guess) {
-            found.push(t)
+          if (element === guess) {
+            found.add(element)
             break
           }
         }
       }
-      intersection = new Set(found)
+      intersection = found
     }
     return Array.from(intersection)
   }
