@@ -1,15 +1,15 @@
-import fs from 'node:fs'
+import { existsSync } from 'node:fs'
+import { open } from 'node:fs/promises'
 
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheBranchSync } from 'cachebranch'
 import { h64 } from 'xxhashjs'
 import { TissueRoll } from '../core/TissueRoll'
-import { TissueRollMediator } from './TissueRollMediator'
+import { TissueRollMediator } from '../core/TissueRollMediator'
 import { TissueRollComparator } from './TissueRollComparator'
 import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
-import { IterableSet } from '../utils/IterableSet'
 import { TextConverter } from '../utils/TextConverter'
 import { DelayedExecution } from '../utils/DelayedExecution'
 
@@ -163,7 +163,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    */
   static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 8192): TissueRollDocument<T> {
     // 파일이 존재하지 않을 경우
-    if (!fs.existsSync(file)) {
+    if (!existsSync(file)) {
       if (!payloadSize) {
         throw ErrorBuilder.ERR_DB_NO_EXISTS(file)
       }
@@ -176,44 +176,6 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const docRoot = TissueRollDocument.Verify(file, record.payload)
 
     return new TissueRollDocument(db, record.header.id, docRoot, 0)
-  }
-
-  /**
-   * When TissueRollDocument is updated and becomes incompatible with the existing database, this function is used.  
-   * It inserts all records from the existing database into the new one.
-   * 
-   * Directly inserting all records may result in issues where the `createdAt` and `updatedAt` fields of each document are set to the current time,
-   * causing records to be considered updated.
-   * However, this function preserves all content during insertion.
-   * In this process, documents that have been deleted but are still occupying space in the database are not inserted, potentially reducing the size of the database file.
-   * 
-   * Developers will strive to utilize this function as much as possible to maintain compatibility of the database.
-   * However, it may not be able to handle updates that involve changes to the entire structure, such as changes to the database header.
-   * 
-   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
-   * @param before The path where the previous database file exists.
-   * @param after The path where the new database file will be created.
-   * @param payloadSize The payload size of the new database to be created. The default value is `8192`.
-   * @param silent Determines whether the migration progress will be printed to the console.
-   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
-   */
-  static Migrate<T extends Record<string, SupportedType>>(before: string, after: string, payloadSize = 8192, silent = false): TissueRollDocument<T> {
-    const db1 = TissueRollDocument.Open<T>(before, payloadSize)
-    const db2 = TissueRollDocument.Create<T>(after, payloadSize, false)
-    const records = db1.pick({})
-    const max = db1.metadata.count
-    const per = max/100
-    let count = 0
-    for (const record of records) {
-      db2._callInternalPut(record)
-      if (!silent) {
-        count++
-        if (count % per === 0) {
-          console.log(`migrate: ${count/per}%`)
-        }
-      }
-    }
-    return db2
   }
  
   protected readonly db: TissueRoll
@@ -518,6 +480,60 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    */
   count(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
     return this.findRecordIds(query).length
+  }
+
+  /**
+   * Exports data from all documents inserted into the current database to a file.
+   * Each document is separated by a newline character.
+   * The exported file can then be used with the `importData` method to insert data into another database.
+   * This method is useful for database migration purposes.
+   * 
+   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
+   * @param dataDist Location where the data will be stored in the file.
+   * @param silent Determines whether the progress will be printed to the console.
+   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
+   */
+  async exportData(dataDist: string, silent = false): Promise<void> {
+    const handle = await open(dataDist, 'a')
+    const documents = this.pick({})
+    const max = documents.length
+    let count = 0
+    for (const document of documents) {
+      await handle.write(JSON.stringify(document)+'\n', null, 'utf8')
+      if (!silent) {
+        count++
+        const per = count / max * 100
+        console.log(`Exporting data: ${per.toFixed(2)}%`)
+      }
+    }
+    await handle.close()
+    if (!silent) {
+      console.log('Data exporting done.')
+    }
+  }
+
+  /**
+   * Reads documents from a file where all document data is stored and inserts them into the current database.
+   * Each document should be separated by a newline character.
+   * Such a file containing all document data can be created using the `exportData` method.
+   * This method is useful for database migration purposes.
+   * 
+   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
+   * @param dataSrc Location of the file where the data is stored.
+   * @param silent Determines whether the progress will be printed to the console.
+   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
+   */
+  async importData(dataSrc: string, silent = false): Promise<void> {
+    const fd = await open(dataSrc, 'r')
+    let count = 0
+    for await (const line of fd.readLines()) {
+      const document = JSON.parse(line) as TissueRollDocumentRecord<T>
+      this._callInternalPut(document)
+      count++
+      if (!silent) {
+        console.log(`Importing document ${count.toLocaleString()} done.`)
+      }
+    }
   }
 
   /**

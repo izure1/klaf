@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import { fstatSync, readSync, writeSync } from 'node:fs'
 
 export class IterableView {
   static Read<T>(array: T[], start: number, length = array.length-start): T[] {
@@ -25,12 +25,12 @@ export class IterableView {
 
 export class FileView {
   static Size(fd: number): number {
-    return fs.fstatSync(fd).size
+    return fstatSync(fd).size
   }
 
   static Read(fd: number, start: number, length = FileView.Size(fd)-start): number[] {
     const buf = Buffer.alloc(length)
-    fs.readSync(fd, buf, 0, buf.length, start)
+    readSync(fd, buf, 0, buf.length, start)
     return Array.from(buf)
   }
 
@@ -40,13 +40,13 @@ export class FileView {
     const chunk     = data.slice(0, writable)
     const buf       = Uint8Array.from(chunk)
 
-    fs.writeSync(fd, buf, 0, buf.length, start)
+    writeSync(fd, buf, 0, buf.length, start)
     return chunk
   }
 
   static Append(fd: number, data: number[]): void {
     const buf = Uint8Array.from(data)
-    const pos = fs.fstatSync(fd).size
-    fs.writeSync(fd, buf, 0, buf.length, pos)
+    const pos = fstatSync(fd).size
+    writeSync(fd, buf, 0, buf.length, pos)
   }
 }

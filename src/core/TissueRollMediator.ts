@@ -1,6 +1,10 @@
-import { TissueRoll } from '../core/TissueRoll'
+import { TissueRoll, IPageHeader } from '../core/TissueRoll'
 
 export class TissueRollMediator extends TissueRoll {
+  static AddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>): number {
+    return TissueRoll.CallAddEmptyPage(db, head)
+  }
+
   static Put(db: TissueRoll, data: number[], autoIncrement: boolean): string {
     return TissueRoll.CallInternalPut(db, data, autoIncrement)
   }
@@ -19,4 +23,9 @@ export class TissueRollMediator extends TissueRoll {
   static readonly HeaderSize = 100
   static readonly RecordHeaderSize = 40
   static readonly CellSize = 4
+
+  static readonly UnknownType         = 0
+  static readonly InternalType        = 1
+  static readonly OverflowType        = 2
+  static readonly SystemReservedType  = 3
 }

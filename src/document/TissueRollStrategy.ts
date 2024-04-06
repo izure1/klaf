@@ -1,7 +1,7 @@
 import { BPTreeNode, SerializeStrategySync, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
 import { TissueRoll } from '../core/TissueRoll'
-import { TissueRollMediator } from './TissueRollMediator'
+import { TissueRollMediator } from '../core/TissueRollMediator'
 import { DelayedExecution } from '../utils/DelayedExecution'
 import { TextConverter } from '../utils/TextConverter'
 
@@ -21,13 +21,8 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
     this.root = root
   }
 
-  private _addOverflowRecord(): string {
-    const reserved = '\x00'.repeat(this.db.metadata.payloadSize)
-    return TissueRollMediator.Put(
-      this.db,
-      TextConverter.ToArray(reserved),
-      false
-    )
+  private _addEmptyPage(): number {
+    return TissueRollMediator.AddEmptyPage(this.db, { type: TissueRollMediator.OverflowType })
   }
 
   private _getRecordOwnNode(id: number) {
@@ -38,10 +33,8 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
     return record
   }
 
-  id(): number {
-    const recordId = this._addOverflowRecord()
-    const record = this.db.pick(recordId)
-    return record.page.index
+  id(isLeaf: boolean): number {
+    return this._addEmptyPage()
   }
 
   read(id: number): BPTreeNode<string, SupportedType> {

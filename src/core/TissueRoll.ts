@@ -1,4 +1,5 @@
-import fs from 'node:fs'
+import { openSync, closeSync, writeFileSync, existsSync } from 'node:fs'
+import { open } from 'node:fs/promises'
 
 import type { IHookallSync } from 'hookall'
 import { useHookallSync } from 'hookall'
@@ -10,7 +11,7 @@ import { IntegerConverter } from '../utils/IntegerConverter'
 import { CryptoHelper } from '../utils/CryptoHelper'
 import { IterableView, FileView } from '../utils/IterableView'
 
-type IPageHeader = {
+export type IPageHeader = {
   type: number
   index: number
   next: number
@@ -18,7 +19,7 @@ type IPageHeader = {
   free: number
 }
 
-type IRootHeader = {
+export type IRootHeader = {
   majorVersion: number
   minorVersion: number
   patchVersion: number
@@ -30,20 +31,20 @@ type IRootHeader = {
   index: number
 }
 
-type IHookerRecordInformation = { id: string, data: string }
-type IHooker = {
+export type IHookerRecordInformation = { id: string, data: string }
+export type IHooker = {
   put: (data: string) => string
   update: (record: IHookerRecordInformation) => IHookerRecordInformation
   delete: (recordId: string) => string
 }
 
-type PickResult = {
+export type PickResult = {
   page: IPageHeader
   record: NormalizedRecord
   order: number
 }
 
-type NormalizedRecord = {
+export type NormalizedRecord = {
   rawRecord: number[],
   rawHeader: number[],
   rawPayload: number[],
@@ -118,7 +119,7 @@ export class TissueRoll {
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
   static Create(file: string, payloadSize = 8192, overwrite = false): TissueRoll {
-    if (fs.existsSync(file) && !overwrite) {
+    if (existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
     }
     
@@ -154,7 +155,7 @@ export class TissueRoll {
     IterableView.Update(root, RootAutoIncrementOffset,  IntegerConverter.ToArray64(0n))
     IterableView.Update(root, RootCountOffset,          IntegerConverter.ToArray32(0))
 
-    fs.writeFileSync(file, Buffer.from(root))
+    writeFileSync(file, Buffer.from(root))
 
     const inst = TissueRoll.Open(file)
     inst._addEmptyPage({ type: TissueRoll.InternalType })
@@ -169,7 +170,7 @@ export class TissueRoll {
    */
   static Open(file: string, payloadSize = 8192) {
     // 파일이 존재하지 않을 경우
-    if (!fs.existsSync(file)) {
+    if (!existsSync(file)) {
       if (!payloadSize) {
         throw ErrorBuilder.ERR_DB_NO_EXISTS(file)
       }
@@ -178,11 +179,11 @@ export class TissueRoll {
     }
 
     // 파일이 존재할 경우 열기
-    const fd = fs.openSync(file, 'r+')
+    const fd = openSync(file, 'r+')
     
     // 올바른 형식의 파일인지 체크
     if (!TissueRoll.CheckDBValid(fd)) {
-      fs.closeSync(fd)
+      closeSync(fd)
       throw ErrorBuilder.ERR_DB_INVALID(file)
     }
 
@@ -268,6 +269,10 @@ export class TissueRoll {
     return text === TissueRoll.DB_NAME
   }
 
+  protected static CallAddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>): number {
+    return db._addEmptyPage(head)
+  }
+
   protected static CallInternalPut(db: TissueRoll, data: number[], autoIncrement: boolean): string {
     return db.callInternalPut(data, autoIncrement)
   }
@@ -307,7 +312,7 @@ export class TissueRoll {
 
   protected constructor(fd: number, secretKey: Uint8Array, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
-      fs.closeSync(fd)
+      closeSync(fd)
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
     }
     this.chunkSize    = TissueRoll.HeaderSize+payloadSize
@@ -651,7 +656,9 @@ export class TissueRoll {
       const order = i+1
       const rawRecord = this._getRecord(header.index, order)
       const record = this._normalizeRecord(rawRecord)
-      records.push(record)
+      if (!record.header.deleted) {
+        records.push(record)
+      }
     }
     return records
   }
@@ -974,10 +981,62 @@ export class TissueRoll {
   }
 
   /**
+   * Exports data from all rows inserted into the current database to a file.
+   * Each row is separated by a newline character.
+   * The exported file can then be used with the `importData` method to insert data into another database.
+   * This method is useful for database migration purposes.
+   * 
+   * This method may take longer depending on the amount of inserted rows. Therefore, it's advisable to avoid executing it during runtime.
+   * @param dataDist Location where the data will be stored in the file.
+   * @param silent Determines whether the progress will be printed to the console.
+   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
+   */
+  async exportData(dataDist: string, silent = false): Promise<void> {
+    const handle = await open(dataDist, 'a')
+    for (let i = 1, len = this.metadata.index; i <= len; i++) {
+      const records = this.getRecords(i)
+      for (const record of records) {
+        await handle.write(record.payload+'\n', null, 'utf8')
+      }
+      if (!silent) {
+        const per = i / len * 100
+        console.log(`Exporting data: ${per.toFixed(2)}%`)
+      }
+    }
+    await handle.close()
+    if (!silent) {
+      console.log('Data exporting done.')
+    }
+  }
+
+  /**
+   * Reads rows from a file where all row data is stored and inserts them into the current database.
+   * Each row should be separated by a newline character.
+   * Such a file containing all row data can be created using the `exportData` method.
+   * This method is useful for database migration purposes.
+   * 
+   * This method may take longer depending on the amount of inserted rows. Therefore, it's advisable to avoid executing it during runtime.
+   * @param dataSrc Location of the file where the data is stored.
+   * @param silent Determines whether the progress will be printed to the console.
+   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
+   */
+  async importData(dataSrc: string, silent = false): Promise<void> {
+    const fd = await open(dataSrc, 'r')
+    let count = 0
+    for await (const line of fd.readLines()) {
+      this.put(line)
+      count++
+      if (!silent) {
+        console.log(`Importing row ${count.toLocaleString()} done.`)
+      }
+    }
+  }
+
+  /**
    * Shut down the database to close file input and output.
    */
   close(): void {
-    fs.closeSync(this.fd)
+    closeSync(this.fd)
   }
 
   /**
