@@ -58,7 +58,7 @@ If you are using TypeScript, specifying clear types in the database allows you t
 
 ```typescript
 const payloadSize = 8192
-const db = const db = TissueRollDocument.Open<{
+const db = TissueRollDocument.Open<{
   student: boolean
   name: string
   age?: number

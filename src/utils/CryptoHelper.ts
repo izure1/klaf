@@ -1,32 +1,56 @@
-import { randomBytes, webcrypto, createCipheriv, createDecipheriv } from 'node:crypto'
+import { ecb } from '@noble/ciphers/aes'
+import { randomBytes } from '@noble/ciphers/webcrypto'
+import { hexToBytes, utf8ToBytes, bytesToUtf8, bytesToHex, numberToBytesBE, bytesToNumberBE } from '@noble/ciphers/utils'
 
 export class CryptoHelper {
-  static RandomBytes(size: number): Uint8Array {
-    return webcrypto.getRandomValues(new Uint8Array(size))
-  }
-  
-  static EncryptAES256(text: string, secret: Buffer): string {
-    const iv = randomBytes(16)
-    const cipher = createCipheriv('aes-256-gcm', secret, iv)
-    const a = cipher.update(text, 'utf8')
-    const b = cipher.final()
-    const tag = cipher.getAuthTag()
-    return (
-      Buffer.concat([a, b]).toString('hex') +
-      ':' +
-      iv.toString('hex') +
-      ':' +
-      tag.toString('hex')
-    )
-  }
-  
-  static DecryptAES256(text: string, secret: Buffer): string {
-    const [encryptedText, iv, tag] = text.split(':')
-    const decipher = createDecipheriv('aes-256-gcm', secret, Buffer.from(iv, 'hex'))
-    decipher.setAuthTag(Buffer.from(tag, 'hex'))
+  protected static readonly CachedCipher = new Map<Uint8Array, ReturnType<typeof ecb>>()
 
-    const a = decipher.update(encryptedText, 'hex', 'utf8')
-    const b = decipher.final('utf8')
-    return a+b
+  static RandomBytes(size: number): Uint8Array {
+    return randomBytes(size)
+  }
+
+  static Utf8ToBytes(text: string): Uint8Array {
+    return utf8ToBytes(text)
+  }
+
+  static HexToBytes(hex: string): Uint8Array {
+    return hexToBytes(hex)
+  }
+
+  static NumberToBytesBe(num: number|bigint): Uint8Array {
+    return numberToBytesBE(num, 8)
+  }
+
+  static BytesToNumberBe(bytes: Uint8Array): bigint {
+    return bytesToNumberBE(bytes)
+  }
+
+  static BytesToUtf8(bytes: Uint8Array): string {
+    return bytesToUtf8(bytes)
+  }
+
+  static BytesToHex(bytes: Uint8Array): string {
+    return bytesToHex(bytes)
+  }
+
+  protected static GetCipher(key: Uint8Array): ReturnType<typeof ecb> {
+    if (!CryptoHelper.CachedCipher.has(key)) {
+      CryptoHelper.CachedCipher.set(key, ecb(key))
+    }
+    return CryptoHelper.CachedCipher.get(key)!
+  }
+
+  static Encrypt(plain: string, key: Uint8Array): string {
+    const data = CryptoHelper.Utf8ToBytes(plain)
+    const cipher = CryptoHelper.GetCipher(key)
+    const cipherText = cipher.encrypt(data)
+    return CryptoHelper.BytesToHex(cipherText)
+  }
+
+  static Decrypt(hash: string, key: Uint8Array): string {
+    const data = CryptoHelper.HexToBytes(hash)
+    const cipher = CryptoHelper.GetCipher(key)
+    const plainText = cipher.decrypt(data)
+    return CryptoHelper.BytesToUtf8(plainText)
   }
 }

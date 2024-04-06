@@ -1,10 +1,17 @@
 {
   "name": "tissue-roll",
-  "version": "3.0.5",
+  "version": "4.0.0",
   "description": "Very simple read/write database with a no-sql.",
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/esm/index.mjs",
   "types": "dist/typings/index.d.ts",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.cjs",
+      "types": "./dist/typings/index.d.ts"
+    }
+  },
   "files": [
     "dist/**/*",
     "docs/**/*"
@@ -38,10 +45,10 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
-    "cachebranch": "^1.1.0",
-    "hookall": "^2.0.2",
-    "node-fpe": "^2.0.2",
-    "serializable-bptree": "^3.2.3",
+    "@noble/ciphers": "^0.5.2",
+    "cachebranch": "^1.2.0",
+    "hookall": "^2.1.0",
+    "serializable-bptree": "^3.3.0",
     "xxhashjs": "^0.2.2"
   }
 }

@@ -2,23 +2,28 @@ const esbuild = require('esbuild')
 
 const common = {
   target: 'esnext',
+  platform: 'node',
+  bundle: true,
   entryPoints: [
     { in: 'src/index.ts', out: 'index' }
   ],
-  external: ['node:fs', 'node:crypto', 'crypto'],
-  // minify: true
+  external: ['node:fs', 'node:crypto', 'fs', 'crypto']
 }
 
 esbuild.build({
   ...common,
-  outdir: 'dist/esm',
-  bundle: true,
   format: 'esm',
+  outdir: 'dist/esm',
+  outExtension: {
+    '.js': '.mjs'
+  },
 })
 
 esbuild.build({
   ...common,
-  outdir: 'dist/cjs',
-  bundle: true,
   format: 'cjs',
+  outdir: 'dist/cjs',
+  outExtension: {
+    '.js': '.cjs'
+  },
 })

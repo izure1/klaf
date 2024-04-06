@@ -1,6 +1,5 @@
 import fs from 'node:fs'
 
-import type { FpeCipher } from 'node-fpe'
 import type { IHookallSync } from 'hookall'
 import { useHookallSync } from 'hookall'
 import { CacheBranchSync } from 'cachebranch'
@@ -8,9 +7,7 @@ import { CacheBranchSync } from 'cachebranch'
 import { ErrorBuilder } from './ErrorBuilder'
 import { TextConverter } from '../utils/TextConverter'
 import { IntegerConverter } from '../utils/IntegerConverter'
-import { Base64Helper } from '../utils/Base64Helper'
 import { CryptoHelper } from '../utils/CryptoHelper'
-import { FpeBuilder } from '../utils/FpeBuilder'
 import { IterableView, FileView } from '../utils/IterableView'
 
 type IPageHeader = {
@@ -55,10 +52,8 @@ type NormalizedRecord = {
     aliasId: string,
     index: number,
     order: number,
-    salt: number,
     aliasIndex: number,
     aliasOrder: number,
-    aliasSalt: number,
     length: number,
     maxLength: number,
     deleted: number,
@@ -67,7 +62,7 @@ type NormalizedRecord = {
 }
 
 export class TissueRoll {
-  protected static readonly DB_VERSION                    = '3.0.0'
+  protected static readonly DB_VERSION                    = '4.0.0'
   protected static readonly DB_NAME                       = 'TissueRoll'
   protected static readonly RootValidStringOffset         = 0
   protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
@@ -84,7 +79,7 @@ export class TissueRoll {
   protected static readonly RootTimestampOffset           = TissueRoll.RootPayloadSizeOffset+TissueRoll.RootPayloadSizeSize
   protected static readonly RootTimestampSize             = 8
   protected static readonly RootSecretKeyOffset           = TissueRoll.RootTimestampOffset+TissueRoll.RootTimestampSize
-  protected static readonly RootSecretKeySize             = 8
+  protected static readonly RootSecretKeySize             = 16
   protected static readonly RootAutoIncrementOffset       = TissueRoll.RootSecretKeyOffset+TissueRoll.RootSecretKeySize
   protected static readonly RootAutoIncrementSize         = 8
   protected static readonly RootCountOffset               = TissueRoll.RootAutoIncrementOffset+TissueRoll.RootAutoIncrementSize
@@ -98,9 +93,7 @@ export class TissueRoll {
   protected static readonly RecordHeaderIndexSize         = 4
   protected static readonly RecordHeaderOrderOffset       = TissueRoll.RecordHeaderIndexOffset+TissueRoll.RecordHeaderIndexSize
   protected static readonly RecordHeaderOrderSize         = 4
-  protected static readonly RecordHeaderSaltOffset        = TissueRoll.RecordHeaderOrderOffset+TissueRoll.RecordHeaderOrderSize
-  protected static readonly RecordHeaderSaltSize          = 4
-  protected static readonly RecordHeaderLengthOffset      = TissueRoll.RecordHeaderSaltOffset+TissueRoll.RecordHeaderSaltSize
+  protected static readonly RecordHeaderLengthOffset      = TissueRoll.RecordHeaderOrderOffset+TissueRoll.RecordHeaderOrderSize
   protected static readonly RecordHeaderLengthSize        = 4
   protected static readonly RecordHeaderMaxLengthOffset   = TissueRoll.RecordHeaderLengthOffset+TissueRoll.RecordHeaderLengthSize
   protected static readonly RecordHeaderMaxLengthSize     = 4
@@ -110,8 +103,6 @@ export class TissueRoll {
   protected static readonly RecordHeaderAliasIndexSize    = 4
   protected static readonly RecordHeaderAliasOrderOffset  = TissueRoll.RecordHeaderAliasIndexOffset+TissueRoll.RecordHeaderAliasIndexSize
   protected static readonly RecordHeaderAliasOrderSize    = 4
-  protected static readonly RecordHeaderAliasSaltOffset   = TissueRoll.RecordHeaderAliasOrderOffset+TissueRoll.RecordHeaderAliasOrderSize
-  protected static readonly RecordHeaderAliasSaltSize     = 4
 
 
   protected static readonly UnknownType                   = 0
@@ -196,8 +187,7 @@ export class TissueRoll {
     }
 
     const root = TissueRoll.ParseRootChunk(fd)
-    const secretBuf = Buffer.from(IntegerConverter.ToArray64(root.secretKey))
-    const secretKey = secretBuf.toString('base64')
+    const secretKey = Buffer.from(IntegerConverter.ToArray128(root.secretKey))
     
     return new TissueRoll(fd, secretKey, root.payloadSize)
   }
@@ -242,7 +232,7 @@ export class TissueRoll {
     const timestamp     = IntegerConverter.FromArray64(
       IterableView.Read(rHeader, RootTimestampOffset, RootTimestampSize)
     )
-    const secretKey     = IntegerConverter.FromArray64(
+    const secretKey     = IntegerConverter.FromArray128(
       IterableView.Read(rHeader, RootSecretKeyOffset, RootSecretKeySize)
     )
     const autoIncrement = IntegerConverter.FromArray64(
@@ -293,19 +283,17 @@ export class TissueRoll {
     return db.callInternalDelete(id, countDecrement)
   }
 
-
   protected readonly chunkSize: number
   protected readonly headerSize: number
   protected readonly payloadSize: number
   protected readonly fd: number
-  protected readonly secretKey: string
-  protected readonly fpe: FpeCipher
+  protected readonly secretKey: Uint8Array
   protected readonly hooker: IHookallSync<IHooker>
   private readonly _cachedId: CacheBranchSync<{
     [key: string]: string
   }>
   private readonly _cachedIdInfo: CacheBranchSync<{
-    [key: string]: { index: number, order: number, salt: number }
+    [key: string]: { index: number, order: number }
   }>
   private readonly _cachedRecord: CacheBranchSync<{
     [key: string]: number[]|PickResult
@@ -317,7 +305,7 @@ export class TissueRoll {
     [key: string]: number
   }>
 
-  protected constructor(fd: number, secretKey: string, payloadSize: number) {
+  protected constructor(fd: number, secretKey: Uint8Array, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
       fs.closeSync(fd)
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
@@ -327,10 +315,6 @@ export class TissueRoll {
     this.payloadSize  = payloadSize
     this.fd           = fd
     this.secretKey    = secretKey
-    this.fpe          = new FpeBuilder()
-      .setSecretKey(secretKey)
-      .setDomain(Base64Helper.UrlSafeDomain)
-      .build()
     
     this.hooker = useHookallSync<IHooker>(this)
     this._cachedId = new CacheBranchSync()
@@ -402,10 +386,6 @@ export class TissueRoll {
     return endOfPage-(TissueRoll.CellSize*order)
   }
 
-  private _createSalt(): number {
-    return IntegerConverter.FromArray32(CryptoHelper.RandomBytes(4))
-  }
-
   private _recordPosition(index: number, order: number): number {
     return this._cachedRecordPosition.ensure(`${index}/${order}`, () => {
       const payloadPos    = this._pagePayloadPosition(index)
@@ -421,37 +401,35 @@ export class TissueRoll {
     return FileView.Read(this.fd, start, this.chunkSize)
   }
 
-  private _recordId(index: number, order: number, salt: number): string {
-    return this._cachedId.ensure(`${index}/${order}/${salt}`, () => {
-      const sIndex  = index.toString(16).padStart(8, '0')
-      const sOrder  = order.toString(16).padStart(8, '0')
-      const sSalt   = salt.toString(16).padStart(8, '0')
-      const base64  = Base64Helper.UrlSafeEncode(`${sIndex}${sOrder}${sSalt}`)
-      const result  = this.fpe.encrypt(base64)
-      return result
+  private _recordId(index: number, order: number): string {
+    return this._cachedId.ensure(`${index}/${order}`, () => {
+      const sIndex  = index.toString(16).padStart(7, '0')
+      const sOrder  = order.toString(16).padStart(7, '0')
+      const plain = `${sIndex}${sOrder}`
+      const encrypted = CryptoHelper.Encrypt(plain, this.secretKey)
+      return encrypted
     }).raw
   }
 
-  private _normalizeRecordId(recordId: string) {
+  private _normalizeRecordId(recordId: string): {
+    index: number
+    order: number
+  } {
     return this._cachedIdInfo.ensure(recordId, () => {
-      const base64 = this.fpe.decrypt(recordId)
-      const plain = Base64Helper.UrlSafeDecode(base64)
-      const index = parseInt(plain.slice(0, 8), 16)
-      const order = parseInt(plain.slice(8, 16), 16)
-      const salt  = parseInt(plain.slice(16, 24), 16)
+      const plain = CryptoHelper.Decrypt(recordId, this.secretKey)
+      const index = parseInt(plain.slice(0, 7), 16)
+      const order = parseInt(plain.slice(7, 14), 16)
       return {
         index,
         order,
-        salt,
       }
     }).clone('object-shallow-copy')
   }
 
   private _rawRecordId(recordId: string): number[] {
-    const { index, order, salt } = this._normalizeRecordId(recordId)
+    const { index, order } = this._normalizeRecordId(recordId)
     return IntegerConverter.ToArray32(index).concat(
-      IntegerConverter.ToArray32(order),
-      IntegerConverter.ToArray32(salt)
+      IntegerConverter.ToArray32(order)
     )
   }
 
@@ -538,13 +516,6 @@ export class TissueRoll {
           TissueRoll.RecordHeaderOrderSize
         )
       )
-      const salt = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderSaltOffset,
-          TissueRoll.RecordHeaderSaltSize
-        )
-      )
       const length = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
@@ -580,26 +551,17 @@ export class TissueRoll {
           TissueRoll.RecordHeaderAliasOrderSize
         )
       )
-      const aliasSalt = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderAliasSaltOffset,
-          TissueRoll.RecordHeaderAliasSaltSize
-        )
-      )
   
-      const id = this._recordId(index, order, salt)
-      const aliasId = this._recordId(aliasIndex, aliasOrder, aliasSalt)
+      const id = this._recordId(index, order)
+      const aliasId = this._recordId(aliasIndex, aliasOrder)
 
       return {
         id,
         aliasId,
         index,
         order,
-        salt,
         aliasIndex,
         aliasOrder,
-        aliasSalt,
         length,
         maxLength,
         deleted,
@@ -655,17 +617,13 @@ export class TissueRoll {
   }
 
   protected pickRecord(recordId: string, recursiveAlias: boolean): PickResult {
-    const { index, order, salt } = this._normalizeRecordId(recordId)
+    const { index, order } = this._normalizeRecordId(recordId)
     const page    = this._normalizeHeader(this._getHeader(index))
     const raw     = this._getRecord(index, order)
     const record  = this._normalizeRecord(raw)
     
     if (recursiveAlias && record.header.aliasIndex && record.header.aliasOrder) {
       return this.pickRecord(record.header.aliasId, recursiveAlias)
-    }
-
-    if (record.header.salt !== salt) {
-      throw ErrorBuilder.ERR_INVALID_RECORD(recordId)
     }
 
     if (record.header.deleted) {
@@ -740,8 +698,7 @@ export class TissueRoll {
   }
 
   private _putJustOnePage(header: IPageHeader, data: number[]): string {
-    const salt      = this._createSalt()
-    const recordId  = this._recordId(header.index, header.count+1, salt)
+    const recordId  = this._recordId(header.index, header.count+1)
     const record    = this._createRecord(recordId, data)
 
     this._setPagePayload(header.index, header.count+1, record)
@@ -816,8 +773,7 @@ export class TissueRoll {
     
     // Overflow 타입의 페이지입니다.
     // 다음 삽입 시 무조건 새로운 페이지를 만들어야하므로, free, count 값이 고정됩니다.
-    const salt      = this._createSalt()
-    const recordId  = this._recordId(header.index, header.count+1, salt)
+    const recordId  = this._recordId(header.index, header.count+1)
     const record    = this._createRecord(recordId, data)
     const headIndex = index
 
@@ -881,7 +837,7 @@ export class TissueRoll {
       // Overflow 타입의 페이지가 아닐 경우엔 새롭게 삽입해야 합니다.
       if (!tail.page.next) {
         const afterRecordId = this.callInternalPut(payload, false)
-        const { index, order, salt } = this._normalizeRecordId(afterRecordId)
+        const { index, order } = this._normalizeRecordId(afterRecordId)
 
         if (head.record.header.aliasIndex && head.record.header.aliasOrder) {
           this.callInternalDelete(
@@ -900,11 +856,6 @@ export class TissueRoll {
           head.record.rawHeader,
           TissueRoll.RecordHeaderAliasOrderOffset,
           IntegerConverter.ToArray32(order)
-        )
-        IterableView.Update(
-          head.record.rawHeader,
-          TissueRoll.RecordHeaderAliasSaltOffset,
-          IntegerConverter.ToArray32(salt)
         )
         this._setRecordHeader(head.page.index, head.order, head.record.rawHeader)
   

@@ -112,7 +112,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
   private static OrderN(payloadSize: number, meanValueSize: number): number {
     const reserved = 150
-    const keySize = 36
+    const keySize = 32
     let n = 0
     while (
       reserved +
