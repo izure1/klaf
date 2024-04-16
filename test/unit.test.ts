@@ -3,7 +3,7 @@ import { TissueRoll, TissueRollDocument } from '../'
 
 const createDatabase = (name: string) => {
   const dbName = `./db-${name}.db`
-  const db = TissueRoll.Create(dbName, undefined, true)
+  const db = TissueRoll.Create(dbName, 1024, true)
   
   const close = () => {
     db.close()
@@ -23,7 +23,7 @@ const createDocumentDatabase = (name: string) => {
     age: number
     sex?: 'male'|'female'
     more?: any
-  }>(dbName, undefined, true)
+  }>(dbName, 1024, true)
   
   sql.put({ name: 'kim', age: 10 })
   sql.put({ name: 'tomas', age: 80, sex: 'male' })
@@ -137,8 +137,6 @@ describe('Record test', () => {
     db.update(id, longestContent)
     const res5 = db.pick(id)
     expect(res5.record.payload).toBe(longestContent)
-    
-    // expect(res5.record.header.id).toBe(res1.record.header.id)
 
     db
     .onBefore('update', (info) => {

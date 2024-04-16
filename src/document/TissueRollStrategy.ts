@@ -1,9 +1,8 @@
 import { BPTreeNode, SerializeStrategySync, SerializeStrategyHead } from 'serializable-bptree'
 import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
 import { TissueRoll } from '../core/TissueRoll'
-import { TissueRollMediator } from '../core/TissueRollMediator'
 import { DelayedExecution } from '../utils/DelayedExecution'
-import { TextConverter } from '../utils/TextConverter'
+import { TissueRollMediator } from '../core/TissueRollMediator'
 
 export class TissueRollStrategy<T extends Record<string, SupportedType>> extends SerializeStrategySync<string, SupportedType> {
   protected readonly property: string
@@ -21,42 +20,52 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
     this.root = root
   }
 
-  private _addEmptyPage(): number {
-    return TissueRollMediator.AddEmptyPage(this.db, { type: TissueRollMediator.OverflowType })
-  }
-
-  private _getRecordOwnNode(id: number) {
-    const record = this.db.getRecords(id).pop()
-    if (!record) {
-      throw new Error(`The '${id}' page not found`)
-    }
-    return record
-  }
-
-  id(isLeaf: boolean): number {
-    return this._addEmptyPage()
-  }
-
-  read(id: number): BPTreeNode<string, SupportedType> {
-    const record = this._getRecordOwnNode(id)
-    return JSON.parse(record.payload)
-  }
-
-  write(id: number, node: BPTreeNode<string, SupportedType>): void {
-    const key = `write:${id}`
-    this.locker.execute(key, () => {
-      const record = this._getRecordOwnNode(id)
-      const stringify = JSON.stringify(node)
-      this.db.update(record.header.id, stringify)
-    })
-  }
-
-  readHead(): SerializeStrategyHead|null {
+  private get _head(): SerializeStrategyHead|null {
     return this.root.head[this.property] ?? null
   }
 
-  writeHead(head: SerializeStrategyHead): void {
+  private set _head(head: SerializeStrategyHead) {
     this.root.head[this.property] = head
+  }
+
+  private _addOverflowRecord(): string {
+    return TissueRollMediator.Put(
+      this.db,
+      new Array(this.db.metadata.payloadSize),
+      false
+    )
+  }
+
+  private _getRecordOwnNode(id: string) {
+    const record = this.db.pick(id)
+    const node = JSON.parse(record.record.payload)
+    return node
+  }
+
+  id(isLeaf: boolean): string {
+    return this._addOverflowRecord()
+  }
+
+  read(id: string): BPTreeNode<string, SupportedType> {
+    return this._getRecordOwnNode(id)
+  }
+
+  write(id: string, node: BPTreeNode<string, SupportedType>): void {
+    this.locker.execute(`write:node:${id}`, () => {
+      this.db.update(id, JSON.stringify(node))
+    })
+  }
+
+  delete(id: string): void {
+    this.db.delete(id)
+  }
+
+  readHead(): SerializeStrategyHead|null {
+    return this._head ?? null
+  }
+
+  writeHead(head: SerializeStrategyHead): void {
+    this._head = head
     this.locker.execute('write:head', () => {
       this.db.update(
         this.rootId,

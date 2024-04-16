@@ -12,7 +12,7 @@ This database is suitable for a website that simply stores values in the databas
 import { TissueRoll } from 'tissue-roll'
 
 // OPEN DB
-const payloadSize = 8192
+const payloadSize = 1024
 const db = TissueRoll.Open('my_file_path.db', payloadSize)
 
 // INPUT

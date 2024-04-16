@@ -29,6 +29,7 @@ export type IRootHeader = {
   autoIncrement: bigint
   count: number
   index: number
+  lastInternalIndex: number
 }
 
 export type IHookerRecordInformation = { id: string, data: string }
@@ -85,10 +86,24 @@ export class TissueRoll {
   protected static readonly RootAutoIncrementSize         = 8
   protected static readonly RootCountOffset               = TissueRoll.RootAutoIncrementOffset+TissueRoll.RootAutoIncrementSize
   protected static readonly RootCountSize                 = 4
+  protected static readonly RootLastInternalIndexOffset   = TissueRoll.RootCountOffset+TissueRoll.RootCountSize
+  protected static readonly RootLastInternalIndexSize     = 4
 
   protected static readonly RootChunkSize                 = 200
   protected static readonly HeaderSize                    = 100
   protected static readonly CellSize                      = 4
+
+  protected static readonly PageTypeOffset                = 0
+  protected static readonly PageTypeSize                  = 4
+  protected static readonly PageIndexOffset               = TissueRoll.PageTypeOffset+TissueRoll.PageTypeSize
+  protected static readonly PageIndexSize                 = 4
+  protected static readonly PageNextOffset                = TissueRoll.PageIndexOffset+TissueRoll.PageIndexSize
+  protected static readonly PageNextSize                  = 4
+  protected static readonly PageCountOffset               = TissueRoll.PageNextOffset+TissueRoll.PageNextSize
+  protected static readonly PageCountSize                 = 4
+  protected static readonly PageFreeOffset                = TissueRoll.PageCountOffset+TissueRoll.PageCountSize
+  protected static readonly PageFreeSize                  = 4
+
   protected static readonly RecordHeaderSize              = 40
   protected static readonly RecordHeaderIndexOffset       = 0
   protected static readonly RecordHeaderIndexSize         = 4
@@ -115,10 +130,10 @@ export class TissueRoll {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `8192`. If this value is too large or too small, it can affect performance.
+   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create(file: string, payloadSize = 8192, overwrite = false): TissueRoll {
+  static Create(file: string, payloadSize = 1024, overwrite = false): TissueRoll {
     if (existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
     }
@@ -138,6 +153,7 @@ export class TissueRoll {
       RootSecretKeySize,
       RootAutoIncrementOffset,
       RootCountOffset,
+      RootLastInternalIndexOffset,
     } = TissueRoll
     const [
       majorVersion,
@@ -145,30 +161,31 @@ export class TissueRoll {
       patchVersion
     ] = DB_VERSION.split('.')
     const secretKey = CryptoHelper.RandomBytes(RootSecretKeySize)
-    IterableView.Update(root, RootValidStringOffset,    TextConverter.ToArray(DB_NAME))
-    IterableView.Update(root, RootMajorVersionOffset,   IntegerConverter.ToArray8(Number(majorVersion)))
-    IterableView.Update(root, RootMinorVersionOffset,   IntegerConverter.ToArray8(Number(minorVersion)))
-    IterableView.Update(root, RootPatchVersionOffset,   IntegerConverter.ToArray8(Number(patchVersion)))
-    IterableView.Update(root, RootPayloadSizeOffset,    IntegerConverter.ToArray32(payloadSize))
-    IterableView.Update(root, RootTimestampOffset,      IntegerConverter.ToArray64(BigInt(Date.now())))
-    IterableView.Update(root, RootSecretKeyOffset,      Array.from(secretKey))
-    IterableView.Update(root, RootAutoIncrementOffset,  IntegerConverter.ToArray64(0n))
-    IterableView.Update(root, RootCountOffset,          IntegerConverter.ToArray32(0))
+    IterableView.Update(root, RootValidStringOffset,        TextConverter.ToArray(DB_NAME))
+    IterableView.Update(root, RootMajorVersionOffset,       IntegerConverter.ToArray8(Number(majorVersion)))
+    IterableView.Update(root, RootMinorVersionOffset,       IntegerConverter.ToArray8(Number(minorVersion)))
+    IterableView.Update(root, RootPatchVersionOffset,       IntegerConverter.ToArray8(Number(patchVersion)))
+    IterableView.Update(root, RootPayloadSizeOffset,        IntegerConverter.ToArray32(payloadSize))
+    IterableView.Update(root, RootTimestampOffset,          IntegerConverter.ToArray64(BigInt(Date.now())))
+    IterableView.Update(root, RootSecretKeyOffset,          Array.from(secretKey))
+    IterableView.Update(root, RootAutoIncrementOffset,      IntegerConverter.ToArray64(0n))
+    IterableView.Update(root, RootCountOffset,              IntegerConverter.ToArray32(0))
+    IterableView.Update(root, RootLastInternalIndexOffset,  IntegerConverter.ToArray32(0))
 
     writeFileSync(file, Buffer.from(root))
 
     const inst = TissueRoll.Open(file)
-    inst._addEmptyPage({ type: TissueRoll.InternalType })
+    inst._addEmptyPage({ type: TissueRoll.InternalType }, true)
     return inst
   }
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
+   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `8192`.
+   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    */
-  static Open(file: string, payloadSize = 8192) {
+  static Open(file: string, payloadSize = 1024) {
     // 파일이 존재하지 않을 경우
     if (!existsSync(file)) {
       if (!payloadSize) {
@@ -214,6 +231,8 @@ export class TissueRoll {
       RootAutoIncrementSize,
       RootCountOffset,
       RootCountSize,
+      RootLastInternalIndexOffset,
+      RootLastInternalIndexSize,
     } = TissueRoll
     const majorVersion  = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
@@ -242,6 +261,9 @@ export class TissueRoll {
     const count = IntegerConverter.FromArray32(
       IterableView.Read(rHeader, RootCountOffset, RootCountSize)
     )
+    const lastInternalIndex = IntegerConverter.FromArray32(
+      IterableView.Read(rHeader, RootLastInternalIndexOffset, RootLastInternalIndexSize)
+    )
     return {
       majorVersion,
       minorVersion,
@@ -252,6 +274,7 @@ export class TissueRoll {
       autoIncrement,
       count,
       index,
+      lastInternalIndex,
     }
   }
 
@@ -269,8 +292,14 @@ export class TissueRoll {
     return text === TissueRoll.DB_NAME
   }
 
-  protected static CallAddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>): number {
-    return db._addEmptyPage(head)
+  protected static CallAddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
+    return db._addEmptyPage(head, incrementInternalIndex)
+  }
+
+  protected static CallSetPage(db: TissueRoll, head: Partial<IPageHeader>, data: number[]): void {
+    const newHeadRaw = db._createEmptyHeader(head)
+    const newHead = db._normalizeHeader(newHeadRaw)
+    db._setPage(newHead, data)
   }
 
   protected static CallInternalPut(db: TissueRoll, data: number[], autoIncrement: boolean): string {
@@ -289,6 +318,7 @@ export class TissueRoll {
   }
 
   protected readonly chunkSize: number
+  protected readonly maximumFreeSize: number
   protected readonly headerSize: number
   protected readonly payloadSize: number
   protected readonly fd: number
@@ -315,11 +345,12 @@ export class TissueRoll {
       closeSync(fd)
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
     }
-    this.chunkSize    = TissueRoll.HeaderSize+payloadSize
-    this.headerSize   = TissueRoll.HeaderSize
-    this.payloadSize  = payloadSize
-    this.fd           = fd
-    this.secretKey    = secretKey
+    this.chunkSize        = TissueRoll.HeaderSize+payloadSize
+    this.headerSize       = TissueRoll.HeaderSize
+    this.maximumFreeSize  = payloadSize-TissueRoll.CellSize
+    this.payloadSize      = payloadSize
+    this.fd               = fd
+    this.secretKey        = secretKey
     
     this.hooker = useHookallSync<IHooker>(this)
     this._cachedId = new CacheBranchSync()
@@ -347,11 +378,11 @@ export class TissueRoll {
     const rNext  = IntegerConverter.ToArray32(next)
     const rCount = IntegerConverter.ToArray32(count)
     const rFree  = IntegerConverter.ToArray32(free)
-    IterableView.Update(header, 0, rType)
-    IterableView.Update(header, 4, rIndex)
-    IterableView.Update(header, 8, rNext)
-    IterableView.Update(header, 12, rCount)
-    IterableView.Update(header, 16, rFree)
+    IterableView.Update(header, TissueRoll.PageTypeOffset, rType)
+    IterableView.Update(header, TissueRoll.PageIndexOffset, rIndex)
+    IterableView.Update(header, TissueRoll.PageNextOffset, rNext)
+    IterableView.Update(header, TissueRoll.PageCountOffset, rCount)
+    IterableView.Update(header, TissueRoll.PageFreeOffset, rFree)
 
     return header
   }
@@ -364,15 +395,28 @@ export class TissueRoll {
     return this._createEmptyHeader(header).concat(this._createEmptyPayload())
   }
 
-  private _addEmptyPage(header: Partial<IPageHeader>): number {
+  private _addEmptyPage(header: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
     // update root
-    let { index } = this.metadata
+    let { index, lastInternalIndex } = this.metadata
     index++
-    FileView.Update(this.fd, TissueRoll.RootIndexOffset, IntegerConverter.ToArray32(index))
+    FileView.Update(
+      this.fd,
+      TissueRoll.RootIndexOffset,
+      IntegerConverter.ToArray32(index)
+    )
 
     // extend payload
     const page = this._createEmptyPage(Object.assign({}, header, { index }))
     FileView.Append(this.fd, page)
+
+    if (header.type === TissueRoll.InternalType && incrementInternalIndex) {
+      lastInternalIndex++
+      FileView.Update(
+        this.fd,
+        TissueRoll.RootLastInternalIndexOffset,
+        IntegerConverter.ToArray32(lastInternalIndex)
+      )
+    }
 
     return index
   }
@@ -460,12 +504,12 @@ export class TissueRoll {
 
   private _getRecord(index: number, order: number): number[] {
     return this._cachedRecord.ensure(`${index}/${order}`, () => {
-      const recordPos = this._recordPosition(index, order)
-      const recordHeader = FileView.Read(this.fd, recordPos, TissueRoll.RecordHeaderSize)
-      const recordPayloadPos = TissueRoll.RecordHeaderSize+recordPos
-      const recordPayloadLength = IntegerConverter.FromArray32(
+      const pos = this._recordPosition(index, order)
+      const rHeader = FileView.Read(this.fd, pos, TissueRoll.RecordHeaderSize)
+      const payloadPos = TissueRoll.RecordHeaderSize+pos
+      const payloadLength = IntegerConverter.FromArray32(
         IterableView.Read(
-          recordHeader,
+          rHeader,
           TissueRoll.RecordHeaderLengthOffset,
           TissueRoll.RecordHeaderLengthSize
         )
@@ -475,19 +519,17 @@ export class TissueRoll {
       
       // internal 페이지일 경우
       if (!header.next) {
-        const recordPayload = FileView.Read(this.fd, recordPayloadPos, recordPayloadLength)
-        return recordHeader.concat(recordPayload)
+        const rPayload = FileView.Read(this.fd, payloadPos, payloadLength)
+        return rHeader.concat(rPayload)
       }
   
       // overflow 페이지로 나뉘어져 있을 경우
       const record = []
-      const payloadMaxLength = this.payloadSize-TissueRoll.CellSize
-      
-      let remain = recordPayloadLength+TissueRoll.RecordHeaderSize
+      let remain = payloadLength+TissueRoll.RecordHeaderSize
   
       while (remain > 0) {
         const pos   = this._pagePayloadPosition(header.index)
-        const size  = Math.min(payloadMaxLength, Math.abs(remain))
+        const size  = Math.min(this.maximumFreeSize, Math.abs(remain))
         const chunk = FileView.Read(this.fd, pos, size)
         record.push(...chunk)
   
@@ -593,11 +635,21 @@ export class TissueRoll {
   }
 
   private _normalizeHeader(header: number[]): IPageHeader {
-    const type  = IntegerConverter.FromArray32(IterableView.Read(header, 0, 4))
-    const index = IntegerConverter.FromArray32(IterableView.Read(header, 4, 4))
-    const next  = IntegerConverter.FromArray32(IterableView.Read(header, 8, 4))
-    const count = IntegerConverter.FromArray32(IterableView.Read(header, 12, 4))
-    const free  = IntegerConverter.FromArray32(IterableView.Read(header, 16, 4))
+    const type  = IntegerConverter.FromArray32(
+      IterableView.Read(header, TissueRoll.PageTypeOffset, TissueRoll.PageTypeSize)
+    )
+    const index = IntegerConverter.FromArray32(
+      IterableView.Read(header, TissueRoll.PageIndexOffset, TissueRoll.PageIndexSize)
+    )
+    const next  = IntegerConverter.FromArray32(
+      IterableView.Read(header, TissueRoll.PageNextOffset, TissueRoll.PageNextSize)
+    )
+    const count = IntegerConverter.FromArray32(
+      IterableView.Read(header, TissueRoll.PageCountOffset, TissueRoll.PageCountSize)
+    )
+    const free  = IntegerConverter.FromArray32(
+      IterableView.Read(header, TissueRoll.PageFreeOffset, TissueRoll.PageFreeSize)
+    )
     return {
       type,
       index,
@@ -656,9 +708,7 @@ export class TissueRoll {
       const order = i+1
       const rawRecord = this._getRecord(header.index, order)
       const record = this._normalizeRecord(rawRecord)
-      if (!record.header.deleted) {
-        records.push(record)
-      }
+      records.push(record)
     }
     return records
   }
@@ -704,7 +754,7 @@ export class TissueRoll {
     this._cachedRecord.cache(`${index}/${order}`, 'top-down')
   }
 
-  private _putJustOnePage(header: IPageHeader, data: number[]): string {
+  private _setPage(header: IPageHeader, data: number[]): string {
     const recordId  = this._recordId(header.index, header.count+1)
     const record    = this._createRecord(recordId, data)
 
@@ -719,23 +769,10 @@ export class TissueRoll {
     return recordId
   }
 
-  private _setRecordHeader(index: number, order: number, rHeader: number[]): void {
-    FileView.Update(
-      this.fd,
-      this._recordPosition(index, order),
-      rHeader
-    )
-    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
-  }
-
   protected callInternalPut(data: number[], autoIncrement: boolean): string {
-    let index   = this.metadata.index
+    const lastInternalIndex = this.metadata.lastInternalIndex
+    let index   = lastInternalIndex
     let header  = this._normalizeHeader(this._getHeader(index))
-
-    if (header.type !== TissueRoll.InternalType) {
-      index   = this._addEmptyPage({ type: TissueRoll.InternalType })
-      header  = this._normalizeHeader(this._getHeader(index))
-    }
 
     if (autoIncrement) {
       let { autoIncrement: increment, count } = this.metadata
@@ -756,7 +793,7 @@ export class TissueRoll {
     const recordSize  = TissueRoll.RecordHeaderSize+data.length
     const recordUsage = TissueRoll.CellSize+recordSize
     if (header.free >= recordUsage) {
-      const recordId = this._putJustOnePage(header, data)
+      const recordId = this._setPage(header, data)
       return recordId
     }
     
@@ -766,16 +803,20 @@ export class TissueRoll {
     // 하지만 이전 페이지가 사용되지 않은 채 공백으로 남아 있을 수 있습니다.
     // 따라서 사용되었을 경우에만 생성되어야 합니다.
     if (header.count) {
-      index = this._addEmptyPage({ type: TissueRoll.InternalType })
+      index = this._addEmptyPage({ type: TissueRoll.InternalType }, true)
       header = this._normalizeHeader(this._getHeader(index))
     }
     
-    const chunkSize = this.payloadSize-TissueRoll.CellSize
-    const count = Math.ceil(recordSize/chunkSize)
+    const count = Math.ceil(recordSize/this.maximumFreeSize)
     
     // 한 페이지에 삽입이 가능할 경우, Internal 타입으로 생성되어야 하며, 삽입 후 종료되어야 합니다.
     if (count === 1) {
-      return this._putJustOnePage(header, data)
+      return this._setPage(header, data)
+    }
+
+    let isInternalIndexDeferred = false
+    if (count > 1 && !header.count) {
+      isInternalIndexDeferred = true
     }
     
     // Overflow 타입의 페이지입니다.
@@ -786,14 +827,14 @@ export class TissueRoll {
 
     for (let i = 0; i < count; i++) {
       const last = i === count-1
-      const start = i*chunkSize
-      const chunk = IterableView.Read(record, start, chunkSize)
+      const start = i*this.maximumFreeSize
+      const chunk = IterableView.Read(record, start, this.maximumFreeSize)
       
       const currentHeader = this._normalizeHeader(this._getHeader(index))
       this._setPagePayload(currentHeader.index, currentHeader.count+1, chunk)
       
       if (!last) {
-        index = this._addEmptyPage({ type: TissueRoll.OverflowType })
+        index = this._addEmptyPage({ type: TissueRoll.OverflowType }, false)
       }
       currentHeader.type = TissueRoll.OverflowType
       currentHeader.free = 0
@@ -809,6 +850,15 @@ export class TissueRoll {
     headHeader.count = 1
     headHeader.free = 0
     this._setPageHeader(headHeader)
+
+    if (isInternalIndexDeferred) {
+      FileView.Update(
+        this.fd,
+        TissueRoll.RootLastInternalIndexOffset,
+        IntegerConverter.ToArray32(index)
+      )
+      this._addEmptyPage({ type: TissueRoll.InternalType }, true)
+    }
 
     return recordId
   }
@@ -827,94 +877,135 @@ export class TissueRoll {
     })
   }
 
-  protected callInternalUpdate(id: string, data: string) {
+  private _overwriteInternalRecord(index: number, order: number, record: number[]): number {
+    FileView.Update(this.fd, this._recordPosition(index, order), record)
+    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
+    return index
+  }
+
+  private _overwriteOverflowedRecord(index: number, record: number[]): number {
+    while (index) {
+      const size = Math.min(this.maximumFreeSize, record.length)
+      const chunk = IterableView.Read(record, 0, size)
+      
+      FileView.Update(this.fd, this._pagePayloadPosition(index), chunk)
+      record = record.slice(size)
+      
+      if (!record.length) {
+        this._cachedRecord.delete(index.toString())
+        return index
+      }
+
+      const rHeader = this._getHeader(index)
+      const header = this._normalizeHeader(rHeader)
+      let next = header.next
+      if (!next) {
+        next = this._addEmptyPage({
+          type: TissueRoll.OverflowType,
+          count: 1,
+          free: 0
+        }, false)
+        IterableView.Update(
+          rHeader,
+          TissueRoll.PageNextOffset,
+          IntegerConverter.ToArray32(next)
+        )
+        FileView.Update(
+          this.fd,
+          this._pagePosition(index),
+          rHeader
+        )
+        // FileView.Update(
+        //   this.fd,
+        //   this._cellPosition(next, 1),
+        //   this._createCell(0)
+        // )
+        this._cachedRecord.delete(index.toString())
+      }
+      index = next
+    }
+
+    return index
+  }
+
+  private _isInternalRecord(record: number[]): boolean {
+    return this._normalizeRecord(record).header.maxLength <= this.maximumFreeSize
+  }
+
+  protected callInternalUpdate(id: string, data: string): {
+    id: string
+    data: string
+  } {
     const payload = TextConverter.ToArray(data)
-    const payloadLen = IntegerConverter.ToArray32(payload.length)
     const head = this.pickRecord(id, false)
     const tail = this.pickRecord(id, true)
     
     if (head.record.header.deleted) {
       throw ErrorBuilder.ERR_ALREADY_DELETED(id)
     }
-    
-    let extendOverflow = false
-    // 최근 업데이트 레코드보다 크기가 큰 값이 들어왔을 경우 새롭게 생성해야 합니다.
-    // 최근 업데이트 레코드는 무조건 기존의 레코드보다 길이가 깁니다.
-    if (tail.record.header.maxLength < payload.length) {
-      // Overflow 타입의 페이지가 아닐 경우엔 새롭게 삽입해야 합니다.
-      if (!tail.page.next) {
-        const afterRecordId = this.callInternalPut(payload, false)
-        const { index, order } = this._normalizeRecordId(afterRecordId)
 
-        if (head.record.header.aliasIndex && head.record.header.aliasOrder) {
-          this.callInternalDelete(
-            head.record.header.aliasId,
-            false
+    const record = this._createRecord(tail.record.header.id, payload)
+    
+    this._cachedRecord.delete(`${head.record.header.index}/${head.record.header.order}`)
+    this._cachedRecord.delete(`${tail.record.header.index}/${tail.record.header.order}`)
+
+    if (tail.record.rawRecord.length < record.length) {
+      if (this._isInternalRecord(tail.record.rawRecord)) {
+        const id = this.callInternalPut(payload, false)
+        const { index, order } = this._normalizeRecordId(id)
+        const headClone = IterableView.Copy(head.record.rawRecord)
+          IterableView.Update(
+            headClone,
+            TissueRoll.RecordHeaderAliasIndexOffset,
+            IntegerConverter.ToArray32(index)
           )
+          IterableView.Update(
+            headClone,
+            TissueRoll.RecordHeaderAliasOrderOffset,
+            IntegerConverter.ToArray32(order)
+          )
+          FileView.Update(
+            this.fd,
+            this._recordPosition(
+              head.record.header.index,
+              head.record.header.order
+            ),
+            headClone
+          )
+        if (head.record.header.id !== tail.record.header.id) {
+          this.callInternalDelete(tail.record.header.id, false)
         }
-        
-        // update head record's header
-        IterableView.Update(
-          head.record.rawHeader,
-          TissueRoll.RecordHeaderAliasIndexOffset,
-          IntegerConverter.ToArray32(index)
-        )
-        IterableView.Update(
-          head.record.rawHeader,
-          TissueRoll.RecordHeaderAliasOrderOffset,
-          IntegerConverter.ToArray32(order)
-        )
-        this._setRecordHeader(head.page.index, head.order, head.record.rawHeader)
-  
-        return { id, data }
+        this._cachedRecord.cache(`${head.record.header.index}/${head.record.header.order}`, 'top-down')
+        return {
+          id,
+          data
+        }
       }
-      // Overflow 타입의 페이지일 경우엔, 페이지를 늘릴 수 있습니다.
       else {
-        extendOverflow = true
+        this._overwriteOverflowedRecord(tail.record.header.index, record)
       }
     }
-
-    // 기존의 레코드보다 짧거나, overflow 페이지일 경우 덮어쓰기합니다
-    const rawRecord = TissueRoll.CreateIterable(TissueRoll.RecordHeaderSize+payload.length, 0)
-    IterableView.Update(rawRecord, 0, tail.record.rawHeader)
-
-    const chunkSize = this.payloadSize-TissueRoll.CellSize
-    const count = Math.ceil(rawRecord.length/chunkSize)
-
-    // 업데이트할 레코드를 데이터 크기에 맞추어 새롭게 생성한 뒤
-    const maxPayloadLen = IntegerConverter.ToArray32(
-      Math.max(payload.length, tail.record.header.maxLength)
-    )
-    IterableView.Update(rawRecord, TissueRoll.RecordHeaderMaxLengthOffset, maxPayloadLen)
-    IterableView.Update(rawRecord, TissueRoll.RecordHeaderLengthOffset, payloadLen)
-    IterableView.Update(rawRecord, TissueRoll.RecordHeaderSize, payload)
-
-    // 각 페이지에 맞추어 재삽입합니다
-    let index = tail.page.index
-    let order = tail.order
-
-    for (let i = 0; i < count; i++) {
-      const last = i === count-1
-      const start = i*chunkSize
-      const chunk = IterableView.Read(rawRecord, start, chunkSize)
-      this._setPagePayload(index, order, chunk)
-
-      const page = this._normalizeHeader(this._getHeader(index))
-      index = page.next
-      order = 1
-
-      if (last) break
-      if (extendOverflow && index === 0) {
-        index = this._addEmptyPage({
-          type: TissueRoll.OverflowType,
-          free: 0,
-          count: 1
-        })
-        this._setPageHeader(Object.assign({}, page, { next: index }))
+    else {
+      IterableView.Update(
+        record,
+        TissueRoll.RecordHeaderMaxLengthOffset,
+        IntegerConverter.ToArray32(tail.record.header.maxLength)
+      )
+      if (this._isInternalRecord(tail.record.rawRecord)) {
+        this._overwriteInternalRecord(
+          tail.record.header.index,
+          tail.record.header.order,
+          record
+        )
+      }
+      else {
+        this._overwriteOverflowedRecord(tail.record.header.index, record)
       }
     }
-    
-    return { id, data }
+    return {
+      id: tail.record.header.id,
+      data
+    }
   }
 
   /**

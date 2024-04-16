@@ -1,6 +1,10 @@
 import { fstatSync, readSync, writeSync } from 'node:fs'
 
 export class IterableView {
+  static Copy<T>(array: T[]): T[] {
+    return array.slice()
+  }
+
   static Read<T>(array: T[], start: number, length = array.length-start): T[] {
     return array.slice(start, start+length)
   }

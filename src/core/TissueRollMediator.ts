@@ -1,8 +1,12 @@
 import { TissueRoll, IPageHeader } from '../core/TissueRoll'
 
 export class TissueRollMediator extends TissueRoll {
-  static AddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>): number {
-    return TissueRoll.CallAddEmptyPage(db, head)
+  static AddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
+    return TissueRoll.CallAddEmptyPage(db, head, incrementInternalIndex)
+  }
+
+  static SetPage(db: TissueRoll, head: Partial<IPageHeader>, data: number[]): void {
+    return TissueRoll.CallSetPage(db, head, data)
   }
 
   static Put(db: TissueRoll, data: number[], autoIncrement: boolean): string {
