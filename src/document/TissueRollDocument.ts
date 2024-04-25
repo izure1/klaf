@@ -168,7 +168,7 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }
 
     const db = TissueRoll.Open(file, payloadSize)
-    const record = db.getRecords(1).pop()!
+    const record = db.getRecords(1)[0]
     const docRoot = TissueRollDocument.Verify(file, record.payload)
 
     return new TissueRollDocument(db, record.header.id, docRoot, 0)
