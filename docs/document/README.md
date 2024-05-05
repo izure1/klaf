@@ -12,11 +12,21 @@ If this is not the database you were looking for, please check the [key-value](.
 import { TissueRollDocument } from 'tissue-roll'
 
 // OPEN DB
-const payloadSize = 1024
-const db = TissueRollDocument.Open<{
-  name: string
-  age?: number
-}>('my_file_path.db', payloadSize)
+const db = TissueRollDocument.Open({
+  path: 'my_file_path.db',
+  version: 0,
+  table: {
+    name: {
+      default: () => 'Anonymous',
+      validate: (v) => typeof v === 'string'
+    },
+    age: {
+      default: () => 0,
+      validate: (v) => typeof v === 'number'
+    }
+  },
+  payloadSize: 1024,
+})
 
 db.put({
   name: 'john'
@@ -54,56 +64,65 @@ If there are many write/update operations in the database, it's recommended to s
 
 ### Explicit Type Specification
 
-If you are using TypeScript, specifying clear types in the database allows you to benefit from type inference.
+The table is distinguished by key-value, where the key is the field name of the table, and the value has default and validate properties.
 
 ```typescript
-const payloadSize = 1024
-const db = TissueRollDocument.Open<{
-  student: boolean
-  name: string
-  age?: number
-  sex?: 'male'|'female'
-}>('my_file_path.db', payloadSize)
-```
-
-In this case, you can indicate that the **age** and **sex** properties may or may not exist during document insertion. For example, it can be inserted as `{ student: false, name: 'park' }` or `{ student: false, name: 'park', age: 20 }`.
-
-**Be cautious**. Note that in specific documents, values like **age** and **sex** that do not exist are not treated as equivalent to **null**. Therefore, you cannot search for them as **null**, as shown in the example below.
-
-```typescript
-db.pick({
-  age: {
-    equal: null
-  }
-}) // Do not use it like this. It will not yield correct results.
-```
-
-If you want to retrieve documents where the **age** property does not exist, you can use the following approach.
-
-```typescript
-db.pick({}).filter((doc) => !('age' in doc))
-```
-
-However, keep in mind that this might not be performance-efficient as it involves querying all documents. Therefore, if you often need to search by **age**, it is better to initialize the value of the **age** property explicitly to **null**, not as an optional property, for optimization of **age** lookups.
-
-If you want to explicitly initialize this property to **null** in all existing documents, please update the database. The following is a code that queries all documents and initializes the **age** property to **null** if it is not in the document.
-
-```typescript
-// Ensure the age property in all documents
-db.partialUpdate({}, (document) => ({
-  age: document.age ?? null
-}))
-```
-
-Now, you can quickly search only for documents where the **age** property value is **null**.
-
-```typescript
-db.pick({
-  age: {
-    equal: null
-  }
+const db = TissueRollDocument.Open({
+  path: 'my_file_path.db',
+  version: 0,
+  table: {
+    name: {
+      default: () => 'Anonymous',
+      validate: (v) => typeof v === 'string'
+    },
+    age: {
+      default: () => 0,
+      validate: (v) => typeof v === 'number'
+    },
+    sex: {
+      default: (): 'male'|'female'|null => null,
+      validate: (v) => v === 'male' || v === 'female' || v === null
+    }
+  },
+  payloadSize: 1024,
 })
 ```
+
+#### default (required)
+
+The default property is a function that returns one of the **string**, **number**, **boolean**, or **null** types, and is used to automatically generate a default value for a field that is omitted when inserting or updating a document.
+
+For example, if the table structure is changed and a new field is added, all documents inserted before will have this function called and a default value inserted.
+
+#### validate (optional)
+
+This value is optional and allows all values if not used.
+
+It is a function that checks the validity of the value when inserting or updating a document. This function takes the inserted value as a parameter and returns a **boolean**.
+
+For example, if you want the **name** attribute to accept only strings, you can implement it like this: `validate: (v) => typeof v === 'string'`.
+
+### Table structure change
+
+However, you may want to extend the fields of the table. For example, let's say you want to add a **student** field that you didn't have before.
+
+```typescript
+table: {
+    ...
+    // If the table structure has been modified, you must increment the version!
+    version: 1,
+    student: {
+      default: () => true,
+      validate: (v) => typeof v === 'boolean'
+    }
+  }
+```
+
+In this case, you can simply add the **student** field to the table property. Then, increment the **version** number. **TissueRollDocument** considers the table to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
+
+And the **student** field will be set to the default value because it did not exist in the documents that were inserted before.
+
+Please note that this migration process can affect application performance if there are many inserted documents, as it updates all inserted documents.
 
 ### Optimization
 

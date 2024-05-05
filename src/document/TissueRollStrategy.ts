@@ -57,6 +57,7 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
   }
 
   delete(id: string): void {
+    this.locker.cancel(`write:node:${id}`)
     this.db.delete(id)
   }
 

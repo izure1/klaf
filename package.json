@@ -1,6 +1,6 @@
 {
   "name": "tissue-roll",
-  "version": "4.0.1",
+  "version": "5.0.0-alpha.0",
   "description": "Very simple read/write database with a no-sql.",
   "main": "dist/cjs/index.cjs",
   "module": "dist/esm/index.mjs",
@@ -42,7 +42,7 @@
     "esbuild": "^0.20.2",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@noble/ciphers": "^0.5.2",

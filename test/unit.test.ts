@@ -18,14 +18,28 @@ const createDatabase = (name: string) => {
 
 const createDocumentDatabase = (name: string) => {
   const dbName = `./sql-${name}.db`
-  const sql = TissueRollDocument.Create<{
-    name: string
-    age: number
-    sex?: 'male'|'female'
-    more?: any
-  }>(dbName, 1024, true)
+  const sql = TissueRollDocument.Create({
+    path: dbName,
+    version: 0,
+    payloadSize: 1024,
+    overwrite: true,
+    table: {
+      name: {
+        default: () => '',
+        validate: (v) => typeof v === 'string'
+      },
+      age: {
+        default: () => 0,
+        validate: (v) => typeof v === 'number'
+      },
+      sex: {
+        default: (): 'male'|'female' => 'male',
+        validate: (v) => v === 'male' || v === 'female'
+      }
+    }
+  })
   
-  sql.put({ name: 'kim', age: 10 })
+  sql.put({ name: 'kim', age: 10, sex: 'female' })
   sql.put({ name: 'tomas', age: 80, sex: 'male' })
   sql.put({ name: 'john', age: 20, sex: 'male' })
   sql.put({ name: 'lee', age: 50, sex: 'female' })
@@ -464,7 +478,7 @@ describe('DOCUMENT', () => {
       order: 'sex',
     })
     const expect2 = [
-      { name: 'kim', age: 10 },
+      { name: 'kim', age: 10, sex: 'female' },
       { name: 'lee', age: 50, sex: 'female' },
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 20, sex: 'male' },
@@ -505,7 +519,7 @@ describe('DOCUMENT', () => {
     const { sql, close } = createDocumentDatabase('pick-range-2')
 
     for (let i = 0; i < 100; i++) {
-      sql.put({ name: 'unknown', age: i })
+      sql.put({ name: 'unknown', age: i, sex: 'male' })
     }
 
     const result1 = sql.pick({

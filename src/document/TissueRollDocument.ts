@@ -17,6 +17,7 @@ export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: Suppo
 
 export interface TissueRollDocumentRoot {
   verify: 'TissueRollDocument'
+  tableVersion: number,
   head: Record<string, SerializeStrategyHead|null>
 }
 
@@ -51,14 +52,11 @@ type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   like?: string
 }
 
-type TissueRollDocumentQuery<T extends Record<string, SupportedType>> = {
-  /**
-   * The property of the document to be searched.
-   */
-  [K in keyof T]?: T[K]|TissueRollDocumentQueryCondition<T, K>
+interface TissueRollDocumentRecordShape {
+  [key: string]: SupportedType
 }
 
-type TissueRollDocumentRecord<T extends Record<string, SupportedType>> = T&{
+interface TissueRollDocumentTimestampShape {
   /**
    * The timestamp when the document was created. This value is automatically added when inserted into the database.
    */
@@ -69,7 +67,20 @@ type TissueRollDocumentRecord<T extends Record<string, SupportedType>> = T&{
   updatedAt: number
 }
 
-type TissueRollDocumentOption<T extends Record<string, SupportedType>> = {
+type TissueRollDocumentRecord<
+  T extends TissueRollDocumentRecordShape
+> = T&TissueRollDocumentTimestampShape
+
+type TissueRollDocumentQuery<
+  T extends TissueRollDocumentRecord<any>
+> = {
+  /**
+   * The property of the document to be searched.
+   */
+  [K in keyof T]?: T[K]|TissueRollDocumentQueryCondition<T, K>
+}
+
+interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRollDocumentRecordShape>> {
   /**
    * Used when retrieving a portion of the searched documents. Specifies the starting offset, with a default value of `0`.
    */
@@ -88,7 +99,63 @@ type TissueRollDocumentOption<T extends Record<string, SupportedType>> = {
   desc?: boolean
 }
 
-export class TissueRollDocument<T extends Record<string, SupportedType>> {
+interface TissueRollDocumentField {
+  default: () => SupportedType,
+  validate?: (v: SupportedType) => boolean
+}
+
+interface TissueRollDocumentTable {
+  [key: string]: TissueRollDocumentField
+}
+
+type TissueRollDocumentTableType<T extends TissueRollDocumentTable> = {
+  [K in keyof T]: ReturnType<T[K]['default']>
+}
+
+interface TissueRollDocumentCreateOption<T extends TissueRollDocumentTable> {
+  /**
+   * This is the path where the database file will be created.
+   */
+  path: string
+  /**
+   * Scheme version.
+   */
+  version: number
+  /**
+   * The fields of the database table and their validation functions.
+   * The property names become field names, and their values perform validation when inserting or updating values.
+   * Please refer to the example below.
+   * ```
+   * const db = TissueRollDocument.Open({
+   *   path: 'my-db-path/database.db',
+   *   table: {
+   *     id: {
+   *       default: () => uuid(),
+   *       validate: (v) => isUUID(v)
+   *     },
+   *     email: {
+   *       default: () => createDefaultEmail(),
+   *       validate: (v) => isEmail(v)
+   *     }
+   *   }
+   * })
+   * ```
+   * If you use the [validator.js](https://github.com/validatorjs/validator.js) library,
+   * you can easily implement these validation checks.
+   * Please refer to it for assistance.
+   */
+  table: T
+  /**
+   * This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   */
+  payloadSize?: number
+  /**
+   * This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
+   */
+  overwrite?: boolean
+}
+
+export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
   private static Verify(file: string, payload: string): TissueRollDocumentRoot {
@@ -131,14 +198,22 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
 
   /**
    * It creates a new database file.
-   * @param file This is the path where the database file will be created.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
-   * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
+   * @param option The database creation options.
    */
-  static Create<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024, overwrite = false): TissueRollDocument<T> {
-    const db = TissueRoll.Create(file, payloadSize, overwrite)
+  static Create<
+    T extends TissueRollDocumentTable
+  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentTableType<T>> {
+    const {
+      path,
+      version,
+      table,
+      payloadSize = 1024,
+      overwrite = false
+    } = option
+    const db = TissueRoll.Create(path, payloadSize, overwrite)
     const docRoot: TissueRollDocumentRoot = {
       verify: TissueRollDocument.DB_NAME,
+      tableVersion: 0,
       head: {},
     }
     const rootId = TissueRollMediator.Put(
@@ -148,30 +223,36 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     )
     db.update(rootId, JSON.stringify(docRoot))
 
-    return new TissueRollDocument(db, rootId, docRoot, 0)
+    return new TissueRollDocument(db, rootId, docRoot, table, version, 0)
   }
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
-   * @param file This is the path where the database file is located.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * @param option The database creation options.
    */
-  static Open<T extends Record<string, SupportedType>>(file: string, payloadSize = 1024): TissueRollDocument<T> {
+  static Open<
+    T extends TissueRollDocumentTable
+  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentTableType<T>> {
+    const {
+      path,
+      version,
+      table,
+      payloadSize = 1024
+    } = option
     // 파일이 존재하지 않을 경우
-    if (!existsSync(file)) {
+    if (!existsSync(path)) {
       if (!payloadSize) {
-        throw ErrorBuilder.ERR_DB_NO_EXISTS(file)
+        throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
       }
       // 옵션이 지정되었을 경우 새롭게 생성합니다
-      return TissueRollDocument.Create(file, payloadSize)
+      return TissueRollDocument.Create(option)
     }
 
-    const db = TissueRoll.Open(file, payloadSize)
+    const db = TissueRoll.Open(path, payloadSize)
     const record = db.getRecords(1)[0]
-    const docRoot = TissueRollDocument.Verify(file, record.payload)
+    const docRoot = TissueRollDocument.Verify(path, record.payload)
 
-    return new TissueRollDocument(db, record.header.id, docRoot, 0)
+    return new TissueRollDocument(db, record.header.id, docRoot, table, version, 0)
   }
  
   protected readonly db: TissueRoll
@@ -179,25 +260,36 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   protected readonly order: number
   protected readonly comparator: TissueRollComparator
   protected readonly locker: DelayedExecution
+  protected readonly table: TissueRollDocumentTable
+  protected readonly tableVersion: number
   protected lock: boolean
-  private readonly _root: TissueRollDocumentRoot
   private readonly _trees: CacheBranchSync<{
     [key: string]: BPTreeSync<string, SupportedType>
   }>
   private readonly _document: CacheBranchSync<{
     [key: string]: TissueRollDocumentRecord<T>
   }>
+  private _root: TissueRollDocumentRoot
   private _metadata: {
     autoIncrement: bigint
     count: number
   }
 
-  protected constructor(db: TissueRoll, rootId: string, root: TissueRollDocumentRoot, writeBack: number) {
+  protected constructor(
+    db: TissueRoll,
+    rootId: string,
+    root: TissueRollDocumentRoot,
+    table: TissueRollDocumentTable,
+    tableVersion: number,
+    writeBack: number
+  ) {
     this.db = db
     this.rootId = rootId
     this.order = Math.max(TissueRollDocument.OrderN(db.metadata.payloadSize, 40), 4)
     this.comparator = new TissueRollComparator()
     this.locker = new DelayedExecution(writeBack)
+    this.tableVersion = tableVersion
+    this.table = table
     this.lock = false
     this._root = root
     this._trees = new CacheBranchSync()
@@ -207,6 +299,20 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     this._metadata = {
       autoIncrement,
       count,
+    }
+
+    // Needed to alter table
+    if (this._root.tableVersion < tableVersion) {
+      this._root.tableVersion = tableVersion
+      this.updateRoot(this._root)
+      this._callInternalUpdate(
+        {},
+        (document) => this._normalizeRecord(document as any),
+        (document) => ({
+          createdAt: document.createdAt,
+          updatedAt: document.updatedAt,
+        }) as any
+      )
     }
   }
 
@@ -224,38 +330,64 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     }).raw
   }
 
+  protected updateRoot(root: TissueRollDocumentRoot): void {
+    this._root = root
+    this.db.update(this.rootId, JSON.stringify(root))
+  }
+
   private _normalizeOption(
     option: Partial<TissueRollDocumentOption<TissueRollDocumentRecord<T>>>
   ): Required<TissueRollDocumentOption<TissueRollDocumentRecord<T>>> {
-    const def: Required<TissueRollDocumentOption<T>> = {
+    const def: Required<TissueRollDocumentOption<TissueRollDocumentRecord<T>>> = {
       start: 0,
       end: Number.MAX_SAFE_INTEGER,
       order: 'createdAt',
       desc: false
     }
-    const merged: Required<TissueRollDocumentOption<T>> = Object.assign({}, def, option)
+    const merged: Required<
+      TissueRollDocumentOption<TissueRollDocumentRecord<T>>
+    > = Object.assign({}, def, option)
     return merged
   }
 
-  private _normalizeFlatQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
+  private _normalizeFlatQuery(
+    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
+  ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
     query = Object.assign({}, query)
     for (const property in query) {
-      const condition = query[property]
+      const condition = query[property as keyof typeof query]
       if (typeof condition !== 'object' || condition === null) {
-        query[property] = {
+        (query as any)[property] = {
           equal: condition
-        } as any
+        }
       }
     }
     return query
   }
 
-  private _normalizeQuery<U extends T>(query: TissueRollDocumentQuery<U>): TissueRollDocumentQuery<U> {
+  private _normalizeQuery(
+    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
+  ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
     return Object.assign({
       createdAt: {
         gt: 0
       }
     }, this._normalizeFlatQuery(query))
+  }
+
+  private _normalizeRecord(
+    record: Partial<T>
+  ): T {
+    for (const field in this.table) {
+      const { default: def, validate } = this.table[field]
+      const r = record as any
+      const v = record[field] ?? def()
+      if (validate && !validate(v)) {
+        throw new Error(`The value '${v}' did not pass the validation of field '${field}'.`)
+      }
+      r[field] = v
+    }
+    return record as T
   }
 
   /**
@@ -268,16 +400,23 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
   get metadata() {
     const { autoIncrement, count } = this._metadata
     const { payloadSize, timestamp } = this.db.metadata
+    const { tableVersion } = this
     return {
       autoIncrement,
       count,
       payloadSize,
       timestamp,
+      tableVersion
     }
   }
 
-  private _callInternalPut(document: T, ...overwrite: Partial<TissueRollDocumentRecord<T>>[]): TissueRollDocumentRecord<T> {
-    const record = Object.assign({}, document, ...overwrite) as TissueRollDocumentRecord<T>
+  private _callInternalPut(
+    document: Partial<T>,
+    ...overwrite: Partial<T>[]
+  ): TissueRollDocumentRecord<T> {
+    const record = this._normalizeRecord(
+      Object.assign({}, document, ...overwrite)
+    ) as TissueRollDocumentRecord<T>
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
     for (const property in record) {
@@ -328,13 +467,55 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
       const record = this._document.ensure(hashKey, () => JSON.parse(payload)).raw
       for (const property in record) {
         const tree = this.getTree(property)
-        const value = record[property]
+        const value = record[property as keyof typeof record]
         tree.delete(id, value)
       }
       this.db.delete(id)
       this._document.delete(id)
     }
     this._metadata.count -= ids.length
+    return ids.length
+  }
+
+  private _callInternalUpdate(
+    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
+    update: Partial<T|TissueRollDocumentRecord<T>>|(
+      (record: TissueRollDocumentRecord<T>) => Partial<T>
+    ),
+    createOverwrite: (
+      before: TissueRollDocumentRecord<T>
+    ) => Partial<TissueRollDocumentRecord<T>>
+  ): number {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
+    const ids = this.findRecordIds(query)
+    for (const id of ids) {
+      const before = this._document.ensure(id, () => (
+        JSON.parse(this.db.pick(id).record.payload)
+      )).clone() as TissueRollDocumentRecord<T>
+      const partial = typeof update === 'function' ? update(before) : update
+      const overwrite = createOverwrite(before)
+      const after = Object.assign(
+        {},
+        before,
+        partial,
+        overwrite
+      ) as unknown as TissueRollDocumentRecord<T>
+      for (const property in before) {
+        const tree = this.getTree(property)
+        const value = before[property as keyof typeof before]
+        tree.delete(id, value)
+      }
+      for (const property in after) {
+        const tree = this.getTree(property)
+        const value = after[property as keyof typeof after]
+        tree.insert(id, value)
+      }
+      const stringify = JSON.stringify(after)
+      this.db.update(id, stringify)
+      this._document.set(id, () => after)
+    }
     return ids.length
   }
 
@@ -354,31 +535,9 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
     update: Partial<T>|((record: TissueRollDocumentRecord<T>) => Partial<T>)
   ): number {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
-    }
-    const ids = this.findRecordIds(query)
-    for (const id of ids) {
-      const document = this._document.ensure(id, () => (
-        JSON.parse(this.db.pick(id).record.payload)
-      )).clone() as TissueRollDocumentRecord<any>
-      const updater = typeof update === 'function' ? update(document) : update
-      for (const property in updater) {
-        const tree = this.getTree(property)
-        if (ObjectHelper.HasProperty(document, property)) {
-          const before = document[property]
-          tree.delete(id, before)
-        }
-        const after = updater[property] as T[keyof T]
-        tree.insert(id, after)
-        document[property] = after
-      }
-      document.updatedAt = Date.now()
-      const stringify = JSON.stringify(document)
-      this.db.update(id, stringify)
-      this._document.set(id, () => document)
-    }
-    return ids.length
+    return this._callInternalUpdate(query, update, () => ({
+      updatedAt: Date.now()
+    }) as any)
   }
 
   /**
@@ -392,42 +551,16 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
    */
   fullUpdate(
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    update: T|((record: TissueRollDocumentRecord<T>) => T)
+    update: T|((record: TissueRollDocumentRecord<T>) => Partial<T>)
   ): number {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
-    }
-    const ids = this.findRecordIds(query)
-    for (const id of ids) {
-      const beforeDocument = this._document.ensure(id, () => (
-        JSON.parse(this.db.pick(id).record.payload)
-      )).clone() as TissueRollDocumentRecord<T>
-      let recordUpdate = update
-      if (typeof recordUpdate === 'function') {
-        recordUpdate = recordUpdate(beforeDocument)
-      }
-      for (const property in beforeDocument) {
-        const tree = this.getTree(property)
-        const before = beforeDocument[property]
-        tree.delete(id, before)
-      }
-      const afterDocument: TissueRollDocumentRecord<T> = Object.assign({}, recordUpdate, {
-        createdAt: beforeDocument.createdAt,
-        updatedAt: Date.now()
-      })
-      for (const property in afterDocument) {
-        const tree = this.getTree(property)
-        const after = afterDocument[property]
-        tree.insert(id, after)
-      }
-      const stringify = JSON.stringify(afterDocument)
-      this.db.update(id, stringify)
-      this._document.set(id, () => afterDocument)
-    }
-    return ids.length
+    return this._callInternalUpdate(query, update, () => ({
+      updatedAt: Date.now()
+    }) as any)
   }
   
-  protected findRecordIds(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): string[] {
+  protected findRecordIds(
+    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
+  ): string[] {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
@@ -435,7 +568,10 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     let result: Set<string>|undefined
     for (const property in query) {
       const tree = this.getTree(property)
-      result = tree.keys(query[property]! as TissueRollDocumentQueryCondition<T>, result)
+      result = tree.keys(
+        query[property as keyof typeof query]! as TissueRollDocumentQueryCondition<T>,
+        result
+      )
     }
     return Array.from(result ?? [])
   }
@@ -457,13 +593,19 @@ export class TissueRollDocument<T extends Record<string, SupportedType>> {
     const records = this.findRecordIds(query).map((id) => (
       this._document.ensure(id, () => (
         JSON.parse(this.db.pick(id).record.payload)
-      )).clone() as TissueRollDocumentRecord<any>
+      )).clone() as TissueRollDocumentRecord<T>
     ))
     if (desc) {
-      records.sort((a, b) => this.comparator.asc(b[order], a[order]))
+      records.sort((a, b) => this.comparator.asc(
+        b[order] as PrimitiveType,
+        a[order] as PrimitiveType
+      ))
     }
     else {
-      records.sort((a, b) => this.comparator.asc(a[order], b[order]))
+      records.sort((a, b) => this.comparator.asc(
+        a[order] as PrimitiveType,
+        b[order] as PrimitiveType
+      ))
     }
     return records.slice(start, end)
   }
