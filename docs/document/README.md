@@ -122,6 +122,12 @@ In this case, you can simply add the **student** field to the table property. Th
 
 And the **student** field will be set to the default value because it did not exist in the documents that were inserted before.
 
+#### Caution when deleting fields
+
+In this process, fields that do not exist in the latest table among documents inserted in the past are deleted from the database. Since data loss occurs, please make sure to back up your database.
+
+#### Performance caution when migrating
+
 Please note that this migration process can affect application performance if there are many inserted documents, as it updates all inserted documents.
 
 ### Optimization

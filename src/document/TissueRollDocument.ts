@@ -378,16 +378,16 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   private _normalizeRecord(
     record: Partial<T>
   ): T {
+    const after: any = {}
     for (const field in this.table) {
       const { default: def, validate } = this.table[field]
-      const r = record as any
       const v = record[field] ?? def()
       if (validate && !validate(v)) {
         throw new Error(`The value '${v}' did not pass the validation of field '${field}'.`)
       }
-      r[field] = v
+      after[field] = v
     }
-    return record as T
+    return after as T
   }
 
   /**
@@ -414,8 +414,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     document: Partial<T>,
     ...overwrite: Partial<T>[]
   ): TissueRollDocumentRecord<T> {
-    const record = this._normalizeRecord(
-      Object.assign({}, document, ...overwrite)
+    const record = Object.assign(
+      this._normalizeRecord(document),
+      ...overwrite
     ) as TissueRollDocumentRecord<T>
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
@@ -494,11 +495,17 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       const before = this._document.ensure(id, () => (
         JSON.parse(this.db.pick(id).record.payload)
       )).clone() as TissueRollDocumentRecord<T>
+      const normalizedBefore = Object.assign(
+        this._normalizeRecord(before),
+        {
+          createdAt: before.createdAt,
+          updatedAt: before.updatedAt,
+        }
+      ) as TissueRollDocumentRecord<T>
       const partial = typeof update === 'function' ? update(before) : update
       const overwrite = createOverwrite(before)
       const after = Object.assign(
-        {},
-        before,
+        normalizedBefore,
         partial,
         overwrite
       ) as unknown as TissueRollDocumentRecord<T>
@@ -551,7 +558,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    */
   fullUpdate(
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    update: T|((record: TissueRollDocumentRecord<T>) => Partial<T>)
+    update: T|((record: TissueRollDocumentRecord<T>) => T)
   ): number {
     return this._callInternalUpdate(query, update, () => ({
       updatedAt: Date.now()
