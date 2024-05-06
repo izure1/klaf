@@ -60,6 +60,19 @@ If there are many write/update operations in the database, it's recommended to s
 
 *Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **1024**.
 
+## Reserved table column names
+
+First of all, when inserting a document in **TissueRollDocument**, the following columns are automatically added. These values cannot be overwritten, so be careful when naming table columns.
+
+* `documentIndex`  
+  The index when the document was inserted. This value is automatically added when inserted into the database.
+
+* `createdAt`  
+  The timestamp when the document was created. This value is automatically added when inserted into the database.
+
+* `updatedAt`  
+  The timestamp when the document was last updated. This value is automatically updated when the document is modified in the database.
+
 ## How to work
 
 ### Explicit Type Specification
@@ -278,7 +291,7 @@ The **start** and **end** properties are used to retrieve a portion of the array
 
 The default value for **start** is **0**, and the default value for **end** is **Number.MAX_SAFE_INTEGER**.
 
-**order** determines which property to use as the basis for sorting the retrieved documents. The default is **createdAt**, so the documents are sorted in the order they were inserted.
+**order** determines which property to use as the basis for sorting the retrieved documents. The default is **documentIndex**, so the documents are sorted in the order they were inserted.
 
 **desc** determines whether to sort the retrieved array in descending order. The default value is **false**. If this value is set to **true**, the array of retrieved documents will be sorted in descending order based on the order property.
 

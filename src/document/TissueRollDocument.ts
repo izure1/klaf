@@ -58,6 +58,10 @@ interface TissueRollDocumentRecordShape {
 
 interface TissueRollDocumentTimestampShape {
   /**
+   * The index when the document was inserted. This value is automatically added when inserted into the database.
+   */
+  documentIndex: number
+  /**
    * The timestamp when the document was created. This value is automatically added when inserted into the database.
    */
   createdAt: number
@@ -90,7 +94,7 @@ interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRoll
    */
   end?: number
   /**
-   * The property used for sorting the retrieved documents. Results are sorted based on this value, with the default being `createdAt`.
+   * The property used for sorting the retrieved documents. Results are sorted based on this value, with the default being `documentIndex`.
    */
   order?: keyof T
   /**
@@ -270,7 +274,6 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     [key: string]: TissueRollDocumentRecord<T>
   }>
   private _root: TissueRollDocumentRoot
-  private _lastTimestamp: number
   private _metadata: {
     autoIncrement: bigint
     count: number
@@ -295,7 +298,6 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     this._root = root
     this._trees = new CacheBranchSync()
     this._document = new CacheBranchSync()
-    this._lastTimestamp = 0
 
     const { autoIncrement, count } = db.metadata
     this._metadata = {
@@ -311,6 +313,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
         {},
         (document) => this._normalizeRecord(document as any),
         (document) => ({
+          documentIndex: document.documentIndex,
           createdAt: document.createdAt,
           updatedAt: document.updatedAt,
         }) as any
@@ -343,7 +346,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     const def: Required<TissueRollDocumentOption<TissueRollDocumentRecord<T>>> = {
       start: 0,
       end: Number.MAX_SAFE_INTEGER,
-      order: 'createdAt',
+      order: 'documentIndex',
       desc: false
     }
     const merged: Required<
@@ -371,7 +374,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
   ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
     return Object.assign({
-      createdAt: {
+      'documentIndex': {
         gt: 0
       }
     }, this._normalizeFlatQuery(query))
@@ -420,15 +423,6 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       this._normalizeRecord(document),
       ...overwrite
     ) as TissueRollDocumentRecord<T>
-    
-    // createdAt 중복에 의한 순서 정렬 문제를 해결하기 위한 timestamp 지연
-    if (record.createdAt === this._lastTimestamp) {
-      const t = this._lastTimestamp+1
-      record.createdAt = t
-      record.updatedAt = t
-    }
-    this._lastTimestamp = record.createdAt
-
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
     for (const property in record) {
@@ -439,7 +433,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     this._document.set(recordId, () => record)
     this._metadata.autoIncrement++
     this._metadata.count++
-    return record
+    return Object.assign({}, record)
   }
 
   /**
@@ -457,6 +451,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     }
     const now = Date.now()
     const overwrite = {
+      documentIndex: Number(this._metadata.autoIncrement)+1,
       createdAt: now,
       updatedAt: now,
     } as TissueRollDocumentRecord<T>
@@ -509,6 +504,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       const normalizedBefore = Object.assign(
         this._normalizeRecord(before),
         {
+          documentIndex: before.documentIndex,
           createdAt: before.createdAt,
           updatedAt: before.updatedAt,
         }
