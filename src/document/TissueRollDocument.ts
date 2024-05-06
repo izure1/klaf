@@ -270,6 +270,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     [key: string]: TissueRollDocumentRecord<T>
   }>
   private _root: TissueRollDocumentRoot
+  private _lastTimestamp: number
   private _metadata: {
     autoIncrement: bigint
     count: number
@@ -294,6 +295,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     this._root = root
     this._trees = new CacheBranchSync()
     this._document = new CacheBranchSync()
+    this._lastTimestamp = 0
 
     const { autoIncrement, count } = db.metadata
     this._metadata = {
@@ -418,6 +420,15 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       this._normalizeRecord(document),
       ...overwrite
     ) as TissueRollDocumentRecord<T>
+    
+    // createdAt 중복에 의한 순서 정렬 문제를 해결하기 위한 timestamp 지연
+    if (record.createdAt === this._lastTimestamp) {
+      const t = this._lastTimestamp+1
+      record.createdAt = t
+      record.updatedAt = t
+    }
+    this._lastTimestamp = record.createdAt
+
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
     for (const property in record) {
@@ -440,7 +451,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * If search functionality is required, store the relevant property separately as a top-level property.
    * @param document The document to be inserted.
    */
-  put(document: T): TissueRollDocumentRecord<T> {
+  put(document: Partial<T>): TissueRollDocumentRecord<T> {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }

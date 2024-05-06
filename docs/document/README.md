@@ -2,7 +2,7 @@
 
 This document covers the usage of the **document-oriented** database in **tissue-roll**.
 
-The document database in **tissue-roll** allows you to insert data in **JSON** format. Specify each field in TypeScript.
+The document database in **tissue-roll** allows you to insert data in **JSON** format. Specify each column in TypeScript.
 
 If this is not the database you were looking for, please check the [key-value](../core/README.md) database.
 
@@ -64,7 +64,7 @@ If there are many write/update operations in the database, it's recommended to s
 
 ### Explicit Type Specification
 
-The table is distinguished by key-value, where the key is the field name of the table, and the value has default and validate properties.
+The table is distinguished by key-value, where the key is the column name of the table, and the value has default and validate properties.
 
 ```typescript
 const db = TissueRollDocument.Open({
@@ -90,9 +90,9 @@ const db = TissueRollDocument.Open({
 
 #### default (required)
 
-The default property is a function that returns one of the **string**, **number**, **boolean**, or **null** types, and is used to automatically generate a default value for a field that is omitted when inserting or updating a document.
+The default property is a function that returns one of the **string**, **number**, **boolean**, or **null** types, and is used to automatically generate a default value for a column that is omitted when inserting or updating a document.
 
-For example, if the table structure is changed and a new field is added, all documents inserted before will have this function called and a default value inserted.
+For example, if the table structure is changed and a new column is added, all documents inserted before will have this function called and a default value inserted.
 
 #### validate (optional)
 
@@ -104,7 +104,7 @@ For example, if you want the **name** attribute to accept only strings, you can 
 
 ### Table structure change
 
-However, you may want to extend the fields of the table. For example, let's say you want to add a **student** field that you didn't have before.
+However, you may want to extend the columns of the table. For example, let's say you want to add a **student** column that you didn't have before.
 
 ```typescript
 table: {
@@ -118,13 +118,13 @@ table: {
   }
 ```
 
-In this case, you can simply add the **student** field to the table property. Then, increment the **version** number. **TissueRollDocument** considers the table to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
+In this case, you can simply add the **student** column to the table property. Then, increment the **version** number. **TissueRollDocument** considers the table to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
 
-And the **student** field will be set to the default value because it did not exist in the documents that were inserted before.
+And the **student** column will be set to the default value because it did not exist in the documents that were inserted before.
 
-#### Caution when deleting fields
+#### Caution when deleting columns
 
-In this process, fields that do not exist in the latest table among documents inserted in the past are deleted from the database. Since data loss occurs, please make sure to back up your database.
+When migrating to delete an existing column, columns that do not exist in the latest table among documents inserted in the past are deleted from the database. Since data loss occurs, please make sure to back up your database.
 
 #### Performance caution when migrating
 
