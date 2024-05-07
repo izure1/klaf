@@ -43,6 +43,11 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
   }
 
   id(isLeaf: boolean): string {
+    if (this.root.reassignments.length) {
+      const id = this.root.reassignments.shift()!
+      this.writeHead(this.head)
+      return id
+    }
     return this._addOverflowRecord()
   }
 
@@ -58,7 +63,8 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
 
   delete(id: string): void {
     this.locker.cancel(`write:node:${id}`)
-    this.db.delete(id)
+    this.root.reassignments.push(id)
+    this.writeHead(this.head)
   }
 
   readHead(): SerializeStrategyHead|null {

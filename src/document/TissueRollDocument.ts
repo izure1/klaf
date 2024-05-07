@@ -17,7 +17,8 @@ export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: Suppo
 
 export interface TissueRollDocumentRoot {
   verify: 'TissueRollDocument'
-  tableVersion: number,
+  tableVersion: number
+  reassignments: string[]
   head: Record<string, SerializeStrategyHead|null>
 }
 
@@ -218,6 +219,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     const docRoot: TissueRollDocumentRoot = {
       verify: TissueRollDocument.DB_NAME,
       tableVersion: 0,
+      reassignments: [],
       head: {},
     }
     const rootId = TissueRollMediator.Put(
@@ -360,7 +362,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
     query = Object.assign({}, query)
     for (const property in query) {
-      const condition = query[property as keyof typeof query]
+      const condition = query[property]
       if (typeof condition !== 'object' || condition === null) {
         (query as any)[property] = {
           equal: condition
@@ -474,7 +476,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       const record = this._document.ensure(hashKey, () => JSON.parse(payload)).raw
       for (const property in record) {
         const tree = this.getTree(property)
-        const value = record[property as keyof typeof record]
+        const value = record[property]
         tree.delete(id, value)
       }
       this.db.delete(id)
@@ -518,12 +520,12 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       ) as unknown as TissueRollDocumentRecord<T>
       for (const property in before) {
         const tree = this.getTree(property)
-        const value = before[property as keyof typeof before]
+        const value = before[property]
         tree.delete(id, value)
       }
       for (const property in after) {
         const tree = this.getTree(property)
-        const value = after[property as keyof typeof after]
+        const value = after[property]
         tree.insert(id, value)
       }
       const stringify = JSON.stringify(after)
@@ -583,7 +585,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     for (const property in query) {
       const tree = this.getTree(property)
       result = tree.keys(
-        query[property as keyof typeof query]! as TissueRollDocumentQueryCondition<T>,
+        query[property]! as TissueRollDocumentQueryCondition<T>,
         result
       )
     }

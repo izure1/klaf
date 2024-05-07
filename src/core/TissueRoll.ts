@@ -64,7 +64,7 @@ export type NormalizedRecord = {
 }
 
 export class TissueRoll {
-  protected static readonly DB_VERSION                    = '4.0.0'
+  protected static readonly DB_VERSION                    = '5.0.0'
   protected static readonly DB_NAME                       = 'TissueRoll'
   protected static readonly RootValidStringOffset         = 0
   protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
@@ -915,11 +915,6 @@ export class TissueRoll {
           this._pagePosition(index),
           rHeader
         )
-        // FileView.Update(
-        //   this.fd,
-        //   this._cellPosition(next, 1),
-        //   this._createCell(0)
-        // )
         this._cachedRecord.delete(index.toString())
       }
       index = next
@@ -929,7 +924,8 @@ export class TissueRoll {
   }
 
   private _isInternalRecord(record: number[]): boolean {
-    return this._normalizeRecord(record).header.maxLength <= this.maximumFreeSize
+    const recordSize = this._normalizeRecord(record).header.maxLength + TissueRoll.RecordHeaderSize
+    return recordSize <= this.maximumFreeSize
   }
 
   protected callInternalUpdate(id: string, data: string): {
