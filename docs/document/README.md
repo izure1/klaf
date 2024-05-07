@@ -313,6 +313,6 @@ db.metadata.count // 0
 
 ## Performance Comparison between **sqlite3** and **TissueRollDocument**
 
-The following values compare the speed with **sqlite3** written in C/C++. These are the average of **5** tests. In data retrieval, **sqlite3** demonstrates speeds approximately **3-5** times faster. **TissueRollDocument** will strive to narrow this gap further.
+Here is a performance comparison test with the node.js's representative database library, [**node-sqlite3**](https://github.com/TryGhost/node-sqlite3) library. This is the result of an average of 5 tests. **node-sqlite3** shows about **3** times faster speed when searching strings and full scanning documents, and insertion is faster in **TissueRollDocument**.
 
 ![COMPARISON](../asset/image/svg_perf_compare.svg)
