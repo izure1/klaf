@@ -3,7 +3,7 @@ import { open } from 'node:fs/promises'
 
 import type { IHookallSync } from 'hookall'
 import { useHookallSync } from 'hookall'
-import { CacheBranchSync } from 'cachebranch'
+import { CacheEntanglementSync } from 'cache-entanglement'
 
 import { ErrorBuilder } from './ErrorBuilder'
 import { TextConverter } from '../utils/TextConverter'
@@ -324,21 +324,12 @@ export class TissueRoll {
   protected readonly fd: number
   protected readonly secretKey: Uint8Array
   protected readonly hooker: IHookallSync<IHooker>
-  private readonly _cachedId: CacheBranchSync<{
-    [key: string]: string
-  }>
-  private readonly _cachedIdInfo: CacheBranchSync<{
-    [key: string]: { index: number, order: number }
-  }>
-  private readonly _cachedRecord: CacheBranchSync<{
-    [key: string]: number[]|PickResult
-  }>
-  private readonly _cachedRecordHeader: CacheBranchSync<{
-    [key: string]: NormalizedRecord['header']
-  }>
-  private readonly _cachedRecordPosition: CacheBranchSync<{
-    [key: string]: number
-  }>
+  private readonly _encodingIdCache: ReturnType<TissueRoll['_createEncodingIdCache']>
+  private readonly _decodingIdCache: ReturnType<TissueRoll['_createDecodingIdCache']>
+  private readonly _decodingRecordCache: ReturnType<TissueRoll['_createDecodingRecordCache']>
+  private readonly _pageHeaderCache: ReturnType<TissueRoll['_createPageHeaderCache']>
+  private readonly _recordPositionCache: ReturnType<TissueRoll['_createRecordPositionCache']>
+  private readonly _recordCache: ReturnType<TissueRoll['_createRecordCache']>
 
   protected constructor(fd: number, secretKey: Uint8Array, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
@@ -353,15 +344,182 @@ export class TissueRoll {
     this.secretKey        = secretKey
     
     this.hooker = useHookallSync<IHooker>(this)
-    this._cachedId = new CacheBranchSync()
-    this._cachedIdInfo = new CacheBranchSync()
-    this._cachedRecordHeader = new CacheBranchSync()
-    this._cachedRecord = new CacheBranchSync()
-    this._cachedRecordPosition = new CacheBranchSync()
+    this._encodingIdCache = this._createEncodingIdCache()
+    this._decodingIdCache = this._createDecodingIdCache()
+    this._decodingRecordCache = this._createDecodingRecordCache()
+    this._pageHeaderCache = this._createPageHeaderCache()
+    this._recordPositionCache = this._createRecordPositionCache()
+    this._recordCache = this._createRecordCache(
+      this._recordPositionCache,
+      this._pageHeaderCache
+    )
   }
 
   get metadata(): IRootHeader {
     return TissueRoll.ParseRootChunk(this.fd)
+  }
+
+  private _createEncodingIdCache() {
+    return new CacheEntanglementSync((key, state, index: number, order: number) => {
+      const sIndex  = index.toString(16).padStart(7, '0')
+      const sOrder  = order.toString(16).padStart(7, '0')
+      const plain = `${sIndex}${sOrder}`
+      const encrypted = CryptoHelper.Encrypt(plain, this.secretKey)
+      return encrypted
+    })
+  }
+
+  private _createDecodingIdCache() {
+    return new CacheEntanglementSync((key, state) => {
+      const plain = CryptoHelper.Decrypt(key, this.secretKey)
+      const index = parseInt(plain.slice(0, 7), 16)
+      const order = parseInt(plain.slice(7, 14), 16)
+      return {
+        index,
+        order,
+      }
+    })
+  }
+
+  private _createDecodingRecordCache() {
+    return new CacheEntanglementSync((key, state, rawHeader: number[]) => {
+      const index = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderIndexOffset,
+          TissueRoll.RecordHeaderIndexSize
+        )
+      )
+      const order = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderOrderOffset,
+          TissueRoll.RecordHeaderOrderSize
+        )
+      )
+      const length = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderLengthOffset,
+          TissueRoll.RecordHeaderLengthSize
+        )
+      )
+      const maxLength = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderMaxLengthOffset,
+          TissueRoll.RecordHeaderMaxLengthSize
+        )
+      )
+      const deleted = IntegerConverter.FromArray8(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderDeletedOffset,
+          TissueRoll.RecordHeaderDeletedSize
+        )
+      )
+      const aliasIndex = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderAliasIndexOffset,
+          TissueRoll.RecordHeaderAliasIndexSize
+        )
+      )
+      const aliasOrder = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rawHeader,
+          TissueRoll.RecordHeaderAliasOrderOffset,
+          TissueRoll.RecordHeaderAliasOrderSize
+        )
+      )
+  
+      const id = this._recordId(index, order)
+      const aliasId = this._recordId(aliasIndex, aliasOrder)
+
+      return {
+        id,
+        aliasId,
+        index,
+        order,
+        aliasIndex,
+        aliasOrder,
+        length,
+        maxLength,
+        deleted,
+      }
+    })
+  }
+
+  private _createPageHeaderCache() {
+    return new CacheEntanglementSync((key, state, index: number) => {
+      const page    = this._get(index)
+      const header  = IterableView.Read(page, 0, this.headerSize)
+      return header
+    })
+  }
+
+  private _createRecordPositionCache() {
+    return new CacheEntanglementSync((key, state, index: number, order: number) => {
+      const payloadPos    = this._pagePayloadPosition(index)
+      const cellPos       = this._cellPosition(index, order)
+      const cellValue     = FileView.Read(this.fd, cellPos, TissueRoll.CellSize)
+      const recordOffset  = IntegerConverter.FromArray32(cellValue)
+      return payloadPos+recordOffset
+    })
+  }
+
+  private _createRecordCache(
+    recordPosition: ReturnType<TissueRoll['_createRecordPositionCache']>,
+    pageHeader: ReturnType<TissueRoll['_createPageHeaderCache']>
+  ) {
+    return new CacheEntanglementSync((key, {
+      recordPosition,
+      pageHeader,
+    }, index: number, order: number) => {
+      const pos = recordPosition.raw
+      const rHeader = FileView.Read(this.fd, pos, TissueRoll.RecordHeaderSize)
+      const payloadPos = TissueRoll.RecordHeaderSize+pos
+      const payloadLength = IntegerConverter.FromArray32(
+        IterableView.Read(
+          rHeader,
+          TissueRoll.RecordHeaderLengthOffset,
+          TissueRoll.RecordHeaderLengthSize
+        )
+      )
+  
+      let header = this._normalizeHeader(pageHeader.raw)
+      
+      // internal 페이지일 경우
+      if (!header.next) {
+        const rPayload = FileView.Read(this.fd, payloadPos, payloadLength)
+        return rHeader.concat(rPayload)
+      }
+  
+      // overflow 페이지로 나뉘어져 있을 경우
+      const record = []
+      let remain = payloadLength+TissueRoll.RecordHeaderSize
+  
+      while (remain > 0) {
+        const pos   = this._pagePayloadPosition(header.index)
+        const size  = Math.min(this.maximumFreeSize, Math.abs(remain))
+        const chunk = FileView.Read(this.fd, pos, size)
+        record.push(...chunk)
+  
+        if (!header.next) {
+          break
+        }
+        header = this._normalizeHeader(this._getHeader(header.next))
+        remain -= size
+      }
+  
+      return record
+    }, {
+      recordPosition,
+      pageHeader,
+    }, (key, dependencyKey, index, order) => {
+      recordPosition.cache(key, index, order)
+      pageHeader.cache(dependencyKey, index)
+    })
   }
 
   private _createEmptyHeader({
@@ -436,13 +594,7 @@ export class TissueRoll {
   }
 
   private _recordPosition(index: number, order: number): number {
-    return this._cachedRecordPosition.ensure(`${index}/${order}`, () => {
-      const payloadPos    = this._pagePayloadPosition(index)
-      const cellPos       = this._cellPosition(index, order)
-      const cellValue     = FileView.Read(this.fd, cellPos, TissueRoll.CellSize)
-      const recordOffset  = IntegerConverter.FromArray32(cellValue)
-      return payloadPos+recordOffset
-    }).raw
+    return this._recordPositionCache.cache(`${index}/${order}`, index, order).raw
   }
 
   private _get(index: number): number[] {
@@ -451,28 +603,14 @@ export class TissueRoll {
   }
 
   private _recordId(index: number, order: number): string {
-    return this._cachedId.ensure(`${index}/${order}`, () => {
-      const sIndex  = index.toString(16).padStart(7, '0')
-      const sOrder  = order.toString(16).padStart(7, '0')
-      const plain = `${sIndex}${sOrder}`
-      const encrypted = CryptoHelper.Encrypt(plain, this.secretKey)
-      return encrypted
-    }).raw
+    return this._encodingIdCache.cache(`${index}/${order}`, index, order).raw
   }
 
   private _normalizeRecordId(recordId: string): {
     index: number
     order: number
   } {
-    return this._cachedIdInfo.ensure(recordId, () => {
-      const plain = CryptoHelper.Decrypt(recordId, this.secretKey)
-      const index = parseInt(plain.slice(0, 7), 16)
-      const order = parseInt(plain.slice(7, 14), 16)
-      return {
-        index,
-        order,
-      }
-    }).clone('object-shallow-copy')
+    return this._decodingIdCache.cache(recordId).clone('object-shallow-copy')
   }
 
   private _rawRecordId(recordId: string): number[] {
@@ -503,117 +641,18 @@ export class TissueRoll {
   }
 
   private _getRecord(index: number, order: number): number[] {
-    return this._cachedRecord.ensure(`${index}/${order}`, () => {
-      const pos = this._recordPosition(index, order)
-      const rHeader = FileView.Read(this.fd, pos, TissueRoll.RecordHeaderSize)
-      const payloadPos = TissueRoll.RecordHeaderSize+pos
-      const payloadLength = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rHeader,
-          TissueRoll.RecordHeaderLengthOffset,
-          TissueRoll.RecordHeaderLengthSize
-        )
-      )
-  
-      let header = this._normalizeHeader(this._getHeader(index))
-      
-      // internal 페이지일 경우
-      if (!header.next) {
-        const rPayload = FileView.Read(this.fd, payloadPos, payloadLength)
-        return rHeader.concat(rPayload)
-      }
-  
-      // overflow 페이지로 나뉘어져 있을 경우
-      const record = []
-      let remain = payloadLength+TissueRoll.RecordHeaderSize
-  
-      while (remain > 0) {
-        const pos   = this._pagePayloadPosition(header.index)
-        const size  = Math.min(this.maximumFreeSize, Math.abs(remain))
-        const chunk = FileView.Read(this.fd, pos, size)
-        record.push(...chunk)
-  
-        if (!header.next) {
-          break
-        }
-        header = this._normalizeHeader(this._getHeader(header.next))
-        remain -= size
-      }
-  
-      return record
-    }).clone('array-shallow-copy') as number[]
+    return this._recordCache
+      .cache(`${index}/${order}`, index, order)
+      .clone('array-shallow-copy') as number[]
   }
 
   private _normalizeRecord(record: number[]): NormalizedRecord {
     const rawHeader   = IterableView.Read(record, 0, TissueRoll.RecordHeaderSize)
     const rawPayload  = IterableView.Read(record, TissueRoll.RecordHeaderSize)
 
-    const header = this._cachedRecordHeader.ensure(rawHeader.join(','), () => {
-      const index = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderIndexOffset,
-          TissueRoll.RecordHeaderIndexSize
-        )
-      )
-      const order = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderOrderOffset,
-          TissueRoll.RecordHeaderOrderSize
-        )
-      )
-      const length = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderLengthOffset,
-          TissueRoll.RecordHeaderLengthSize
-        )
-      )
-      const maxLength = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderMaxLengthOffset,
-          TissueRoll.RecordHeaderMaxLengthSize
-        )
-      )
-      const deleted = IntegerConverter.FromArray8(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderDeletedOffset,
-          TissueRoll.RecordHeaderDeletedSize
-        )
-      )
-      const aliasIndex = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderAliasIndexOffset,
-          TissueRoll.RecordHeaderAliasIndexSize
-        )
-      )
-      const aliasOrder = IntegerConverter.FromArray32(
-        IterableView.Read(
-          rawHeader,
-          TissueRoll.RecordHeaderAliasOrderOffset,
-          TissueRoll.RecordHeaderAliasOrderSize
-        )
-      )
-  
-      const id = this._recordId(index, order)
-      const aliasId = this._recordId(aliasIndex, aliasOrder)
-
-      return {
-        id,
-        aliasId,
-        index,
-        order,
-        aliasIndex,
-        aliasOrder,
-        length,
-        maxLength,
-        deleted,
-      }
-    }).clone('object-shallow-copy')
+    const header = this._decodingRecordCache
+      .cache(rawHeader.join(','), rawHeader)
+      .clone('object-shallow-copy')
 
     const rawRecord = rawHeader.concat(rawPayload)
     const payload = TextConverter.FromArray(rawPayload)
@@ -627,11 +666,9 @@ export class TissueRoll {
   }
 
   private _getHeader(index: number): number[] {
-    return this._cachedRecord.ensure(`${index}/_header`, () => {
-      const page    = this._get(index)
-      const header  = IterableView.Read(page, 0, this.headerSize)
-      return header
-    }).clone('array-shallow-copy') as number[]
+    return this._pageHeaderCache
+      .cache(`${index}`, index)
+      .clone('array-shallow-copy') as number[]
   }
 
   private _normalizeHeader(header: number[]): IPageHeader {
@@ -728,7 +765,7 @@ export class TissueRoll {
     const rHeader = this._createEmptyHeader(header)
 
     FileView.Update(this.fd, pos, rHeader)
-    this._cachedRecord.cache(`${header.index}`, 'top-down')
+    this._pageHeaderCache.delete(`${header.index}`)
   }
 
   private _setPagePayload(index: number, order: number, record: number[]): void {
@@ -747,11 +784,10 @@ export class TissueRoll {
     const cellPos = this._cellPosition(index, order)
     const cell    = this._createCell(recordPos-payloadPos)
 
-    // update payload
     FileView.Update(this.fd, recordPos, record)
-    // update cell
     FileView.Update(this.fd, cellPos, cell)
-    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
+
+    this._recordCache.delete(`${index}/${order}`)
   }
 
   private _setPage(header: IPageHeader, data: number[]): string {
@@ -879,7 +915,6 @@ export class TissueRoll {
 
   private _overwriteInternalRecord(index: number, order: number, record: number[]): number {
     FileView.Update(this.fd, this._recordPosition(index, order), record)
-    this._cachedRecord.cache(`${index}/${order}`, 'top-down')
     return index
   }
 
@@ -892,7 +927,7 @@ export class TissueRoll {
       record = record.slice(size)
       
       if (!record.length) {
-        this._cachedRecord.delete(index.toString())
+        this._recordCache.delete(`${index}/1`)
         return index
       }
 
@@ -915,8 +950,9 @@ export class TissueRoll {
           this._pagePosition(index),
           rHeader
         )
-        this._cachedRecord.delete(index.toString())
       }
+      this._pageHeaderCache.delete(`${index}`)
+      this._recordCache.delete(`${index}/1`)
       index = next
     }
 
@@ -924,8 +960,9 @@ export class TissueRoll {
   }
 
   private _isInternalRecord(record: number[]): boolean {
-    const recordSize = this._normalizeRecord(record).header.maxLength + TissueRoll.RecordHeaderSize
-    return recordSize <= this.maximumFreeSize
+    const index = this._normalizeRecord(record).header.index
+    const page =  this._normalizeHeader(this._getHeader(index))
+    return !page.next
   }
 
   protected callInternalUpdate(id: string, data: string): {
@@ -941,37 +978,35 @@ export class TissueRoll {
     }
 
     const record = this._createRecord(tail.record.header.id, payload)
-    
-    this._cachedRecord.delete(`${head.record.header.index}/${head.record.header.order}`)
-    this._cachedRecord.delete(`${tail.record.header.index}/${tail.record.header.order}`)
 
     if (tail.record.rawRecord.length < record.length) {
       if (this._isInternalRecord(tail.record.rawRecord)) {
         const id = this.callInternalPut(payload, false)
         const { index, order } = this._normalizeRecordId(id)
         const headClone = IterableView.Copy(head.record.rawRecord)
-          IterableView.Update(
-            headClone,
-            TissueRoll.RecordHeaderAliasIndexOffset,
-            IntegerConverter.ToArray32(index)
-          )
-          IterableView.Update(
-            headClone,
-            TissueRoll.RecordHeaderAliasOrderOffset,
-            IntegerConverter.ToArray32(order)
-          )
-          FileView.Update(
-            this.fd,
-            this._recordPosition(
-              head.record.header.index,
-              head.record.header.order
-            ),
-            headClone
-          )
+        IterableView.Update(
+          headClone,
+          TissueRoll.RecordHeaderAliasIndexOffset,
+          IntegerConverter.ToArray32(index)
+        )
+        IterableView.Update(
+          headClone,
+          TissueRoll.RecordHeaderAliasOrderOffset,
+          IntegerConverter.ToArray32(order)
+        )
+        FileView.Update(
+          this.fd,
+          this._recordPosition(
+            head.record.header.index,
+            head.record.header.order
+          ),
+          headClone
+        )
         if (head.record.header.id !== tail.record.header.id) {
           this.callInternalDelete(tail.record.header.id, false)
         }
-        this._cachedRecord.cache(`${head.record.header.index}/${head.record.header.order}`, 'top-down')
+        this._recordCache.delete(`${head.record.header.index}/${head.record.header.order}`)
+        this._recordCache.delete(`${tail.record.header.index}/${tail.record.header.order}`)
         return {
           id,
           data
@@ -1038,7 +1073,7 @@ export class TissueRoll {
       )
     }
     FileView.Update(this.fd, pos, buf)
-    this._cachedRecord.delete(`${index}/${order}`)
+    this._recordCache.delete(`${index}/${order}`)
   }
 
   /**

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
-import { CacheBranchSync } from 'cachebranch'
+import { CacheEntanglementSync } from 'cache-entanglement'
 import { h64 } from 'xxhashjs'
 import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from '../core/TissueRollMediator'
@@ -269,12 +269,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   protected readonly table: TissueRollDocumentTable
   protected readonly tableVersion: number
   protected lock: boolean
-  private readonly _trees: CacheBranchSync<{
-    [key: string]: BPTreeSync<string, SupportedType>
-  }>
-  private readonly _document: CacheBranchSync<{
-    [key: string]: TissueRollDocumentRecord<T>
-  }>
+  private readonly _trees: ReturnType<TissueRollDocument<T>['_createTreesCache']>
+  private readonly _document: ReturnType<TissueRollDocument<T>['_createDocumentCache']>
   private _root: TissueRollDocumentRoot
   private _metadata: {
     autoIncrement: bigint
@@ -298,8 +294,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     this.table = table
     this.lock = false
     this._root = root
-    this._trees = new CacheBranchSync()
-    this._document = new CacheBranchSync()
+    this._trees = this._createTreesCache()
+    this._document = this._createDocumentCache()
 
     const { autoIncrement, count } = db.metadata
     this._metadata = {
@@ -323,18 +319,28 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     }
   }
 
-  protected getTree(property: string): BPTreeSync<string, SupportedType> {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
-    }
-    return this._trees.ensure(property, () => {
+  private _createTreesCache() {
+    return new CacheEntanglementSync((key) => {
       const tree = new BPTreeSync<string, SupportedType>(
-        new TissueRollStrategy(this.order, property, this.db, this.locker, this.rootId, this._root),
+        new TissueRollStrategy(this.order, key, this.db, this.locker, this.rootId, this._root),
         this.comparator
       )
       tree.init()
       return tree
-    }).raw
+    })
+  }
+
+  private _createDocumentCache() {
+    return new CacheEntanglementSync((key, state, document: TissueRollDocumentRecord<T>) => {
+      return document
+    })
+  }
+
+  protected getTree(property: string): BPTreeSync<string, SupportedType> {
+    if (this.lock) {
+      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+    }
+    return this._trees.cache(property).raw
   }
 
   protected updateRoot(root: TissueRollDocumentRoot): void {
@@ -432,7 +438,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       const value = record[property]
       tree.insert(recordId, value)
     }
-    this._document.set(recordId, () => record)
+    this._document.update(recordId, record)
     this._metadata.autoIncrement++
     this._metadata.count++
     return Object.assign({}, record)
@@ -473,7 +479,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     for (const id of ids) {
       const payload = this.db.pick(id).record.payload
       const hashKey = h64(payload, 0).toString(16)
-      const record = this._document.ensure(hashKey, () => JSON.parse(payload)).raw
+      const record = this._document.cache(hashKey, JSON.parse(payload)).raw
       for (const property in record) {
         const tree = this.getTree(property)
         const value = record[property]
@@ -500,9 +506,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     }
     const ids = this.findRecordIds(query)
     for (const id of ids) {
-      const before = this._document.ensure(id, () => (
-        JSON.parse(this.db.pick(id).record.payload)
-      )).clone() as TissueRollDocumentRecord<T>
+      const before = this._document
+        .cache(id, JSON.parse(this.db.pick(id).record.payload))
+        .clone()
       const normalizedBefore = Object.assign(
         this._normalizeRecord(before),
         {
@@ -530,7 +536,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       }
       const stringify = JSON.stringify(after)
       this.db.update(id, stringify)
-      this._document.set(id, () => after)
+      this._document.update(id, after)
     }
     return ids.length
   }
@@ -607,9 +613,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     }
     const { start, end, order, desc } = this._normalizeOption(option)
     const records = this.findRecordIds(query).map((id) => (
-      this._document.ensure(id, () => (
-        JSON.parse(this.db.pick(id).record.payload)
-      )).clone() as TissueRollDocumentRecord<T>
+      this._document
+        .cache(id, JSON.parse(this.db.pick(id).record.payload))
+        .clone()
     ))
     if (desc) {
       records.sort((a, b) => this.comparator.asc(
