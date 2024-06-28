@@ -23,7 +23,7 @@ const createDocumentDatabase = (name: string) => {
     version: 0,
     payloadSize: 1024,
     overwrite: true,
-    table: {
+    scheme: {
       name: {
         default: () => '',
         validate: (v) => typeof v === 'string'

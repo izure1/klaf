@@ -17,7 +17,7 @@ export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: Suppo
 
 export interface TissueRollDocumentRoot {
   verify: 'TissueRollDocument'
-  tableVersion: number
+  schemeVersion: number
   reassignments: string[]
   head: Record<string, SerializeStrategyHead|null>
 }
@@ -109,15 +109,15 @@ interface TissueRollDocumentField {
   validate?: (v: SupportedType) => boolean
 }
 
-interface TissueRollDocumentTable {
+interface TissueRollDocumentScheme {
   [key: string]: TissueRollDocumentField
 }
 
-type TissueRollDocumentTableType<T extends TissueRollDocumentTable> = {
+type TissueRollDocumentSchemeType<T extends TissueRollDocumentScheme> = {
   [K in keyof T]: ReturnType<T[K]['default']>
 }
 
-interface TissueRollDocumentCreateOption<T extends TissueRollDocumentTable> {
+interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
   /**
    * This is the path where the database file will be created.
    */
@@ -127,13 +127,13 @@ interface TissueRollDocumentCreateOption<T extends TissueRollDocumentTable> {
    */
   version: number
   /**
-   * The fields of the database table and their validation functions.
+   * The fields of the database scheme and their validation functions.
    * The property names become field names, and their values perform validation when inserting or updating values.
    * Please refer to the example below.
    * ```
    * const db = TissueRollDocument.Open({
    *   path: 'my-db-path/database.db',
-   *   table: {
+   *   scheme: {
    *     id: {
    *       default: () => uuid(),
    *       validate: (v) => isUUID(v)
@@ -149,7 +149,7 @@ interface TissueRollDocumentCreateOption<T extends TissueRollDocumentTable> {
    * you can easily implement these validation checks.
    * Please refer to it for assistance.
    */
-  table: T
+  scheme: T
   /**
    * This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
    */
@@ -206,19 +206,19 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param option The database creation options.
    */
   static Create<
-    T extends TissueRollDocumentTable
-  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentTableType<T>> {
+    T extends TissueRollDocumentScheme
+  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentSchemeType<T>> {
     const {
       path,
       version,
-      table,
+      scheme,
       payloadSize = 1024,
       overwrite = false
     } = option
     const db = TissueRoll.Create(path, payloadSize, overwrite)
     const docRoot: TissueRollDocumentRoot = {
       verify: TissueRollDocument.DB_NAME,
-      tableVersion: 0,
+      schemeVersion: 0,
       reassignments: [],
       head: {},
     }
@@ -229,7 +229,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     )
     db.update(rootId, JSON.stringify(docRoot))
 
-    return new TissueRollDocument(db, rootId, docRoot, table, version, 0)
+    return new TissueRollDocument(db, rootId, docRoot, scheme, version, 0)
   }
 
   /**
@@ -237,12 +237,12 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param option The database creation options.
    */
   static Open<
-    T extends TissueRollDocumentTable
-  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentTableType<T>> {
+    T extends TissueRollDocumentScheme
+  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentSchemeType<T>> {
     const {
       path,
       version,
-      table,
+      scheme,
       payloadSize = 1024
     } = option
     // 파일이 존재하지 않을 경우
@@ -258,7 +258,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     const record = db.getRecords(1)[0]
     const docRoot = TissueRollDocument.Verify(path, record.payload)
 
-    return new TissueRollDocument(db, record.header.id, docRoot, table, version, 0)
+    return new TissueRollDocument(db, record.header.id, docRoot, scheme, version, 0)
   }
  
   protected readonly db: TissueRoll
@@ -266,8 +266,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   protected readonly order: number
   protected readonly comparator: TissueRollComparator
   protected readonly locker: DelayedExecution
-  protected readonly table: TissueRollDocumentTable
-  protected readonly tableVersion: number
+  protected readonly scheme: TissueRollDocumentScheme
+  protected readonly schemeVersion: number
   protected lock: boolean
   private readonly _trees: ReturnType<TissueRollDocument<T>['_createTreesCache']>
   private readonly _document: ReturnType<TissueRollDocument<T>['_createDocumentCache']>
@@ -281,8 +281,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     db: TissueRoll,
     rootId: string,
     root: TissueRollDocumentRoot,
-    table: TissueRollDocumentTable,
-    tableVersion: number,
+    scheme: TissueRollDocumentScheme,
+    schemeVersion: number,
     writeBack: number
   ) {
     this.db = db
@@ -290,8 +290,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     this.order = Math.max(TissueRollDocument.OrderN(db.metadata.payloadSize, 40), 4)
     this.comparator = new TissueRollComparator()
     this.locker = new DelayedExecution(writeBack)
-    this.tableVersion = tableVersion
-    this.table = table
+    this.schemeVersion = schemeVersion
+    this.scheme = scheme
     this.lock = false
     this._root = root
     this._trees = this._createTreesCache()
@@ -303,9 +303,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       count,
     }
 
-    // Needed to alter table
-    if (this._root.tableVersion < tableVersion) {
-      this._root.tableVersion = tableVersion
+    // Needed to alter scheme
+    if (this._root.schemeVersion < schemeVersion) {
+      this._root.schemeVersion = schemeVersion
       this.updateRoot(this._root)
       this._callInternalUpdate(
         {},
@@ -392,8 +392,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     record: Partial<T>
   ): T {
     const after: any = {}
-    for (const field in this.table) {
-      const { default: def, validate } = this.table[field]
+    for (const field in this.scheme) {
+      const { default: def, validate } = this.scheme[field]
       const v = record[field] ?? def()
       if (validate && !validate(v)) {
         throw new Error(`The value '${v}' did not pass the validation of field '${field}'.`)
@@ -413,13 +413,13 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   get metadata() {
     const { autoIncrement, count } = this._metadata
     const { payloadSize, timestamp } = this.db.metadata
-    const { tableVersion } = this
+    const { schemeVersion } = this
     return {
       autoIncrement,
       count,
       payloadSize,
       timestamp,
-      tableVersion
+      schemeVersion
     }
   }
 

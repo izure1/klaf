@@ -2,7 +2,7 @@
 
 This document covers the usage of the **document-oriented** database in **tissue-roll**.
 
-The document database in **tissue-roll** allows you to insert data in **JSON** format. Specify each column in TypeScript.
+The document database in **tissue-roll** allows you to insert data in **JSON** format. Specify each property in TypeScript.
 
 If this is not the database you were looking for, please check the [key-value](../core/README.md) database.
 
@@ -15,7 +15,7 @@ import { TissueRollDocument } from 'tissue-roll'
 const db = TissueRollDocument.Open({
   path: 'my_file_path.db',
   version: 0,
-  table: {
+  scheme: {
     name: {
       default: () => 'Anonymous',
       validate: (v) => typeof v === 'string'
@@ -60,9 +60,9 @@ If there are many write/update operations in the database, it's recommended to s
 
 *Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **1024**.
 
-## Reserved table column names
+## Reserved document property names
 
-First of all, when inserting a document in **TissueRollDocument**, the following columns are automatically added. These values cannot be overwritten, so be careful when naming table columns.
+First of all, when inserting a document in **TissueRollDocument**, the following properties are automatically added. These values cannot be overwritten, so be careful when naming document properties.
 
 * `documentIndex`  
   The index when the document was inserted. This value is automatically added when inserted into the database.
@@ -77,13 +77,13 @@ First of all, when inserting a document in **TissueRollDocument**, the following
 
 ### Explicit Type Specification
 
-The table is distinguished by key-value, where the key is the column name of the table, and the value has default and validate properties.
+The scheme is distinguished by key-value, where the key is the property name of the scheme, and the value has default and validate properties.
 
 ```typescript
 const db = TissueRollDocument.Open({
   path: 'my_file_path.db',
   version: 0,
-  table: {
+  scheme: {
     name: {
       default: () => 'Anonymous',
       validate: (v) => typeof v === 'string'
@@ -103,9 +103,9 @@ const db = TissueRollDocument.Open({
 
 #### default (required)
 
-The default property is a function that returns one of the **string**, **number**, **boolean**, or **null** types, and is used to automatically generate a default value for a column that is omitted when inserting or updating a document.
+The default property is a function that returns one of the **string**, **number**, **boolean**, or **null** types, and is used to automatically generate a default value for a property that is omitted when inserting or updating a document.
 
-For example, if the table structure is changed and a new column is added, all documents inserted before will have this function called and a default value inserted.
+For example, if the scheme structure is changed and a new property is added, all documents inserted before will have this function called and a default value inserted.
 
 #### validate (optional)
 
@@ -115,29 +115,31 @@ It is a function that checks the validity of the value when inserting or updatin
 
 For example, if you want the **name** attribute to accept only strings, you can implement it like this: `validate: (v) => typeof v === 'string'`.
 
-### Table structure change
+### Scheme structure change
 
-However, you may want to extend the columns of the table. For example, let's say you want to add a **student** column that you didn't have before.
+However, you may want to extend the properties of the scheme. For example, let's say you want to add a **student** property that you didn't have before.
 
 ```typescript
-table: {
+{
+  scheme: {
     ...
-    // If the table structure has been modified, you must increment the version!
-    version: 1,
     student: {
       default: () => true,
       validate: (v) => typeof v === 'boolean'
     }
   }
+  // If the scheme structure has been modified, you must increment the version!
+  version: 1
+}
 ```
 
-In this case, you can simply add the **student** column to the table property. Then, increment the **version** number. **TissueRollDocument** considers the table to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
+In this case, you can simply add the **student** to the scheme property. Then, increment the **version** number. **TissueRollDocument** considers the scheme to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
 
-And the **student** column will be set to the default value because it did not exist in the documents that were inserted before.
+And the **student** property will be set to the default value because it did not exist in the documents that were inserted before.
 
-#### Caution when deleting columns
+#### Caution when deleting properties
 
-When migrating to delete an existing column, columns that do not exist in the latest table among documents inserted in the past are deleted from the database. Since data loss occurs, please make sure to back up your database.
+When migrating to delete an existing property, properties that do not exist in the latest scheme among documents inserted in the past are deleted from the database. Since data loss occurs, please make sure to back up your database.
 
 #### Performance caution when migrating
 
