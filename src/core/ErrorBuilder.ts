@@ -3,7 +3,8 @@ export class ErrorBuilder {
     return new Error(`The path '${file}' database file is already existing. If you want overwrite, pass a 'overwrite' parameter with 'true'.`)
   }
   
-  static ERR_DB_INVALID(file: string) {
+  static ERR_DB_INVALID(file: string|null) {
+    file = file ?? 'In-memory'
     return new Error(`The path '${file}' database file seems to be invalid. Maybe broken or incorrect format.`)
   }
 
@@ -17,5 +18,9 @@ export class ErrorBuilder {
 
   static ERR_INVALID_RECORD(recordId: string) {
     return new Error(`The record '${recordId}' is invalid. Maybe incorrect id.`)
+  }
+
+  static ERR_UNSUPPORTED_ENGINE() {
+    return new Error(`This feature is not supported by the current database engine.`)
   }
 }

@@ -1,5 +1,3 @@
-import { fstatSync, readSync, writeSync } from 'node:fs'
-
 export class IterableView {
   static Copy<T>(array: T[]): T[] {
     return array.slice()
@@ -25,32 +23,16 @@ export class IterableView {
     array.push(...extended)
     return array
   }
-}
-
-export class FileView {
-  static Size(fd: number): number {
-    return fstatSync(fd).size
+  
+  read<T>(array: T[], start: number, length = array.length-start): T[] {
+    return IterableView.Read(array, start, length)
+  }
+  
+  update<T>(array: T[], start: number, data: T[]): T[] {
+    return IterableView.Update(array, start, data)
   }
 
-  static Read(fd: number, start: number, length = FileView.Size(fd)-start): number[] {
-    const buf = Buffer.alloc(length)
-    readSync(fd, buf, 0, buf.length, start)
-    return Array.from(buf)
-  }
-
-  static Update(fd: number, start: number, data: number[]): number[] {
-    const size      = FileView.Size(fd)
-    const writable  = Math.min(data.length, size-start)
-    const chunk     = data.slice(0, writable)
-    const buf       = Uint8Array.from(chunk)
-
-    writeSync(fd, buf, 0, buf.length, start)
-    return chunk
-  }
-
-  static Append(fd: number, data: number[]): void {
-    const buf = Uint8Array.from(data)
-    const pos = fstatSync(fd).size
-    writeSync(fd, buf, 0, buf.length, pos)
+  ensure<T>(array: T[], len: number, fill: T): T[] {
+    return IterableView.Ensure(array, length, fill)
   }
 }

@@ -9,7 +9,8 @@ import { ErrorBuilder } from './ErrorBuilder'
 import { TextConverter } from '../utils/TextConverter'
 import { IntegerConverter } from '../utils/IntegerConverter'
 import { CryptoHelper } from '../utils/CryptoHelper'
-import { IterableView, FileView } from '../utils/IterableView'
+import { IterableView } from '../utils/IterableView'
+import { DataEngine, FileEngine, InMemoryEngine } from '../utils/DataEngine'
 
 export type IPageHeader = {
   type: number
@@ -63,8 +64,13 @@ export type NormalizedRecord = {
   payload: string,
 }
 
+export enum DatabaseEngine {
+  FileSystem,
+  InMemory,
+}
+
 export class TissueRoll {
-  protected static readonly DB_VERSION                    = '5.0.0'
+  protected static readonly DB_VERSION                    = '5.1.0'
   protected static readonly DB_NAME                       = 'TissueRoll'
   protected static readonly RootValidStringOffset         = 0
   protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
@@ -130,14 +136,12 @@ export class TissueRoll {
   /**
    * It creates a new database file.
    * @param file This is the path where the database file will be created.
+   * If this value is set to `null`, the database will operate in memory.
+   * This is useful for caching purposes, but note that the data will be volatile as it will not be permanently stored in the file system.
    * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
    * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
-  static Create(file: string, payloadSize = 1024, overwrite = false): TissueRoll {
-    if (existsSync(file) && !overwrite) {
-      throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
-    }
-    
+  static Create(file: string|null, payloadSize = 1024, overwrite = false): TissueRoll {
     // create root
     const root = TissueRoll.CreateIterable(TissueRoll.RootChunkSize, 0)
     const {
@@ -172,6 +176,17 @@ export class TissueRoll {
     IterableView.Update(root, RootCountOffset,              IntegerConverter.ToArray32(0))
     IterableView.Update(root, RootLastInternalIndexOffset,  IntegerConverter.ToArray32(0))
 
+    if (file === null) {
+      const engine = new InMemoryEngine()
+      engine.append(root)
+      const inst = new TissueRoll(engine, secretKey, payloadSize)
+      inst._addEmptyPage({ type: TissueRoll.InternalType }, true)
+      return inst
+    }
+
+    if (existsSync(file) && !overwrite) {
+      throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
+    }
     writeFileSync(file, Buffer.from(root))
 
     const inst = TissueRoll.Open(file)
@@ -183,9 +198,15 @@ export class TissueRoll {
    * It opens or creates a database file at the specified path. 
    * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    * @param file This is the path where the database file is located.
+   * If this value is set to `null`, the database will operate in memory.
+   * This is useful for caching purposes, but note that the data will be volatile as it will not be permanently stored in the file system.
    * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    */
-  static Open(file: string, payloadSize = 1024) {
+  static Open(file: string|null, payloadSize = 1024) {
+    if (file === null) {
+      return TissueRoll.Create(null, payloadSize)
+    }
+
     // 파일이 존재하지 않을 경우
     if (!existsSync(file)) {
       if (!payloadSize) {
@@ -197,21 +218,22 @@ export class TissueRoll {
 
     // 파일이 존재할 경우 열기
     const fd = openSync(file, 'r+')
+    const engine = new FileEngine(fd)
     
     // 올바른 형식의 파일인지 체크
-    if (!TissueRoll.CheckDBValid(fd)) {
+    if (!TissueRoll.CheckDBValid(engine)) {
       closeSync(fd)
       throw ErrorBuilder.ERR_DB_INVALID(file)
     }
 
-    const root = TissueRoll.ParseRootChunk(fd)
+    const root = TissueRoll.ParseRootChunk(engine)
     const secretKey = Buffer.from(IntegerConverter.ToArray128(root.secretKey))
     
-    return new TissueRoll(fd, secretKey, root.payloadSize)
+    return new TissueRoll(engine, secretKey, root.payloadSize)
   }
 
-  protected static ParseRootChunk(fd: number): IRootHeader {
-    const rHeader = FileView.Read(fd, 0, TissueRoll.RootChunkSize)
+  protected static ParseRootChunk(engine: DataEngine): IRootHeader {
+    const rHeader = engine.read(0, TissueRoll.RootChunkSize)
     const {
       RootMajorVersionOffset,
       RootMajorVersionSize,
@@ -282,9 +304,8 @@ export class TissueRoll {
     return new Array(len).fill(fill)
   }
 
-  protected static CheckDBValid(fd: number) {
-    const chunk = FileView.Read(
-      fd,
+  protected static CheckDBValid(engine: DataEngine) {
+    const chunk = engine.read(
       TissueRoll.RootValidStringOffset,
       TissueRoll.RootValidStringSize
     )
@@ -317,11 +338,11 @@ export class TissueRoll {
     return db.callInternalDelete(id, countDecrement)
   }
 
+  readonly engine: DataEngine
   protected readonly chunkSize: number
   protected readonly maximumFreeSize: number
   protected readonly headerSize: number
   protected readonly payloadSize: number
-  protected readonly fd: number
   protected readonly secretKey: Uint8Array
   protected readonly hooker: IHookallSync<IHooker>
   private readonly _encodingIdCache: ReturnType<TissueRoll['_createEncodingIdCache']>
@@ -331,17 +352,19 @@ export class TissueRoll {
   private readonly _recordPositionCache: ReturnType<TissueRoll['_createRecordPositionCache']>
   private readonly _recordCache: ReturnType<TissueRoll['_createRecordCache']>
 
-  protected constructor(fd: number, secretKey: Uint8Array, payloadSize: number) {
+  protected constructor(engine: DataEngine, secretKey: Uint8Array, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
-      closeSync(fd)
+      if (engine instanceof FileEngine) {
+        closeSync(engine.fd)
+      }
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
     }
     this.chunkSize        = TissueRoll.HeaderSize+payloadSize
     this.headerSize       = TissueRoll.HeaderSize
     this.maximumFreeSize  = payloadSize-TissueRoll.CellSize
     this.payloadSize      = payloadSize
-    this.fd               = fd
     this.secretKey        = secretKey
+    this.engine           = engine
     
     this.hooker = useHookallSync<IHooker>(this)
     this._encodingIdCache = this._createEncodingIdCache()
@@ -356,7 +379,7 @@ export class TissueRoll {
   }
 
   get metadata(): IRootHeader {
-    return TissueRoll.ParseRootChunk(this.fd)
+    return TissueRoll.ParseRootChunk(this.engine)
   }
 
   private _createEncodingIdCache() {
@@ -462,7 +485,7 @@ export class TissueRoll {
     return new CacheEntanglementSync((key, state, index: number, order: number) => {
       const payloadPos    = this._pagePayloadPosition(index)
       const cellPos       = this._cellPosition(index, order)
-      const cellValue     = FileView.Read(this.fd, cellPos, TissueRoll.CellSize)
+      const cellValue     = this.engine.read(cellPos, TissueRoll.CellSize)
       const recordOffset  = IntegerConverter.FromArray32(cellValue)
       return payloadPos+recordOffset
     })
@@ -477,7 +500,7 @@ export class TissueRoll {
       pageHeader,
     }, index: number, order: number) => {
       const pos = recordPosition.raw
-      const rHeader = FileView.Read(this.fd, pos, TissueRoll.RecordHeaderSize)
+      const rHeader = this.engine.read(pos, TissueRoll.RecordHeaderSize)
       const payloadPos = TissueRoll.RecordHeaderSize+pos
       const payloadLength = IntegerConverter.FromArray32(
         IterableView.Read(
@@ -491,7 +514,7 @@ export class TissueRoll {
       
       // internal 페이지일 경우
       if (!header.next) {
-        const rPayload = FileView.Read(this.fd, payloadPos, payloadLength)
+        const rPayload = this.engine.read(payloadPos, payloadLength)
         return rHeader.concat(rPayload)
       }
   
@@ -502,7 +525,7 @@ export class TissueRoll {
       while (remain > 0) {
         const pos   = this._pagePayloadPosition(header.index)
         const size  = Math.min(this.maximumFreeSize, Math.abs(remain))
-        const chunk = FileView.Read(this.fd, pos, size)
+        const chunk = this.engine.read(pos, size)
         record.push(...chunk)
   
         if (!header.next) {
@@ -557,20 +580,18 @@ export class TissueRoll {
     // update root
     let { index, lastInternalIndex } = this.metadata
     index++
-    FileView.Update(
-      this.fd,
+    this.engine.update(
       TissueRoll.RootIndexOffset,
       IntegerConverter.ToArray32(index)
     )
 
     // extend payload
     const page = this._createEmptyPage(Object.assign({}, header, { index }))
-    FileView.Append(this.fd, page)
+    this.engine.append(page)
 
     if (header.type === TissueRoll.InternalType && incrementInternalIndex) {
       lastInternalIndex++
-      FileView.Update(
-        this.fd,
+      this.engine.update(
         TissueRoll.RootLastInternalIndexOffset,
         IntegerConverter.ToArray32(lastInternalIndex)
       )
@@ -599,7 +620,7 @@ export class TissueRoll {
 
   private _get(index: number): number[] {
     const start = this._pagePosition(index)
-    return FileView.Read(this.fd, start, this.chunkSize)
+    return this.engine.read(start, this.chunkSize)
   }
 
   private _recordId(index: number, order: number): string {
@@ -764,7 +785,7 @@ export class TissueRoll {
     const pos = this._pagePosition(header.index)
     const rHeader = this._createEmptyHeader(header)
 
-    FileView.Update(this.fd, pos, rHeader)
+    this.engine.update(pos, rHeader)
     this._pageHeaderCache.delete(`${header.index}`)
   }
 
@@ -784,8 +805,8 @@ export class TissueRoll {
     const cellPos = this._cellPosition(index, order)
     const cell    = this._createCell(recordPos-payloadPos)
 
-    FileView.Update(this.fd, recordPos, record)
-    FileView.Update(this.fd, cellPos, cell)
+    this.engine.update(recordPos, record)
+    this.engine.update(cellPos, cell)
 
     this._recordCache.delete(`${index}/${order}`)
   }
@@ -812,13 +833,11 @@ export class TissueRoll {
 
     if (autoIncrement) {
       let { autoIncrement: increment, count } = this.metadata
-      FileView.Update(
-        this.fd,
+      this.engine.update(
         TissueRoll.RootAutoIncrementOffset,
         IntegerConverter.ToArray64(increment+1n)
       )
-      FileView.Update(
-        this.fd,
+      this.engine.update(
         TissueRoll.RootCountOffset,
         IntegerConverter.ToArray32(count+1)
       )
@@ -888,8 +907,7 @@ export class TissueRoll {
     this._setPageHeader(headHeader)
 
     if (isInternalIndexDeferred) {
-      FileView.Update(
-        this.fd,
+      this.engine.update(
         TissueRoll.RootLastInternalIndexOffset,
         IntegerConverter.ToArray32(index)
       )
@@ -914,7 +932,7 @@ export class TissueRoll {
   }
 
   private _overwriteInternalRecord(index: number, order: number, record: number[]): number {
-    FileView.Update(this.fd, this._recordPosition(index, order), record)
+    this.engine.update(this._recordPosition(index, order), record)
     return index
   }
 
@@ -923,7 +941,7 @@ export class TissueRoll {
       const size = Math.min(this.maximumFreeSize, record.length)
       const chunk = IterableView.Read(record, 0, size)
       
-      FileView.Update(this.fd, this._pagePayloadPosition(index), chunk)
+      this.engine.update(this._pagePayloadPosition(index), chunk)
       record = record.slice(size)
       
       if (!record.length) {
@@ -945,8 +963,7 @@ export class TissueRoll {
           TissueRoll.PageNextOffset,
           IntegerConverter.ToArray32(next)
         )
-        FileView.Update(
-          this.fd,
+        this.engine.update(
           this._pagePosition(index),
           rHeader
         )
@@ -994,8 +1011,7 @@ export class TissueRoll {
           TissueRoll.RecordHeaderAliasOrderOffset,
           IntegerConverter.ToArray32(order)
         )
-        FileView.Update(
-          this.fd,
+        this.engine.update(
           this._recordPosition(
             head.record.header.index,
             head.record.header.order
@@ -1066,13 +1082,12 @@ export class TissueRoll {
     const buf = IntegerConverter.ToArray8(1)
     if (countDecrement) {
       const { count } = this.metadata
-      FileView.Update(
-        this.fd,
+      this.engine.update(
         TissueRoll.RootCountOffset,
         IntegerConverter.ToArray32(count-1)
       )
     }
-    FileView.Update(this.fd, pos, buf)
+    this.engine.update(pos, buf)
     this._recordCache.delete(`${index}/${order}`)
   }
 
@@ -1114,6 +1129,9 @@ export class TissueRoll {
    * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
    */
   async exportData(dataDist: string, silent = false): Promise<void> {
+    if (!(this.engine instanceof FileEngine)) {
+      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
+    }
     const handle = await open(dataDist, 'a')
     for (let i = 1, len = this.metadata.index; i <= len; i++) {
       const records = this.getRecords(i)
@@ -1143,6 +1161,9 @@ export class TissueRoll {
    * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
    */
   async importData(dataSrc: string, silent = false): Promise<void> {
+    if (!(this.engine instanceof InMemoryEngine)) {
+      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
+    }
     const fd = await open(dataSrc, 'r')
     let count = 0
     for await (const line of fd.readLines()) {
@@ -1158,7 +1179,12 @@ export class TissueRoll {
    * Shut down the database to close file input and output.
    */
   close(): void {
-    closeSync(this.fd)
+    if (this.engine instanceof FileEngine) {
+      closeSync(this.engine.fd)
+    }
+    else if (this.engine instanceof InMemoryEngine) {
+      this.engine.clear()
+    }
   }
 
   /**

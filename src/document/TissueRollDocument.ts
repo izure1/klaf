@@ -4,13 +4,14 @@ import { open } from 'node:fs/promises'
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheEntanglementSync } from 'cache-entanglement'
 import { h64 } from 'xxhashjs'
-import { TissueRoll } from '../core/TissueRoll'
+import { DatabaseEngine, TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from '../core/TissueRollMediator'
 import { TissueRollComparator } from './TissueRollComparator'
 import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { DelayedExecution } from '../utils/DelayedExecution'
+import { FileEngine } from '../utils/DataEngine'
 
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
@@ -120,8 +121,11 @@ type TissueRollDocumentSchemeType<T extends TissueRollDocumentScheme> = {
 interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
   /**
    * This is the path where the database file will be created.
+   * If this value is set to `null`, the database will operate in-memory.
+   * This is useful for caching purposes,
+   * but note that the data will be volatile as it will not be permanently stored in the file system.
    */
-  path: string
+  path: string|null
   /**
    * Scheme version.
    */
@@ -163,7 +167,7 @@ interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
 export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
-  private static Verify(file: string, payload: string): TissueRollDocumentRoot {
+  private static Verify(file: string|null, payload: string): TissueRollDocumentRoot {
     const docRoot = ObjectHelper.Parse(payload, ErrorBuilder.ERR_INVALID_OBJECT(payload))
     // not object
     if (!ObjectHelper.IsObject(docRoot)) {
@@ -245,13 +249,15 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       scheme,
       payloadSize = 1024
     } = option
-    // 파일이 존재하지 않을 경우
-    if (!existsSync(path)) {
-      if (!payloadSize) {
-        throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
+    if (path !== null) {
+      // 파일이 존재하지 않을 경우
+      if (!existsSync(path)) {
+        if (!payloadSize) {
+          throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
+        }
+        // 옵션이 지정되었을 경우 새롭게 생성합니다
+        return TissueRollDocument.Create(option)
       }
-      // 옵션이 지정되었을 경우 새롭게 생성합니다
-      return TissueRollDocument.Create(option)
     }
 
     const db = TissueRoll.Open(path, payloadSize)
@@ -654,6 +660,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
    */
   async exportData(dataDist: string, silent = false): Promise<void> {
+    if (!(this.db.engine instanceof FileEngine)) {
+      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
+    }
     const handle = await open(dataDist, 'a')
     const documents = this.pick({})
     const max = documents.length
@@ -684,6 +693,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
    */
   async importData(dataSrc: string, silent = false): Promise<void> {
+    if (!(this.db.engine instanceof FileEngine)) {
+      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
+    }
     const fd = await open(dataSrc, 'r')
     let count = 0
     for await (const line of fd.readLines()) {
