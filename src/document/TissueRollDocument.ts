@@ -400,7 +400,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     const after: any = {}
     for (const field in this.scheme) {
       const { default: def, validate } = this.scheme[field]
-      const v = record[field] ?? def()
+      const v = Object.hasOwn(record, field) ? record[field]! : def()
       if (validate && !validate(v)) {
         throw new Error(`The value '${v}' did not pass the validation of field '${field}'.`)
       }
