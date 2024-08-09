@@ -36,16 +36,16 @@
   "devDependencies": {
     "@types/chance": "^1.1.6",
     "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.30",
+    "@types/node": "^22.2.0",
     "@types/xxhashjs": "^0.2.4",
-    "chance": "^1.1.11",
-    "esbuild": "^0.20.2",
+    "chance": "^1.1.12",
+    "esbuild": "^0.23.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.4.5"
+    "ts-jest": "^29.2.4",
+    "typescript": "^5.5.4"
   },
   "dependencies": {
-    "@noble/ciphers": "^0.5.3",
+    "@noble/ciphers": "^0.6.0",
     "cache-entanglement": "^1.1.1",
     "hookall": "^2.1.0",
     "serializable-bptree": "^4.0.0",
