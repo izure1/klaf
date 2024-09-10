@@ -1,4 +1,4 @@
-import { unlinkSync } from 'fs'
+import { unlinkSync } from 'node:fs'
 import { TissueRoll, TissueRollDocument } from '../'
 
 const IN_MEMORY = process.env.npm_config_in_memory === 'true'
@@ -7,7 +7,6 @@ const createDatabase = (name: string|null) => {
   if (IN_MEMORY) {
     name = null
   }
-
   const db = TissueRoll.Create(name, 1024, true)
   
   const close = () => {

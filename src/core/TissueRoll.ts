@@ -1,4 +1,5 @@
-import { openSync, closeSync, writeFileSync, existsSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { openSync, closeSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 
 import type { IHookallSync } from 'hookall'
@@ -187,6 +188,7 @@ export class TissueRoll {
     if (existsSync(file) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
     }
+    mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, Buffer.from(root))
 
     const inst = TissueRoll.Open(file)
