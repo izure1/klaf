@@ -1,17 +1,11 @@
-import { CacheBranchSync } from 'cachebranch'
-
 type DelayedExecutionCallback = () => void
 
 export class DelayedExecution {
-  private readonly _executions: CacheBranchSync<{
-    [key: string]: NodeJS.Timeout|number
-  }>
-  private readonly _defGetter: () => 0
+  private readonly _executions: Map<string, NodeJS.Timeout|number>
   protected readonly delay: number
 
   constructor(delay = 0) {
-    this._executions = new CacheBranchSync()
-    this._defGetter = () => 0
+    this._executions = new Map()
     this.delay = delay
   }
 
@@ -21,11 +15,15 @@ export class DelayedExecution {
       callback()
       this._executions.delete(id)
     }
-    this._executions.set(id, () => setTimeout(wrapper, this.delay))
+    const executionId = setTimeout(wrapper, this.delay)
+    this._executions.set(id, executionId)
   }
 
   cancel(id: string): void {
-    clearTimeout(this._executions.ensure(id, this._defGetter).raw)
+    if (this._executions.has(id)) {
+      const executionId = this._executions.get(id)
+      clearTimeout(executionId)
+    }
     this._executions.delete(id)
   }
 }
