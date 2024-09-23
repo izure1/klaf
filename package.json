@@ -1,55 +1,33 @@
 {
   "name": "tissue-roll",
-  "version": "6.0.0",
+  "version": "6.0.1-beta.0",
   "description": "Very simple read/write database with a no-sql.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/types/index.d.ts",
-        "default": "./dist/esm/index.mjs"
-      },
-      "require": {
-        "types": "./dist/types/index.d.ts",
-        "default": "./dist/cjs/index.cjs"
-      }
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.cjs"
     },
     "./engine/DataEngine": {
-      "import": {
-        "types": "./dist/types/engine/DataEngine.d.ts",
-        "default": "./dist/esm/engine/DataEngine.mjs"
-      },
-      "require": {
-        "types": "./dist/types/engine/DataEngine.d.ts",
-        "default": "./dist/cjs/engine/DataEngine.cjs"
-      }
+      "types": "./dist/types/engine/DataEngine.d.ts",
+      "import": "./dist/esm/engine/DataEngine.mjs",
+      "require": "./dist/cjs/engine/DataEngine.cjs"
     },
     "./engine/FileSystem": {
-      "import": {
-        "types": "./dist/types/engine/FileSystem.d.ts",
-        "default": "./dist/esm/engine/FileSystem.mjs"
-      },
-      "require": {
-        "types": "./dist/types/engine/FileSystem.d.ts",
-        "default": "./dist/cjs/engine/FileSystem.cjs"
-      }
+      "types": "./dist/types/engine/FileSystem.d.ts",
+      "import": "./dist/esm/engine/FileSystem.mjs",
+      "require": "./dist/cjs/engine/FileSystem.cjs"
     },
     "./engine/InMemory": {
-      "import": {
-        "types": "./dist/types/engine/InMemory.d.ts",
-        "default": "./dist/esm/engine/InMemory.mjs"
-      },
-      "require": {
-        "types": "./dist/types/engine/InMemory.d.ts",
-        "default": "./dist/cjs/engine/InMemory.cjs"
-      }
+      "types": "./dist/types/engine/InMemory.d.ts",
+      "import": "./dist/esm/engine/InMemory.mjs",
+      "require": "./dist/cjs/engine/InMemory.cjs"
     },
     "./engine/WebWorker": {
-      "import": {
-        "types": "./dist/types/engine/WebWorker.d.ts",
-        "default": "./dist/esm/engine/WebWorker.mjs"
-      }
+      "types": "./dist/types/engine/WebWorker.d.ts",
+      "import": "./dist/esm/engine/WebWorker.mjs"
     }
   },
   "files": [
