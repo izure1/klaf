@@ -3,8 +3,7 @@ export class ErrorBuilder {
     return new Error(`The path '${file}' database file is already existing. If you want overwrite, pass a 'overwrite' parameter with 'true'.`)
   }
   
-  static ERR_DB_INVALID(file: string|null) {
-    file = file ?? 'In-memory'
+  static ERR_DB_INVALID(file: string) {
     return new Error(`The path '${file}' database file seems to be invalid. Maybe broken or incorrect format.`)
   }
 

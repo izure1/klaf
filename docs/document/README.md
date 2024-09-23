@@ -10,10 +10,12 @@ If this is not the database you were looking for, please check the [key-value](.
 
 ```typescript
 import { TissueRollDocument } from 'tissue-roll'
+import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
 
 // OPEN DB
-const db = TissueRollDocument.Open({
+const db = await TissueRollDocument.Open({
   path: 'my_file_path.db',
+  engine: new FileSystemEngine(),
   version: 0,
   scheme: {
     name: {
@@ -80,8 +82,9 @@ First of all, when inserting a document in **TissueRollDocument**, the following
 The scheme is distinguished by key-value, where the key is the property name of the scheme, and the value has default and validate properties.
 
 ```typescript
-const db = TissueRollDocument.Open({
+const db = await TissueRollDocument.Open({
   path: 'my_file_path.db',
+  engine: new FileSystemEngine(),
   version: 0,
   scheme: {
     name: {

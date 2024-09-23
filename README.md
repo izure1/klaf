@@ -22,7 +22,9 @@ For details on how to use each database, please refer to the links below.
 ### Why use **tissue-roll**?
 
 JavaScript has numerous fantastic database libraries available, but at times, they can seem overly complex.  
-This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure. Or, when everything is too bothersome.
+This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure.
+
+Since it is implemented in pure JavaScript, there is no need for pre-builds or configuration based on the Node.js version. It is compatible with all versions!
 
 ### Why should I use this instead of **JSON**?
 
@@ -30,10 +32,6 @@ When the **JSON** files get large, quick data read and write operations can beco
 **tissue-roll** handles data input and output in real-time, ensuring fast and lightweight performance. Check the performance tests below.
 
 ## How
-
-### How does it differ from a **Map** object?
-
-The **Map** object is memory-based, while **tissue-roll** is file system-based.
 
 ### How does **tissue-roll** work?
 
@@ -44,6 +42,10 @@ When you insert data, the ID you get back includes information about where the d
 ### How many can I own data?
 
 **tissue-roll** can make a unsigned 32bit range of page block. This is a **4,294,967,296**. And each page can own unsigned 32bit range of records also. So you can theoretically insert **4,294,967,295** * **4,294,967,295** records.
+
+## Migration
+
+For migration to version 6.x, please refer to [this link](./docs/migration/6.md).
 
 ## Performance Test
 

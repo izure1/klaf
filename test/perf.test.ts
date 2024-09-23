@@ -1,9 +1,15 @@
 import { unlink } from 'node:fs/promises'
 import Chance from 'chance'
-import { TissueRoll, TissueRollDocument } from '../'
+import { TissueRoll, TissueRollDocument } from 'tissue-roll'
+import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
 
-function createDatabase(name: string) {
-  const db = TissueRoll.Create(`perf-${name}.db`, undefined, true)
+async function createDatabase(name: string) {
+  const engine = new FileSystemEngine()
+  const db = await TissueRoll.Create({
+    path: `perf-${name}.db`,
+    engine,
+    overwrite: true
+  })
   const close = () => {
     db.close()
     unlink(`perf-${name}.db`)
@@ -15,12 +21,25 @@ function createDatabase(name: string) {
   }
 }
 
-function createSqlDatabase(name: string) {
-  const db = TissueRollDocument.Create<{
-    id: string
-    name: string
-    age: number
-  }>(`perf-${name}.db`, undefined, true)
+async function createSqlDatabase(name: string) {
+  const engine = new FileSystemEngine()
+  const db = await TissueRollDocument.Create({
+    path: `perf-${name}.db`,
+    version: 0,
+    engine,
+    scheme: {
+      id: {
+        default: () => '',
+      },
+      name: {
+        default: () => ''
+      },
+      age: {
+        default: () => 0
+      }
+    },
+    overwrite: true
+  })
   const close = async () => {
     await db.close()
     await unlink(`perf-${name}.db`)
@@ -44,8 +63,8 @@ function createFakeUser() {
   }
 }
 
-describe('perf:core', () => {
-  const { db, close } = createDatabase('tissue-roll')
+describe('perf:core', async () => {
+  const { db, close } = await createDatabase('tissue-roll')
 
   afterAll(() => {
     close()
@@ -85,8 +104,8 @@ describe('perf:core', () => {
   })
 })
 
-describe('perf:document', () => {
-  const { db, close } = createSqlDatabase('tissue-roll-sql')
+describe('perf:document', async () => {
+  const { db, close } = await createSqlDatabase('tissue-roll-sql')
 
   afterAll(() => {
     close()

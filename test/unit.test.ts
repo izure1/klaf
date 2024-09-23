@@ -1,17 +1,26 @@
 import { unlinkSync } from 'node:fs'
-import { TissueRoll, TissueRollDocument } from '../'
+import { TissueRoll, TissueRollDocument } from 'tissue-roll'
+import { DataEngine } from 'tissue-roll/engine/DataEngine'
+import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
+import { InMemoryEngine } from 'tissue-roll/engine/InMemory'
 
-const IN_MEMORY = process.env.npm_config_in_memory === 'true'
+const IN_MEMORY   = process.env.npm_config_in_memory === 'true'
 
-const createDatabase = (name: string|null) => {
+const createDatabase = async (name: string) => {
+  let engine: DataEngine = new FileSystemEngine()
   if (IN_MEMORY) {
-    name = null
+    engine = new InMemoryEngine()
   }
-  const db = TissueRoll.Create(name, 1024, true)
+  const db = await TissueRoll.Create({
+    path: name,
+    engine,
+    payloadSize: 1024,
+    overwrite: true
+  })
   
-  const close = () => {
+  const close = async () => {
     db.close()
-    if (name !== null) {
+    if (engine instanceof FileSystemEngine) {
       unlinkSync(name)
     }
   }
@@ -22,13 +31,15 @@ const createDatabase = (name: string|null) => {
   }
 }
 
-const createDocumentDatabase = (name: string|null) => {
+const createDocumentDatabase = async (name: string) => {
+  let engine: DataEngine = new FileSystemEngine()
   if (IN_MEMORY) {
-    name = null
+    engine = new InMemoryEngine()
   }
 
-  const sql = TissueRollDocument.Create({
+  const sql = await TissueRollDocument.Create({
     path: name,
+    engine,
     version: 0,
     payloadSize: 1024,
     overwrite: true,
@@ -55,7 +66,7 @@ const createDocumentDatabase = (name: string|null) => {
   
   const close = async () => {
     await sql.close()
-    if (name !== null) {
+    if (engine instanceof FileSystemEngine) {
       unlinkSync(name)
     }
   }
@@ -67,8 +78,8 @@ const createDocumentDatabase = (name: string|null) => {
 }
 
 describe('Create test', () => {
-  test('db open', () => {
-    const { db, close } = createDatabase('db-open.db')
+  test('db open', async () => {
+    const { db, close } = await createDatabase('db-open.db')
     expect(typeof db.metadata.index).toBe('number')
     expect(typeof db.metadata.majorVersion).toBe('number')
     expect(typeof db.metadata.minorVersion).toBe('number')
@@ -79,8 +90,8 @@ describe('Create test', () => {
 })
 
 describe('Record test', () => {
-  test('put record that shorter than page size', () => {
-    const { db, close } = createDatabase('db-shorter.db')
+  test('put record that shorter than page size', async () => {
+    const { db, close } = await createDatabase('db-shorter.db')
     const max = 10
     const ids: string[] = []
     for (let i = 0; i < max; i++) {
@@ -98,8 +109,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('put record that longer than page size', () => {
-    const { db, close } = createDatabase('db-longer.db')
+  test('put record that longer than page size', async () => {
+    const { db, close } = await createDatabase('db-longer.db')
 
     const content = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer eros augue, commodo sed laoreet id, euismod id turpis. Vivamus id euismod sapien, vel venenatis turpis. Aliquam at ante odio. Curabitur quis nunc orci. Morbi nibh turpis, placerat quis gravida vestibulum, sollicitudin vel nunc. Curabitur in augue sit amet nibh consectetur posuere. Aliquam erat volutpat. Phasellus nec turpis augue. Cras ut eros nibh. Aenean elementum scelerisque maximus. Cras id nulla at felis molestie suscipit eu ac erat. Nulla tincidunt ornare nulla. Etiam vitae est sed arcu congue dignissim. Nam at odio eget velit hendrerit tincidunt. Sed posuere porttitor volutpat.
 
@@ -130,8 +141,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('update', () => {
-    const { db, close } = createDatabase('db-update.db')
+  test('update', async () => {
+    const { db, close } = await createDatabase('db-update.db')
 
     const content = 'long text'.repeat(100)
     const longerContent = 'more longer text'.repeat(100)
@@ -178,8 +189,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('delete', () => {
-    const { db, close } = createDatabase('db-delete.db')
+  test('delete', async () => {
+    const { db, close } = await createDatabase('db-delete.db')
 
     const content = 'you should can not read this'
 
@@ -205,8 +216,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('invalid record', () => {
-    const { db, close } = createDatabase('db-invalid-record.db')
+  test('invalid record', async () => {
+    const { db, close } = await createDatabase('db-invalid-record.db')
 
     const invalidId = btoa('1928399199299331123')
     expect(() => db.pick(invalidId)).toThrow()
@@ -215,8 +226,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('exists', () => {
-    const { db, close } = createDatabase('db-exists.db')
+  test('exists', async () => {
+    const { db, close } = await createDatabase('db-exists.db')
 
     const correctId = db.put('test')
     const invalidId = correctId+'1'
@@ -226,8 +237,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('getRecords', () => {
-    const { db, close } = createDatabase('db-get-records.db')
+  test('getRecords', async () => {
+    const { db, close } = await createDatabase('db-get-records.db')
 
     const largeData = ' '.repeat(10000)
     db.put(largeData)
@@ -249,8 +260,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('autoIncrement', () => {
-    const { db, close } = createDatabase('db-auto-increment.db')
+  test('autoIncrement', async () => {
+    const { db, close } = await createDatabase('db-auto-increment.db')
 
     const sampleId = db.put('a')
     db.put('b')
@@ -268,8 +279,8 @@ describe('Record test', () => {
     close()
   })
 
-  test('count', () => {
-    const { db, close } = createDatabase('db-count.db')
+  test('count', async () => {
+    const { db, close } = await createDatabase('db-count.db')
 
     const sampleId = db.put('a')
     db.put('b')
@@ -290,7 +301,7 @@ describe('Record test', () => {
 
 describe('DOCUMENT', () => {
   test('DOCUMENT:put', async () => {
-    const { sql, close } = createDocumentDatabase('doc-put.db')
+    const { sql, close } = await createDocumentDatabase('doc-put.db')
 
     const result1 = sql.pick({
       age: {
@@ -326,7 +337,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:delete', async () => {
-    const { sql, close } = createDocumentDatabase('doc-delete.db') 
+    const { sql, close } = await createDocumentDatabase('doc-delete.db') 
 
     const delCount = sql.delete({
       name: {
@@ -351,7 +362,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:update:partial', async () => {
-    const { sql, close } = createDocumentDatabase('doc-update-partial.db')
+    const { sql, close } = await createDocumentDatabase('doc-update-partial.db')
 
     const updatedCount = sql.partialUpdate({
       name: {
@@ -379,7 +390,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:update:full-1', async () => {
-    const { sql, close } = createDocumentDatabase('doc-update-full-1.db')
+    const { sql, close } = await createDocumentDatabase('doc-update-full-1.db')
 
     const updatedCount = sql.fullUpdate({
       age: {
@@ -404,7 +415,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:update:full-2', async () => {
-    const { sql, close } = createDocumentDatabase('doc-update-full-2.db')
+    const { sql, close } = await createDocumentDatabase('doc-update-full-2.db')
 
     const updatedCount = sql.fullUpdate({
       age: {
@@ -433,7 +444,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:pick:query', async () => {
-    const { sql, close } = createDocumentDatabase('doc-pick-query.db')
+    const { sql, close } = await createDocumentDatabase('doc-pick-query.db')
 
     const result1 = sql.pick({
       name: 'kim'
@@ -466,7 +477,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:pick:range-1', async () => {
-    const { sql, close } = createDocumentDatabase('doc-pick-range-1.db')
+    const { sql, close } = await createDocumentDatabase('doc-pick-range-1.db')
 
     const result1 = sql.pick({
       age: {
@@ -527,7 +538,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:pick:range-2', async () => {
-    const { sql, close } = createDocumentDatabase('doc-pick-range-2.db')
+    const { sql, close } = await createDocumentDatabase('doc-pick-range-2.db')
 
     for (let i = 0; i < 100; i++) {
       sql.put({ name: 'unknown', age: i, sex: 'male' })
@@ -554,7 +565,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:autoIncrement', async () => {
-    const { sql, close } = createDocumentDatabase('doc-auto-increment.db')
+    const { sql, close } = await createDocumentDatabase('doc-auto-increment.db')
     expect(sql.metadata.autoIncrement).toBe(4n)
 
     sql.partialUpdate({ name: 'kim' }, { name: 'kim'.repeat(10000) })
@@ -567,7 +578,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:count', async () => {
-    const { sql, close } = createDocumentDatabase('doc-count.db')
+    const { sql, close } = await createDocumentDatabase('doc-count.db')
     expect(sql.metadata.count).toBe(4)
 
     sql.partialUpdate({ name: 'kim' }, { name: 'kim'.repeat(10000) })
@@ -583,7 +594,7 @@ describe('DOCUMENT', () => {
   })
 
   test('DOCUMENT:count method', async () => {
-    const { sql, close } = createDocumentDatabase('doc-count.db')
+    const { sql, close } = await createDocumentDatabase('doc-count.db')
     expect(sql.count({
       age: {
         gt: 10

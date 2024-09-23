@@ -1,0 +1,86 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>TissueRoll Web Worker Test</title>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <form onsubmit="return command('put', event)">
+      <input type="text" name="name" placeholder="Name">
+      <input type="number" name="age" placeholder="Age">
+      <input type="submit" value="Submit" />
+    </form>
+    <form onsubmit="return command('pick', event)">
+      <input type="submit" value="Show" />
+    </form>
+    <form onsubmit="return command('download', event)">
+      <input type="submit" value="Download" />
+    </form>
+    <script type="module">
+      const worker  = new Worker('./js/worker.mjs', { type: 'module' })
+      const root    = await navigator.storage.getDirectory()
+
+      async function list() {
+        const result = []
+        for await (const key of root.keys()) {
+          result.push(key)
+        }
+        return result
+      }
+
+      window.show = async () => {
+        const keys = await list()
+        keys.forEach((k) => console.log(k))
+      }
+
+      window.remove = async (key) => {
+        await root.removeEntry(key)
+      }
+
+      worker.onmessage = async (e) => {
+        const { data } = e
+        switch (data.type) {
+          case 'put':
+          case 'pick': {
+            console.log(data.detail)
+            break
+          }
+          case 'download': {
+            const handle = data.detail
+            const file = await handle.getFile()
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(file)
+            link.download = 'test.db'
+            link.click()
+            break
+          }
+        }
+      }
+
+      window.command = async (type, e) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        switch (type) {
+          case 'put': {
+            const form = new FormData(e.target)
+            const detail = Object.fromEntries(form.entries())
+            detail.age = Number(detail.age)
+            worker.postMessage({ type: 'put', detail })
+            break
+          }
+          case 'pick': {
+            const detail = {}
+            worker.postMessage({ type: 'pick', detail })
+            break
+          }
+          case 'download': {
+            worker.postMessage({ type: 'download', detail: {} })
+          }
+        }
+
+        return false
+      }
+    </script>
+  </body>
+</html>

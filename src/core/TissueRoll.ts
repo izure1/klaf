@@ -1,7 +1,3 @@
-import { dirname } from 'node:path'
-import { openSync, closeSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { open } from 'node:fs/promises'
-
 import type { IHookallSync } from 'hookall'
 import { useHookallSync } from 'hookall'
 import { CacheEntanglementSync } from 'cache-entanglement'
@@ -11,7 +7,7 @@ import { TextConverter } from '../utils/TextConverter'
 import { IntegerConverter } from '../utils/IntegerConverter'
 import { CryptoHelper } from '../utils/CryptoHelper'
 import { IterableView } from '../utils/IterableView'
-import { DataEngine, FileEngine, InMemoryEngine } from '../utils/DataEngine'
+import { DataEngine } from '../engine/DataEngine'
 
 export type IPageHeader = {
   type: number
@@ -65,13 +61,29 @@ export type NormalizedRecord = {
   payload: string,
 }
 
-export enum DatabaseEngine {
-  FileSystem,
-  InMemory,
+export interface TissueRollCreateOption {
+  /**
+   * This is the path where the database file will be created.
+   */
+  path: string
+  /**
+   * The engine that determines how the database will function.
+   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `tissue-roll/engine/~` to use them.
+   * If desired, you can extend the DataEngine class to implement your own custom engine.
+   */
+  engine: DataEngine
+  /**
+   * This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   */
+  payloadSize?: number
+  /**
+   * This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
+   */
+  overwrite?: boolean
 }
 
 export class TissueRoll {
-  protected static readonly DB_VERSION                    = '5.1.0'
+  protected static readonly DB_VERSION                    = '6.0.0'
   protected static readonly DB_NAME                       = 'TissueRoll'
   protected static readonly RootValidStringOffset         = 0
   protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
@@ -133,16 +145,17 @@ export class TissueRoll {
   protected static readonly OverflowType                  = 2
   protected static readonly SystemReservedType            = 3
 
-
   /**
    * It creates a new database file.
-   * @param file This is the path where the database file will be created.
-   * If this value is set to `null`, the database will operate in memory.
-   * This is useful for caching purposes, but note that the data will be volatile as it will not be permanently stored in the file system.
-   * @param payloadSize This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
-   * @param overwrite This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
+   * @param option The database creation options.
    */
-  static Create(file: string|null, payloadSize = 1024, overwrite = false): TissueRoll {
+  static async Create(option: TissueRollCreateOption): Promise<TissueRoll> {
+    const {
+      path,
+      engine,
+      payloadSize = 1024,
+      overwrite = false
+    } = option
     // create root
     const root = TissueRoll.CreateIterable(TissueRoll.RootChunkSize, 0)
     const {
@@ -177,59 +190,46 @@ export class TissueRoll {
     IterableView.Update(root, RootCountOffset,              IntegerConverter.ToArray32(0))
     IterableView.Update(root, RootLastInternalIndexOffset,  IntegerConverter.ToArray32(0))
 
-    if (file === null) {
-      const engine = new InMemoryEngine()
-      engine.append(root)
-      const inst = new TissueRoll(engine, secretKey, payloadSize)
-      inst._addEmptyPage({ type: TissueRoll.InternalType }, true)
-      return inst
-    }
+    await engine.boot(path)
 
-    if (existsSync(file) && !overwrite) {
-      throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(file)
+    if (await engine.exists(path) && !overwrite) {
+      throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(path)
     }
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, Buffer.from(root))
+    await engine.create(path, root)
 
-    const inst = TissueRoll.Open(file)
-    inst._addEmptyPage({ type: TissueRoll.InternalType }, true)
-    return inst
+    const database = await TissueRoll.Open({ path, engine })
+    database._addEmptyPage({ type: TissueRoll.InternalType }, true)
+    return database
   }
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
-   * @param file This is the path where the database file is located.
-   * If this value is set to `null`, the database will operate in memory.
-   * This is useful for caching purposes, but note that the data will be volatile as it will not be permanently stored in the file system.
-   * @param payloadSize If this value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * If `option.payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * @param option The database creation options.
    */
-  static Open(file: string|null, payloadSize = 1024) {
-    if (file === null) {
-      return TissueRoll.Create(null, payloadSize)
-    }
+  static async Open(option: TissueRollCreateOption): Promise<TissueRoll> {
+    const {
+      path,
+      engine,
+      payloadSize = 1024
+    } = option
+    await engine.boot(path)
 
-    // 파일이 존재하지 않을 경우
-    if (!existsSync(file)) {
+    if (!(await engine.exists(path))) {
       if (!payloadSize) {
-        throw ErrorBuilder.ERR_DB_NO_EXISTS(file)
+        throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
       }
-      // 옵션이 지정되었을 경우 새롭게 생성합니다
-      return TissueRoll.Create(file, payloadSize)
+      return await TissueRoll.Create({ path, engine, payloadSize })
     }
 
-    // 파일이 존재할 경우 열기
-    const fd = openSync(file, 'r+')
-    const engine = new FileEngine(fd)
-    
-    // 올바른 형식의 파일인지 체크
-    if (!TissueRoll.CheckDBValid(engine)) {
-      closeSync(fd)
-      throw ErrorBuilder.ERR_DB_INVALID(file)
+    await engine.open(path)
+    if (!TissueRoll.CheckDBVerify(engine)) {
+      await engine.close()
+      throw ErrorBuilder.ERR_DB_INVALID(path)
     }
 
     const root = TissueRoll.ParseRootChunk(engine)
-    const secretKey = Buffer.from(IntegerConverter.ToArray128(root.secretKey))
+    const secretKey = Uint8Array.from(IntegerConverter.ToArray128(root.secretKey))
     
     return new TissueRoll(engine, secretKey, root.payloadSize)
   }
@@ -306,7 +306,7 @@ export class TissueRoll {
     return new Array(len).fill(fill)
   }
 
-  protected static CheckDBValid(engine: DataEngine) {
+  protected static CheckDBVerify(engine: DataEngine) {
     const chunk = engine.read(
       TissueRoll.RootValidStringOffset,
       TissueRoll.RootValidStringSize
@@ -356,9 +356,7 @@ export class TissueRoll {
 
   protected constructor(engine: DataEngine, secretKey: Uint8Array, payloadSize: number) {
     if (payloadSize < TissueRoll.CellSize) {
-      if (engine instanceof FileEngine) {
-        closeSync(engine.fd)
-      }
+      engine.close()
       throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
     }
     this.chunkSize        = TissueRoll.HeaderSize+payloadSize
@@ -1120,73 +1118,10 @@ export class TissueRoll {
   }
 
   /**
-   * Exports data from all rows inserted into the current database to a file.
-   * Each row is separated by a newline character.
-   * The exported file can then be used with the `importData` method to insert data into another database.
-   * This method is useful for database migration purposes.
-   * 
-   * This method may take longer depending on the amount of inserted rows. Therefore, it's advisable to avoid executing it during runtime.
-   * @param dataDist Location where the data will be stored in the file.
-   * @param silent Determines whether the progress will be printed to the console.
-   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
-   */
-  async exportData(dataDist: string, silent = false): Promise<void> {
-    if (!(this.engine instanceof FileEngine)) {
-      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
-    }
-    const handle = await open(dataDist, 'a')
-    for (let i = 1, len = this.metadata.index; i <= len; i++) {
-      const records = this.getRecords(i)
-      for (const record of records) {
-        await handle.write(record.payload+'\n', null, 'utf8')
-      }
-      if (!silent) {
-        const per = i / len * 100
-        console.log(`Exporting data: ${per.toFixed(2)}%`)
-      }
-    }
-    await handle.close()
-    if (!silent) {
-      console.log('Data exporting done.')
-    }
-  }
-
-  /**
-   * Reads rows from a file where all row data is stored and inserts them into the current database.
-   * Each row should be separated by a newline character.
-   * Such a file containing all row data can be created using the `exportData` method.
-   * This method is useful for database migration purposes.
-   * 
-   * This method may take longer depending on the amount of inserted rows. Therefore, it's advisable to avoid executing it during runtime.
-   * @param dataSrc Location of the file where the data is stored.
-   * @param silent Determines whether the progress will be printed to the console.
-   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
-   */
-  async importData(dataSrc: string, silent = false): Promise<void> {
-    if (!(this.engine instanceof InMemoryEngine)) {
-      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
-    }
-    const fd = await open(dataSrc, 'r')
-    let count = 0
-    for await (const line of fd.readLines()) {
-      this.put(line)
-      count++
-      if (!silent) {
-        console.log(`Importing row ${count.toLocaleString()} done.`)
-      }
-    }
-  }
-
-  /**
    * Shut down the database to close file input and output.
    */
   close(): void {
-    if (this.engine instanceof FileEngine) {
-      closeSync(this.engine.fd)
-    }
-    else if (this.engine instanceof InMemoryEngine) {
-      this.engine.clear()
-    }
+    this.engine.close()
   }
 
   /**

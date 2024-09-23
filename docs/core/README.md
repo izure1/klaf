@@ -10,10 +10,17 @@ This database is suitable for a website that simply stores values in the databas
 
 ```typescript
 import { TissueRoll } from 'tissue-roll'
+import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
 
 // OPEN DB
+const path = 'my_file_path.db'
+const engine = new FileSystemEngine()
 const payloadSize = 1024
-const db = TissueRoll.Open('my_file_path.db', payloadSize)
+const db = await TissueRoll.Open({
+  path,
+  engine,
+  payloadSize
+})
 
 // INPUT
 const data = 'Data string you want to store'

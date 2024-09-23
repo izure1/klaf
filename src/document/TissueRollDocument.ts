@@ -1,17 +1,14 @@
-import { existsSync } from 'node:fs'
-import { open } from 'node:fs/promises'
-
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheEntanglementSync } from 'cache-entanglement'
 import { h64 } from 'xxhashjs'
-import { DatabaseEngine, TissueRoll } from '../core/TissueRoll'
+import { TissueRoll } from '../core/TissueRoll'
 import { TissueRollMediator } from '../core/TissueRollMediator'
 import { TissueRollComparator } from './TissueRollComparator'
 import { TissueRollStrategy } from './TissueRollStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { DelayedExecution } from '../utils/DelayedExecution'
-import { FileEngine } from '../utils/DataEngine'
+import { DataEngine } from '../engine/DataEngine'
 
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
@@ -23,7 +20,7 @@ export interface TissueRollDocumentRoot {
   head: Record<string, SerializeStrategyHead|null>
 }
 
-type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
+export type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   /**
    * Includes if this value matches the document's property value.
    */
@@ -54,11 +51,11 @@ type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   like?: string
 }
 
-interface TissueRollDocumentRecordShape {
+export interface TissueRollDocumentRecordShape {
   [key: string]: SupportedType
 }
 
-interface TissueRollDocumentTimestampShape {
+export interface TissueRollDocumentTimestampShape {
   /**
    * The index when the document was inserted. This value is automatically added when inserted into the database.
    */
@@ -73,11 +70,11 @@ interface TissueRollDocumentTimestampShape {
   updatedAt: number
 }
 
-type TissueRollDocumentRecord<
+export type TissueRollDocumentRecord<
   T extends TissueRollDocumentRecordShape
 > = T&TissueRollDocumentTimestampShape
 
-type TissueRollDocumentQuery<
+export type TissueRollDocumentQuery<
   T extends TissueRollDocumentRecord<any>
 > = {
   /**
@@ -86,7 +83,7 @@ type TissueRollDocumentQuery<
   [K in keyof T]?: T[K]|TissueRollDocumentQueryCondition<T, K>
 }
 
-interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRollDocumentRecordShape>> {
+export interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRollDocumentRecordShape>> {
   /**
    * Used when retrieving a portion of the searched documents. Specifies the starting offset, with a default value of `0`.
    */
@@ -105,27 +102,30 @@ interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRoll
   desc?: boolean
 }
 
-interface TissueRollDocumentField {
+export interface TissueRollDocumentField {
   default: () => SupportedType,
   validate?: (v: SupportedType) => boolean
 }
 
-interface TissueRollDocumentScheme {
+export interface TissueRollDocumentScheme {
   [key: string]: TissueRollDocumentField
 }
 
-type TissueRollDocumentSchemeType<T extends TissueRollDocumentScheme> = {
+export type TissueRollDocumentSchemeType<T extends TissueRollDocumentScheme> = {
   [K in keyof T]: ReturnType<T[K]['default']>
 }
 
-interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
+export interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
   /**
    * This is the path where the database file will be created.
-   * If this value is set to `null`, the database will operate in-memory.
-   * This is useful for caching purposes,
-   * but note that the data will be volatile as it will not be permanently stored in the file system.
    */
-  path: string|null
+  path: string
+  /**
+   * The engine that determines how the database will function.
+   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `tissue-roll/engine/~` to use them.
+   * If desired, you can extend the DataEngine class to implement your own custom engine.
+   */
+  engine: DataEngine
   /**
    * Scheme version.
    */
@@ -167,7 +167,7 @@ interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
 export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
-  private static Verify(file: string|null, payload: string): TissueRollDocumentRoot {
+  private static Verify(file: string, payload: string): TissueRollDocumentRoot {
     const docRoot = ObjectHelper.Parse(payload, ErrorBuilder.ERR_INVALID_OBJECT(payload))
     // not object
     if (!ObjectHelper.IsObject(docRoot)) {
@@ -209,17 +209,18 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * It creates a new database file.
    * @param option The database creation options.
    */
-  static Create<
+  static async Create<
     T extends TissueRollDocumentScheme
-  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentSchemeType<T>> {
+  >(option: TissueRollDocumentCreateOption<T>): Promise<TissueRollDocument<TissueRollDocumentSchemeType<T>>> {
     const {
       path,
+      engine,
       version,
       scheme,
       payloadSize = 1024,
       overwrite = false
     } = option
-    const db = TissueRoll.Create(path, payloadSize, overwrite)
+    const db = await TissueRoll.Create({ path, engine, payloadSize, overwrite })
     const docRoot: TissueRollDocumentRoot = {
       verify: TissueRollDocument.DB_NAME,
       schemeVersion: 0,
@@ -240,27 +241,26 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * It opens or creates a database file at the specified path. 
    * @param option The database creation options.
    */
-  static Open<
+  static async Open<
     T extends TissueRollDocumentScheme
-  >(option: TissueRollDocumentCreateOption<T>): TissueRollDocument<TissueRollDocumentSchemeType<T>> {
+  >(option: TissueRollDocumentCreateOption<T>): Promise<TissueRollDocument<TissueRollDocumentSchemeType<T>>> {
     const {
       path,
+      engine,
       version,
       scheme,
       payloadSize = 1024
     } = option
-    if (path !== null) {
-      // 파일이 존재하지 않을 경우
-      if (!existsSync(path)) {
-        if (!payloadSize) {
-          throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
-        }
-        // 옵션이 지정되었을 경우 새롭게 생성합니다
-        return TissueRollDocument.Create(option)
+    
+    await engine.boot(path)
+    if (!(await engine.exists(path))) {
+      if (!payloadSize) {
+        throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
       }
+      return await TissueRollDocument.Create(option)
     }
 
-    const db = TissueRoll.Open(path, payloadSize)
+    const db = await TissueRoll.Open({ path, engine, payloadSize })
     const record = db.getRecords(1)[0]
     const docRoot = TissueRollDocument.Verify(path, record.payload)
 
@@ -337,9 +337,11 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   }
 
   private _createDocumentCache() {
-    return new CacheEntanglementSync((key, state, document: TissueRollDocumentRecord<T>) => {
-      return document
-    })
+    return new CacheEntanglementSync((
+      _key,
+      _state,
+      document: TissueRollDocumentRecord<T>
+    ) => document)
   }
 
   protected getTree(property: string): BPTreeSync<string, SupportedType> {
@@ -399,8 +401,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   ): T {
     const after: any = {}
     for (const field in this.scheme) {
-      const { default: def, validate } = this.scheme[field]
-      const v = Object.hasOwn(record, field) ? record[field]! : def()
+      const { default: defaultValue, validate } = this.scheme[field]
+      const v = Object.hasOwn(record, field) ? record[field]! : defaultValue()
       if (validate && !validate(v)) {
         throw new Error(`The value '${v}' did not pass the validation of field '${field}'.`)
       }
@@ -427,6 +429,10 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       timestamp,
       schemeVersion
     }
+  }
+
+  get engine() {
+    return this.db.engine
   }
 
   private _callInternalPut(
@@ -596,10 +602,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     let result: Set<string>|undefined
     for (const property in query) {
       const tree = this.getTree(property)
-      result = tree.keys(
-        query[property]! as TissueRollDocumentQueryCondition<T>,
-        result
-      )
+      const condition = query[property]! as TissueRollDocumentQueryCondition<T>
+      result = tree.keys(condition, result)
     }
     return Array.from(result ?? [])
   }
@@ -646,66 +650,6 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    */
   count(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
     return this.findRecordIds(query).length
-  }
-
-  /**
-   * Exports data from all documents inserted into the current database to a file.
-   * Each document is separated by a newline character.
-   * The exported file can then be used with the `importData` method to insert data into another database.
-   * This method is useful for database migration purposes.
-   * 
-   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
-   * @param dataDist Location where the data will be stored in the file.
-   * @param silent Determines whether the progress will be printed to the console.
-   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
-   */
-  async exportData(dataDist: string, silent = false): Promise<void> {
-    if (!(this.db.engine instanceof FileEngine)) {
-      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
-    }
-    const handle = await open(dataDist, 'a')
-    const documents = this.pick({})
-    const max = documents.length
-    let count = 0
-    for (const document of documents) {
-      await handle.write(JSON.stringify(document)+'\n', null, 'utf8')
-      if (!silent) {
-        count++
-        const per = count / max * 100
-        console.log(`Exporting data: ${per.toFixed(2)}%`)
-      }
-    }
-    await handle.close()
-    if (!silent) {
-      console.log('Data exporting done.')
-    }
-  }
-
-  /**
-   * Reads documents from a file where all document data is stored and inserts them into the current database.
-   * Each document should be separated by a newline character.
-   * Such a file containing all document data can be created using the `exportData` method.
-   * This method is useful for database migration purposes.
-   * 
-   * This method may take longer depending on the amount of inserted documents. Therefore, it's advisable to avoid executing it during runtime.
-   * @param dataSrc Location of the file where the data is stored.
-   * @param silent Determines whether the progress will be printed to the console.
-   * If this value is set to `true`, it will not be printed to the console. The default value is `false`.
-   */
-  async importData(dataSrc: string, silent = false): Promise<void> {
-    if (!(this.db.engine instanceof FileEngine)) {
-      throw ErrorBuilder.ERR_UNSUPPORTED_ENGINE()
-    }
-    const fd = await open(dataSrc, 'r')
-    let count = 0
-    for await (const line of fd.readLines()) {
-      const document = JSON.parse(line) as TissueRollDocumentRecord<T>
-      this._callInternalPut(document)
-      count++
-      if (!silent) {
-        console.log(`Importing document ${count.toLocaleString()} done.`)
-      }
-    }
   }
 
   /**
