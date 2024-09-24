@@ -4,7 +4,7 @@ import { DataEngine } from 'tissue-roll/engine/DataEngine'
 import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
 import { InMemoryEngine } from 'tissue-roll/engine/InMemory'
 
-const IN_MEMORY   = process.env.npm_config_in_memory === 'true'
+const IN_MEMORY = process.env.npm_config_in_memory === 'true'
 
 const createDatabase = async (name: string) => {
   let engine: DataEngine = new FileSystemEngine()
