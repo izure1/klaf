@@ -17,6 +17,12 @@ For details on how to use each database, please refer to the links below.
 * [**Document-oriented Database**](./docs/document/README.md)
 * [**Key-value Database**](./docs/core/README.md)
 
+## Install
+
+```bash
+npm i klaf.js
+```
+
 ## Why
 
 ### Why use **klaf**?
@@ -94,7 +100,7 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 
 |Site|Link|
 |---|---|
-|**NPM**|[View](https://www.npmjs.com/package/klaf)|
+|**NPM**|[View](https://www.npmjs.com/package/klaf.js)|
 |**Github**|[View](https://github.com/izure1/klaf)|
 
 ## License

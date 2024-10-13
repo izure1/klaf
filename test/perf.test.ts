@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import Chance from 'chance'
-import { Klaf, KlafDocument } from 'klaf'
-import { FileSystemEngine } from 'klaf/engine/FileSystem'
+import { Klaf, KlafDocument } from 'klaf.js'
+import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 async function createDatabase(name: string) {
   const engine = new FileSystemEngine()

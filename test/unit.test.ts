@@ -1,8 +1,8 @@
 import { unlinkSync } from 'node:fs'
-import { Klaf, KlafDocument } from 'klaf'
-import { DataEngine } from 'klaf/engine/DataEngine'
-import { FileSystemEngine } from 'klaf/engine/FileSystem'
-import { InMemoryEngine } from 'klaf/engine/InMemory'
+import { Klaf, KlafDocument } from 'klaf.js'
+import { DataEngine } from 'klaf.js/engine/DataEngine'
+import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
+import { InMemoryEngine } from 'klaf.js/engine/InMemory'
 
 const IN_MEMORY = process.env.npm_config_in_memory === 'true'
 

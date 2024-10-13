@@ -9,8 +9,8 @@ If this is not the database you were looking for, please check the [key-value](.
 ## Usage
 
 ```typescript
-import { KlafDocument } from 'klaf'
-import { FileSystemEngine } from 'klaf/engine/FileSystem'
+import { KlafDocument } from 'klaf.js'
+import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const db = await KlafDocument.Open({

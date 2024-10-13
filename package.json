@@ -1,5 +1,5 @@
 {
-  "name": "klaf",
+  "name": "klaf.js",
   "version": "1.0.0",
   "description": "Very simple read/write database with a no-sql.",
   "main": "./dist/cjs/index.cjs",

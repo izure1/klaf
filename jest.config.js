@@ -6,11 +6,11 @@ module.exports = {
       displayName: 'Node',
       testEnvironment: 'node',
       moduleNameMapper: {
-        '^klaf$': ['<rootDir>/src/index.ts'],
-        '^klaf/engine/DataEngine$': ['<rootDir>/src/engine/DataEngine.ts'],
-        '^klaf/engine/FileSystem$': ['<rootDir>/src/engine/FileSystem.ts'],
-        '^klaf/engine/InMemory$': ['<rootDir>/src/engine/InMemory.ts'],
-        '^klaf/engine/WebWorker$': ['<rootDir>/src/engine/WebWorker.ts'],
+        '^klaf.js$': ['<rootDir>/src/index.ts'],
+        '^klaf.js/engine/DataEngine$': ['<rootDir>/src/engine/DataEngine.ts'],
+        '^klaf.js/engine/FileSystem$': ['<rootDir>/src/engine/FileSystem.ts'],
+        '^klaf.js/engine/InMemory$': ['<rootDir>/src/engine/InMemory.ts'],
+        '^klaf.js/engine/WebWorker$': ['<rootDir>/src/engine/WebWorker.ts'],
       },
       setupFiles: [
         './jest.setup.js'
@@ -21,11 +21,11 @@ module.exports = {
       displayName: 'Browser',
       testEnvironment: 'jsdom',
       moduleNameMapper: {
-        '^klaf$': ['<rootDir>/src/index.ts'],
-        '^klaf/engine/DataEngine$': ['<rootDir>/src/engine/DataEngine.ts'],
-        '^klaf/engine/FileSystem$': ['<rootDir>/src/engine/FileSystem.ts'],
-        '^klaf/engine/InMemory$': ['<rootDir>/src/engine/InMemory.ts'],
-        '^klaf/engine/WebWorker$': ['<rootDir>/src/engine/WebWorker.ts'],
+        '^klaf.js$': ['<rootDir>/src/index.ts'],
+        '^klaf.js/engine/DataEngine$': ['<rootDir>/src/engine/DataEngine.ts'],
+        '^klaf.js/engine/FileSystem$': ['<rootDir>/src/engine/FileSystem.ts'],
+        '^klaf.js/engine/InMemory$': ['<rootDir>/src/engine/InMemory.ts'],
+        '^klaf.js/engine/WebWorker$': ['<rootDir>/src/engine/WebWorker.ts'],
       },
       setupFiles: [
         './jest.setup.js'

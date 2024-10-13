@@ -9,8 +9,8 @@ This database is suitable for a website that simply stores values in the databas
 ## Usage
 
 ```typescript
-import { Klaf } from 'klaf'
-import { FileSystemEngine } from 'klaf/engine/FileSystem'
+import { Klaf } from 'klaf.js'
+import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const path = 'my_file_path.db'
