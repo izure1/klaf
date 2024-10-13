@@ -1,1 +1,1 @@
-export { TissueRoll } from './TissueRoll'
+export { Klaf } from './Klaf'

@@ -1,19 +1,19 @@
-# TissueRoll with Document
+# Klaf with Document
 
-This document covers the usage of the **document-oriented** database in **tissue-roll**.
+This document covers the usage of the **document-oriented** database in **klaf**.
 
-The document database in **tissue-roll** allows you to insert data in **JSON** format. Specify each property in TypeScript.
+The document database in **klaf** allows you to insert data in **JSON** format. Specify each property in TypeScript.
 
 If this is not the database you were looking for, please check the [key-value](../core/README.md) database.
 
 ## Usage
 
 ```typescript
-import { TissueRollDocument } from 'tissue-roll'
-import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
+import { KlafDocument } from 'klaf'
+import { FileSystemEngine } from 'klaf/engine/FileSystem'
 
 // OPEN DB
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
   version: 0,
@@ -56,7 +56,7 @@ db.metadata.autoIncrement // 3
 db.metadata.count // 3
 ```
 
-The **TissueRollDocument** manages files in logical blocks called pages. The payload size determines the size of these blocks, measured in bytes.
+The **KlafDocument** manages files in logical blocks called pages. The payload size determines the size of these blocks, measured in bytes.
 
 If there are many write/update operations in the database, it's recommended to set this value to a smaller size, around the size of one document. However, this may result in a larger overall database file size. On the other hand, if there are many read operations, it's advised to set this value to a larger size, but keep in mind that it might slow down write/update speeds.
 
@@ -64,7 +64,7 @@ If there are many write/update operations in the database, it's recommended to s
 
 ## Reserved document property names
 
-First of all, when inserting a document in **TissueRollDocument**, the following properties are automatically added. These values cannot be overwritten, so be careful when naming document properties.
+First of all, when inserting a document in **KlafDocument**, the following properties are automatically added. These values cannot be overwritten, so be careful when naming document properties.
 
 * `documentIndex`  
   The index when the document was inserted. This value is automatically added when inserted into the database.
@@ -82,7 +82,7 @@ First of all, when inserting a document in **TissueRollDocument**, the following
 The scheme is distinguished by key-value, where the key is the property name of the scheme, and the value has default and validate properties.
 
 ```typescript
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
   version: 0,
@@ -136,7 +136,7 @@ However, you may want to extend the properties of the scheme. For example, let's
 }
 ```
 
-In this case, you can simply add the **student** to the scheme property. Then, increment the **version** number. **TissueRollDocument** considers the scheme to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
+In this case, you can simply add the **student** to the scheme property. Then, increment the **version** number. **KlafDocument** considers the scheme to be modified **if this version value is higher than the previous one**, and updates all existing records to maintain consistency.
 
 And the **student** property will be set to the default value because it did not exist in the documents that were inserted before.
 
@@ -150,7 +150,7 @@ Please note that this migration process can affect application performance if th
 
 ### Optimization
 
-**TissueRollDocument** inserts data in the form of **JSON** records, which are referred to as documents. A document has a **key-value** relationship, and the values can be of type **string**, **number**, **boolean**, or **null**. It follows the same format as **JSON**, and there is no limit to the depth of the document.
+**KlafDocument** inserts data in the form of **JSON** records, which are referred to as documents. A document has a **key-value** relationship, and the values can be of type **string**, **number**, **boolean**, or **null**. It follows the same format as **JSON**, and there is no limit to the depth of the document.
 
 For example, you can insert a document like the following:
 
@@ -169,7 +169,7 @@ For example, you can insert a document like the following:
 }
 ```
 
-When inserting a document, **TissueRollDocument** looks for properties that have primitive types as values. Primitive types include **string**, **number**, **boolean**, and **null**. In the example document, properties like **name**, **color**, and **owner** fall into this category. **TissueRollDocument** attempts to optimize these properties by creating a new B+tree structure.
+When inserting a document, **KlafDocument** looks for properties that have primitive types as values. Primitive types include **string**, **number**, **boolean**, and **null**. In the example document, properties like **name**, **color**, and **owner** fall into this category. **KlafDocument** attempts to optimize these properties by creating a new B+tree structure.
 
 However, there's an important point to note. The properties **more** and **products** do not have primitive types as values. These properties are not optimized for queries and cannot be used as conditions for the **pick** method.
 
@@ -316,8 +316,8 @@ db.metadata.autoIncrement // 1
 db.metadata.count // 0
 ```
 
-## Performance Comparison between **sqlite3** and **TissueRollDocument**
+## Performance Comparison between **sqlite3** and **KlafDocument**
 
-Here is a performance comparison test with the node.js's representative database library, [**node-sqlite3**](https://github.com/TryGhost/node-sqlite3) library. This is the result of an average of 5 tests. **node-sqlite3** shows about **3** times faster speed when searching strings and full scanning documents, and insertion is faster in **TissueRollDocument**.
+Here is a performance comparison test with the node.js's representative database library, [**node-sqlite3**](https://github.com/TryGhost/node-sqlite3) library. This is the result of an average of 5 tests. **node-sqlite3** shows about **3** times faster speed when searching strings and full scanning documents, and insertion is faster in **KlafDocument**.
 
 ![COMPARISON](../asset/image/svg_perf_compare.svg)

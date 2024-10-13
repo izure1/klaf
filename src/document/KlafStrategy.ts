@@ -1,17 +1,17 @@
 import { BPTreeNode, SerializeStrategySync, SerializeStrategyHead } from 'serializable-bptree'
-import { SupportedType, TissueRollDocumentRoot } from './TissueRollDocument'
-import { TissueRoll } from '../core/TissueRoll'
+import { SupportedType, KlafDocumentRoot } from './KlafDocument'
+import { Klaf } from '../core/Klaf'
 import { DelayedExecution } from '../utils/DelayedExecution'
-import { TissueRollMediator } from '../core/TissueRollMediator'
+import { KlafMediator } from '../core/KlafMediator'
 
-export class TissueRollStrategy<T extends Record<string, SupportedType>> extends SerializeStrategySync<string, SupportedType> {
+export class KlafStrategy<T extends Record<string, SupportedType>> extends SerializeStrategySync<string, SupportedType> {
   protected readonly property: string
   protected readonly rootId: string
-  protected readonly db: TissueRoll
+  protected readonly db: Klaf
   protected readonly locker: DelayedExecution
-  protected readonly root: TissueRollDocumentRoot
+  protected readonly root: KlafDocumentRoot
 
-  constructor(order: number, property: string, db: TissueRoll, locker: DelayedExecution, rootId: string, root: TissueRollDocumentRoot) {
+  constructor(order: number, property: string, db: Klaf, locker: DelayedExecution, rootId: string, root: KlafDocumentRoot) {
     super(order)
     this.property = property
     this.rootId = rootId
@@ -29,7 +29,7 @@ export class TissueRollStrategy<T extends Record<string, SupportedType>> extends
   }
 
   private _addOverflowRecord(): string {
-    return TissueRollMediator.Put(
+    return KlafMediator.Put(
       this.db,
       new Array(this.db.metadata.payloadSize),
       false

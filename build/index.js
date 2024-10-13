@@ -1,7 +1,7 @@
 const esbuild = require('esbuild')
 
-// TissueRoll
-const TissueRollConfig = {
+// Klaf
+const KlafConfig = {
   target: 'esnext',
   bundle: true,
   entryPoints: [
@@ -10,7 +10,7 @@ const TissueRollConfig = {
 }
 
 esbuild.build({
-  ...TissueRollConfig,
+  ...KlafConfig,
   platform: 'browser',
   format: 'esm',
   outdir: 'dist/esm',
@@ -20,7 +20,7 @@ esbuild.build({
 })
 
 esbuild.build({
-  ...TissueRollConfig,
+  ...KlafConfig,
   platform: 'node',
   format: 'cjs',
   outdir: 'dist/cjs',

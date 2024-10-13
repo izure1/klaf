@@ -1,8 +1,8 @@
-import { TissueRollDocument } from '/dist/esm/index.mjs'
+import { KlafDocument } from '/dist/esm/index.mjs'
 import { WebWorkerEngine } from '/dist/esm/engine/WebWorker.mjs'
 
 const engine = new WebWorkerEngine()
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'test.db',
   engine,
   version: 0,

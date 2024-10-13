@@ -1,6 +1,6 @@
-# TissueRoll with Key-value
+# Klaf with Key-value
 
-This document covers the usage of the **key-value** database in **tissue-roll**.
+This document covers the usage of the **key-value** database in **klaf**.
 
 Unlike typical **key-value** databases, the key is automatically generated upon data insertion and **cannot** be directly specified by the user. Please take note of this distinction.
 
@@ -9,14 +9,14 @@ This database is suitable for a website that simply stores values in the databas
 ## Usage
 
 ```typescript
-import { TissueRoll } from 'tissue-roll'
-import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
+import { Klaf } from 'klaf'
+import { FileSystemEngine } from 'klaf/engine/FileSystem'
 
 // OPEN DB
 const path = 'my_file_path.db'
 const engine = new FileSystemEngine()
 const payloadSize = 1024
-const db = await TissueRoll.Open({
+const db = await Klaf.Open({
   path,
   engine,
   payloadSize

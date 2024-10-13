@@ -1,8 +1,8 @@
 import { unlinkSync } from 'node:fs'
-import { TissueRoll, TissueRollDocument } from 'tissue-roll'
-import { DataEngine } from 'tissue-roll/engine/DataEngine'
-import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
-import { InMemoryEngine } from 'tissue-roll/engine/InMemory'
+import { Klaf, KlafDocument } from 'klaf'
+import { DataEngine } from 'klaf/engine/DataEngine'
+import { FileSystemEngine } from 'klaf/engine/FileSystem'
+import { InMemoryEngine } from 'klaf/engine/InMemory'
 
 const IN_MEMORY = process.env.npm_config_in_memory === 'true'
 
@@ -11,7 +11,7 @@ const createDatabase = async (name: string) => {
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
   }
-  const db = await TissueRoll.Create({
+  const db = await Klaf.Create({
     path: name,
     engine,
     payloadSize: 1024,
@@ -37,7 +37,7 @@ const createDocumentDatabase = async (name: string) => {
     engine = new InMemoryEngine()
   }
 
-  const sql = await TissueRollDocument.Create({
+  const sql = await KlafDocument.Create({
     path: name,
     engine,
     version: 0,

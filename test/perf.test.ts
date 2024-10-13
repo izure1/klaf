@@ -1,11 +1,11 @@
 import { unlink } from 'node:fs/promises'
 import Chance from 'chance'
-import { TissueRoll, TissueRollDocument } from 'tissue-roll'
-import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
+import { Klaf, KlafDocument } from 'klaf'
+import { FileSystemEngine } from 'klaf/engine/FileSystem'
 
 async function createDatabase(name: string) {
   const engine = new FileSystemEngine()
-  const db = await TissueRoll.Create({
+  const db = await Klaf.Create({
     path: `perf-${name}.db`,
     engine,
     overwrite: true
@@ -23,7 +23,7 @@ async function createDatabase(name: string) {
 
 async function createSqlDatabase(name: string) {
   const engine = new FileSystemEngine()
-  const db = await TissueRollDocument.Create({
+  const db = await KlafDocument.Create({
     path: `perf-${name}.db`,
     version: 0,
     engine,
@@ -64,7 +64,7 @@ function createFakeUser() {
 }
 
 describe('perf:core', async () => {
-  const { db, close } = await createDatabase('tissue-roll')
+  const { db, close } = await createDatabase('klaf')
 
   afterAll(() => {
     close()
@@ -105,7 +105,7 @@ describe('perf:core', async () => {
 })
 
 describe('perf:document', async () => {
-  const { db, close } = await createSqlDatabase('tissue-roll-sql')
+  const { db, close } = await createSqlDatabase('klaf-sql')
 
   afterAll(() => {
     close()

@@ -1,21 +1,21 @@
-# TissueRoll Engines
+# Klaf Engines
 
-Since version 6.x, **tissue-roll** has introduced the concept of engines to support cross-platform compatibility. Engines are supported as ESM modules. You can choose an engine that suits your needs, or if necessary, extend an existing engine to create your own.
+**klaf** has introduced the concept of engines to support cross-platform compatibility. Engines are supported as ESM modules. You can choose an engine that suits your needs, or if necessary, extend an existing engine to create your own.
 
 ## Available Engines
 
-Currently, **tissue-roll** supports three engines by default.
+Currently, **klaf** supports three engines by default.
 
 ### FileSystemEngine
 
 **FileSystemEngine** works exclusively in Node.js environments. It operates using Node.js's file system module, allowing the creation of database files on your computer to ensure data persistence.
 
 ```typescript
-import { TissueRollDocument } from 'tissue-roll'
-import { FileSystemEngine } from 'tissue-roll/engine/FileSystem'
+import { KlafDocument } from 'klaf'
+import { FileSystemEngine } from 'klaf/engine/FileSystem'
 
 const engine = new FileSystemEngine()
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'your-database-path',
   engine,
   version: 0,
@@ -32,11 +32,11 @@ This engine is used when you want to build a typical database. Although it only 
 **InMemoryEngine** works in both Node.js and browser environments. This engine does not create any files; it only stores data in the computer's memory. As a result, all data is lost when the instance is terminated.
 
 ```typescript
-import { TissueRollDocument } from 'tissue-roll'
-import { InMemoryEngine } from 'tissue-roll/engine/InMemory'
+import { KlafDocument } from 'klaf'
+import { InMemoryEngine } from 'klaf/engine/InMemory'
 
 const engine = new InMemoryEngine()
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'your-database-path',
   engine,
   version: 0,
@@ -53,11 +53,11 @@ This engine offers high performance because it does not rely on file I/O operati
 **WebWorkerEngine** operates exclusively in the dedicated web worker environment of browsers. It uses the browser's **FileSystemFileHandle API** to manage files. However, if multiple tabs are opened, a separate database will be created for each web worker. When a tab is closed, the corresponding database file will be automatically deleted.
 
 ```typescript
-import { TissueRollDocument } from 'tissue-roll'
-import { WebWorkerEngine } from 'tissue-roll/engine/WebWorker'
+import { KlafDocument } from 'klaf'
+import { WebWorkerEngine } from 'klaf/engine/WebWorker'
 
 const engine = new WebWorkerEngine()
-const db = await TissueRollDocument.Open({
+const db = await KlafDocument.Open({
   path: 'your-database-path',
   engine,
   version: 0,
@@ -88,7 +88,7 @@ worker.onmessage = async (e) => {
 If desired, you can implement your own engine. Below is an example of the class structure required for creating a custom engine.
 
 ```typescript
-import { DataEngine } from 'tissue-roll/engine/DataEngine'
+import { DataEngine } from 'klaf/engine/DataEngine'
 
 class YourCustomEngine extends DataEngine {
   boot(file: string): Promise<void>

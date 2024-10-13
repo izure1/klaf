@@ -1,7 +1,7 @@
 import { ValueComparator } from 'serializable-bptree'
-import { PrimitiveType } from './TissueRollDocument'
+import { PrimitiveType } from './KlafDocument'
 
-export class TissueRollComparator extends ValueComparator<PrimitiveType> {
+export class KlafComparator extends ValueComparator<PrimitiveType> {
   private _normalize(v: PrimitiveType): string|number {
     v = v ?? null
     if (typeof v === 'boolean' || v === null) {

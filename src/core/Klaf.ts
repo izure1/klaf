@@ -61,14 +61,14 @@ export type NormalizedRecord = {
   payload: string,
 }
 
-export interface TissueRollCreateOption {
+export interface KlafCreateOption {
   /**
    * This is the path where the database file will be created.
    */
   path: string
   /**
    * The engine that determines how the database will function.
-   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `tissue-roll/engine/~` to use them.
+   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `klaf/engine/~` to use them.
    * If desired, you can extend the DataEngine class to implement your own custom engine.
    */
   engine: DataEngine
@@ -82,30 +82,30 @@ export interface TissueRollCreateOption {
   overwrite?: boolean
 }
 
-export class TissueRoll {
-  protected static readonly DB_VERSION                    = '6.0.0'
+export class Klaf {
+  protected static readonly DB_VERSION                    = '7.0.0'
   protected static readonly DB_NAME                       = 'TissueRoll'
   protected static readonly RootValidStringOffset         = 0
-  protected static readonly RootValidStringSize           = TissueRoll.DB_NAME.length
-  protected static readonly RootMajorVersionOffset        = TissueRoll.RootValidStringOffset+TissueRoll.RootValidStringSize
+  protected static readonly RootValidStringSize           = Klaf.DB_NAME.length
+  protected static readonly RootMajorVersionOffset        = Klaf.RootValidStringOffset+Klaf.RootValidStringSize
   protected static readonly RootMajorVersionSize          = 1
-  protected static readonly RootMinorVersionOffset        = TissueRoll.RootMajorVersionOffset+TissueRoll.RootMajorVersionSize
+  protected static readonly RootMinorVersionOffset        = Klaf.RootMajorVersionOffset+Klaf.RootMajorVersionSize
   protected static readonly RootMinorVersionSize          = 1
-  protected static readonly RootPatchVersionOffset        = TissueRoll.RootMinorVersionOffset+TissueRoll.RootMinorVersionSize
+  protected static readonly RootPatchVersionOffset        = Klaf.RootMinorVersionOffset+Klaf.RootMinorVersionSize
   protected static readonly RootPatchVersionSize          = 1
-  protected static readonly RootIndexOffset               = TissueRoll.RootPatchVersionOffset+TissueRoll.RootPatchVersionSize
+  protected static readonly RootIndexOffset               = Klaf.RootPatchVersionOffset+Klaf.RootPatchVersionSize
   protected static readonly RootIndexSize                 = 4
-  protected static readonly RootPayloadSizeOffset         = TissueRoll.RootIndexOffset+TissueRoll.RootIndexSize
+  protected static readonly RootPayloadSizeOffset         = Klaf.RootIndexOffset+Klaf.RootIndexSize
   protected static readonly RootPayloadSizeSize           = 4
-  protected static readonly RootTimestampOffset           = TissueRoll.RootPayloadSizeOffset+TissueRoll.RootPayloadSizeSize
+  protected static readonly RootTimestampOffset           = Klaf.RootPayloadSizeOffset+Klaf.RootPayloadSizeSize
   protected static readonly RootTimestampSize             = 8
-  protected static readonly RootSecretKeyOffset           = TissueRoll.RootTimestampOffset+TissueRoll.RootTimestampSize
+  protected static readonly RootSecretKeyOffset           = Klaf.RootTimestampOffset+Klaf.RootTimestampSize
   protected static readonly RootSecretKeySize             = 16
-  protected static readonly RootAutoIncrementOffset       = TissueRoll.RootSecretKeyOffset+TissueRoll.RootSecretKeySize
+  protected static readonly RootAutoIncrementOffset       = Klaf.RootSecretKeyOffset+Klaf.RootSecretKeySize
   protected static readonly RootAutoIncrementSize         = 8
-  protected static readonly RootCountOffset               = TissueRoll.RootAutoIncrementOffset+TissueRoll.RootAutoIncrementSize
+  protected static readonly RootCountOffset               = Klaf.RootAutoIncrementOffset+Klaf.RootAutoIncrementSize
   protected static readonly RootCountSize                 = 4
-  protected static readonly RootLastInternalIndexOffset   = TissueRoll.RootCountOffset+TissueRoll.RootCountSize
+  protected static readonly RootLastInternalIndexOffset   = Klaf.RootCountOffset+Klaf.RootCountSize
   protected static readonly RootLastInternalIndexSize     = 4
 
   protected static readonly RootChunkSize                 = 200
@@ -114,29 +114,29 @@ export class TissueRoll {
 
   protected static readonly PageTypeOffset                = 0
   protected static readonly PageTypeSize                  = 4
-  protected static readonly PageIndexOffset               = TissueRoll.PageTypeOffset+TissueRoll.PageTypeSize
+  protected static readonly PageIndexOffset               = Klaf.PageTypeOffset+Klaf.PageTypeSize
   protected static readonly PageIndexSize                 = 4
-  protected static readonly PageNextOffset                = TissueRoll.PageIndexOffset+TissueRoll.PageIndexSize
+  protected static readonly PageNextOffset                = Klaf.PageIndexOffset+Klaf.PageIndexSize
   protected static readonly PageNextSize                  = 4
-  protected static readonly PageCountOffset               = TissueRoll.PageNextOffset+TissueRoll.PageNextSize
+  protected static readonly PageCountOffset               = Klaf.PageNextOffset+Klaf.PageNextSize
   protected static readonly PageCountSize                 = 4
-  protected static readonly PageFreeOffset                = TissueRoll.PageCountOffset+TissueRoll.PageCountSize
+  protected static readonly PageFreeOffset                = Klaf.PageCountOffset+Klaf.PageCountSize
   protected static readonly PageFreeSize                  = 4
 
   protected static readonly RecordHeaderSize              = 40
   protected static readonly RecordHeaderIndexOffset       = 0
   protected static readonly RecordHeaderIndexSize         = 4
-  protected static readonly RecordHeaderOrderOffset       = TissueRoll.RecordHeaderIndexOffset+TissueRoll.RecordHeaderIndexSize
+  protected static readonly RecordHeaderOrderOffset       = Klaf.RecordHeaderIndexOffset+Klaf.RecordHeaderIndexSize
   protected static readonly RecordHeaderOrderSize         = 4
-  protected static readonly RecordHeaderLengthOffset      = TissueRoll.RecordHeaderOrderOffset+TissueRoll.RecordHeaderOrderSize
+  protected static readonly RecordHeaderLengthOffset      = Klaf.RecordHeaderOrderOffset+Klaf.RecordHeaderOrderSize
   protected static readonly RecordHeaderLengthSize        = 4
-  protected static readonly RecordHeaderMaxLengthOffset   = TissueRoll.RecordHeaderLengthOffset+TissueRoll.RecordHeaderLengthSize
+  protected static readonly RecordHeaderMaxLengthOffset   = Klaf.RecordHeaderLengthOffset+Klaf.RecordHeaderLengthSize
   protected static readonly RecordHeaderMaxLengthSize     = 4
-  protected static readonly RecordHeaderDeletedOffset     = TissueRoll.RecordHeaderMaxLengthOffset+TissueRoll.RecordHeaderMaxLengthSize
+  protected static readonly RecordHeaderDeletedOffset     = Klaf.RecordHeaderMaxLengthOffset+Klaf.RecordHeaderMaxLengthSize
   protected static readonly RecordHeaderDeletedSize       = 1
-  protected static readonly RecordHeaderAliasIndexOffset  = TissueRoll.RecordHeaderDeletedOffset+TissueRoll.RecordHeaderDeletedSize
+  protected static readonly RecordHeaderAliasIndexOffset  = Klaf.RecordHeaderDeletedOffset+Klaf.RecordHeaderDeletedSize
   protected static readonly RecordHeaderAliasIndexSize    = 4
-  protected static readonly RecordHeaderAliasOrderOffset  = TissueRoll.RecordHeaderAliasIndexOffset+TissueRoll.RecordHeaderAliasIndexSize
+  protected static readonly RecordHeaderAliasOrderOffset  = Klaf.RecordHeaderAliasIndexOffset+Klaf.RecordHeaderAliasIndexSize
   protected static readonly RecordHeaderAliasOrderSize    = 4
 
 
@@ -149,7 +149,7 @@ export class TissueRoll {
    * It creates a new database file.
    * @param option The database creation options.
    */
-  static async Create(option: TissueRollCreateOption): Promise<TissueRoll> {
+  static async Create(option: KlafCreateOption): Promise<Klaf> {
     const {
       path,
       engine,
@@ -157,7 +157,7 @@ export class TissueRoll {
       overwrite = false
     } = option
     // create root
-    const root = TissueRoll.CreateIterable(TissueRoll.RootChunkSize, 0)
+    const root = Klaf.CreateIterable(Klaf.RootChunkSize, 0)
     const {
       DB_VERSION,
       DB_NAME,
@@ -172,7 +172,7 @@ export class TissueRoll {
       RootAutoIncrementOffset,
       RootCountOffset,
       RootLastInternalIndexOffset,
-    } = TissueRoll
+    } = Klaf
     const [
       majorVersion,
       minorVersion,
@@ -197,8 +197,8 @@ export class TissueRoll {
     }
     await engine.create(path, root)
 
-    const database = await TissueRoll.Open({ path, engine })
-    database._addEmptyPage({ type: TissueRoll.InternalType }, true)
+    const database = await Klaf.Open({ path, engine })
+    database._addEmptyPage({ type: Klaf.InternalType }, true)
     return database
   }
 
@@ -207,7 +207,7 @@ export class TissueRoll {
    * If `option.payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
    * @param option The database creation options.
    */
-  static async Open(option: TissueRollCreateOption): Promise<TissueRoll> {
+  static async Open(option: KlafCreateOption): Promise<Klaf> {
     const {
       path,
       engine,
@@ -219,23 +219,23 @@ export class TissueRoll {
       if (!payloadSize) {
         throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
       }
-      return await TissueRoll.Create({ path, engine, payloadSize })
+      return await Klaf.Create({ path, engine, payloadSize })
     }
 
     await engine.open(path)
-    if (!TissueRoll.CheckDBVerify(engine)) {
+    if (!Klaf.CheckDBVerify(engine)) {
       await engine.close()
       throw ErrorBuilder.ERR_DB_INVALID(path)
     }
 
-    const root = TissueRoll.ParseRootChunk(engine)
+    const root = Klaf.ParseRootChunk(engine)
     const secretKey = Uint8Array.from(IntegerConverter.ToArray128(root.secretKey))
     
-    return new TissueRoll(engine, secretKey, root.payloadSize)
+    return new Klaf(engine, secretKey, root.payloadSize)
   }
 
   protected static ParseRootChunk(engine: DataEngine): IRootHeader {
-    const rHeader = engine.read(0, TissueRoll.RootChunkSize)
+    const rHeader = engine.read(0, Klaf.RootChunkSize)
     const {
       RootMajorVersionOffset,
       RootMajorVersionSize,
@@ -257,7 +257,7 @@ export class TissueRoll {
       RootCountSize,
       RootLastInternalIndexOffset,
       RootLastInternalIndexSize,
-    } = TissueRoll
+    } = Klaf
     const majorVersion  = IntegerConverter.FromArray8(
       IterableView.Read(rHeader, RootMajorVersionOffset, RootMajorVersionSize)
     )
@@ -308,35 +308,35 @@ export class TissueRoll {
 
   protected static CheckDBVerify(engine: DataEngine) {
     const chunk = engine.read(
-      TissueRoll.RootValidStringOffset,
-      TissueRoll.RootValidStringSize
+      Klaf.RootValidStringOffset,
+      Klaf.RootValidStringSize
     )
     const text = TextConverter.FromArray(chunk)
-    return text === TissueRoll.DB_NAME
+    return text === Klaf.DB_NAME
   }
 
-  protected static CallAddEmptyPage(db: TissueRoll, head: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
+  protected static CallAddEmptyPage(db: Klaf, head: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
     return db._addEmptyPage(head, incrementInternalIndex)
   }
 
-  protected static CallSetPage(db: TissueRoll, head: Partial<IPageHeader>, data: number[]): void {
+  protected static CallSetPage(db: Klaf, head: Partial<IPageHeader>, data: number[]): void {
     const newHeadRaw = db._createEmptyHeader(head)
     const newHead = db._normalizeHeader(newHeadRaw)
     db._setPage(newHead, data)
   }
 
-  protected static CallInternalPut(db: TissueRoll, data: number[], autoIncrement: boolean): string {
+  protected static CallInternalPut(db: Klaf, data: number[], autoIncrement: boolean): string {
     return db.callInternalPut(data, autoIncrement)
   }
 
-  protected static CallInternalUpdate(db: TissueRoll, id: string, data: string): {
+  protected static CallInternalUpdate(db: Klaf, id: string, data: string): {
     id: string
     data: string
   } {
     return db.callInternalUpdate(id, data)
   }
 
-  protected static CallInternalDelete(db: TissueRoll, id: string, countDecrement: boolean): void {
+  protected static CallInternalDelete(db: Klaf, id: string, countDecrement: boolean): void {
     return db.callInternalDelete(id, countDecrement)
   }
 
@@ -347,21 +347,21 @@ export class TissueRoll {
   protected readonly payloadSize: number
   protected readonly secretKey: Uint8Array
   protected readonly hooker: IHookallSync<IHooker>
-  private readonly _encodingIdCache: ReturnType<TissueRoll['_createEncodingIdCache']>
-  private readonly _decodingIdCache: ReturnType<TissueRoll['_createDecodingIdCache']>
-  private readonly _decodingRecordCache: ReturnType<TissueRoll['_createDecodingRecordCache']>
-  private readonly _pageHeaderCache: ReturnType<TissueRoll['_createPageHeaderCache']>
-  private readonly _recordPositionCache: ReturnType<TissueRoll['_createRecordPositionCache']>
-  private readonly _recordCache: ReturnType<TissueRoll['_createRecordCache']>
+  private readonly _encodingIdCache: ReturnType<Klaf['_createEncodingIdCache']>
+  private readonly _decodingIdCache: ReturnType<Klaf['_createDecodingIdCache']>
+  private readonly _decodingRecordCache: ReturnType<Klaf['_createDecodingRecordCache']>
+  private readonly _pageHeaderCache: ReturnType<Klaf['_createPageHeaderCache']>
+  private readonly _recordPositionCache: ReturnType<Klaf['_createRecordPositionCache']>
+  private readonly _recordCache: ReturnType<Klaf['_createRecordCache']>
 
   protected constructor(engine: DataEngine, secretKey: Uint8Array, payloadSize: number) {
-    if (payloadSize < TissueRoll.CellSize) {
+    if (payloadSize < Klaf.CellSize) {
       engine.close()
-      throw new Error(`The payload size is too small. It must be greater than ${TissueRoll.CellSize}. But got a ${payloadSize}`)
+      throw new Error(`The payload size is too small. It must be greater than ${Klaf.CellSize}. But got a ${payloadSize}`)
     }
-    this.chunkSize        = TissueRoll.HeaderSize+payloadSize
-    this.headerSize       = TissueRoll.HeaderSize
-    this.maximumFreeSize  = payloadSize-TissueRoll.CellSize
+    this.chunkSize        = Klaf.HeaderSize+payloadSize
+    this.headerSize       = Klaf.HeaderSize
+    this.maximumFreeSize  = payloadSize-Klaf.CellSize
     this.payloadSize      = payloadSize
     this.secretKey        = secretKey
     this.engine           = engine
@@ -379,7 +379,7 @@ export class TissueRoll {
   }
 
   get metadata(): IRootHeader {
-    return TissueRoll.ParseRootChunk(this.engine)
+    return Klaf.ParseRootChunk(this.engine)
   }
 
   private _createEncodingIdCache() {
@@ -409,50 +409,50 @@ export class TissueRoll {
       const index = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderIndexOffset,
-          TissueRoll.RecordHeaderIndexSize
+          Klaf.RecordHeaderIndexOffset,
+          Klaf.RecordHeaderIndexSize
         )
       )
       const order = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderOrderOffset,
-          TissueRoll.RecordHeaderOrderSize
+          Klaf.RecordHeaderOrderOffset,
+          Klaf.RecordHeaderOrderSize
         )
       )
       const length = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderLengthOffset,
-          TissueRoll.RecordHeaderLengthSize
+          Klaf.RecordHeaderLengthOffset,
+          Klaf.RecordHeaderLengthSize
         )
       )
       const maxLength = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderMaxLengthOffset,
-          TissueRoll.RecordHeaderMaxLengthSize
+          Klaf.RecordHeaderMaxLengthOffset,
+          Klaf.RecordHeaderMaxLengthSize
         )
       )
       const deleted = IntegerConverter.FromArray8(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderDeletedOffset,
-          TissueRoll.RecordHeaderDeletedSize
+          Klaf.RecordHeaderDeletedOffset,
+          Klaf.RecordHeaderDeletedSize
         )
       )
       const aliasIndex = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderAliasIndexOffset,
-          TissueRoll.RecordHeaderAliasIndexSize
+          Klaf.RecordHeaderAliasIndexOffset,
+          Klaf.RecordHeaderAliasIndexSize
         )
       )
       const aliasOrder = IntegerConverter.FromArray32(
         IterableView.Read(
           rawHeader,
-          TissueRoll.RecordHeaderAliasOrderOffset,
-          TissueRoll.RecordHeaderAliasOrderSize
+          Klaf.RecordHeaderAliasOrderOffset,
+          Klaf.RecordHeaderAliasOrderSize
         )
       )
   
@@ -485,28 +485,28 @@ export class TissueRoll {
     return new CacheEntanglementSync((key, state, index: number, order: number) => {
       const payloadPos    = this._pagePayloadPosition(index)
       const cellPos       = this._cellPosition(index, order)
-      const cellValue     = this.engine.read(cellPos, TissueRoll.CellSize)
+      const cellValue     = this.engine.read(cellPos, Klaf.CellSize)
       const recordOffset  = IntegerConverter.FromArray32(cellValue)
       return payloadPos+recordOffset
     })
   }
 
   private _createRecordCache(
-    recordPosition: ReturnType<TissueRoll['_createRecordPositionCache']>,
-    pageHeader: ReturnType<TissueRoll['_createPageHeaderCache']>
+    recordPosition: ReturnType<Klaf['_createRecordPositionCache']>,
+    pageHeader: ReturnType<Klaf['_createPageHeaderCache']>
   ) {
     return new CacheEntanglementSync((key, {
       recordPosition,
       pageHeader,
     }, index: number, order: number) => {
       const pos = recordPosition.raw
-      const rHeader = this.engine.read(pos, TissueRoll.RecordHeaderSize)
-      const payloadPos = TissueRoll.RecordHeaderSize+pos
+      const rHeader = this.engine.read(pos, Klaf.RecordHeaderSize)
+      const payloadPos = Klaf.RecordHeaderSize+pos
       const payloadLength = IntegerConverter.FromArray32(
         IterableView.Read(
           rHeader,
-          TissueRoll.RecordHeaderLengthOffset,
-          TissueRoll.RecordHeaderLengthSize
+          Klaf.RecordHeaderLengthOffset,
+          Klaf.RecordHeaderLengthSize
         )
       )
   
@@ -520,7 +520,7 @@ export class TissueRoll {
   
       // overflow 페이지로 나뉘어져 있을 경우
       const record = []
-      let remain = payloadLength+TissueRoll.RecordHeaderSize
+      let remain = payloadLength+Klaf.RecordHeaderSize
   
       while (remain > 0) {
         const pos   = this._pagePayloadPosition(header.index)
@@ -552,24 +552,24 @@ export class TissueRoll {
     count = 0,
     free = this.payloadSize
   }: Partial<IPageHeader> = {}): number[] {
-    const header = TissueRoll.CreateIterable(this.headerSize, 0)
+    const header = Klaf.CreateIterable(this.headerSize, 0)
 
     const rType  = IntegerConverter.ToArray32(type)
     const rIndex = IntegerConverter.ToArray32(index)
     const rNext  = IntegerConverter.ToArray32(next)
     const rCount = IntegerConverter.ToArray32(count)
     const rFree  = IntegerConverter.ToArray32(free)
-    IterableView.Update(header, TissueRoll.PageTypeOffset, rType)
-    IterableView.Update(header, TissueRoll.PageIndexOffset, rIndex)
-    IterableView.Update(header, TissueRoll.PageNextOffset, rNext)
-    IterableView.Update(header, TissueRoll.PageCountOffset, rCount)
-    IterableView.Update(header, TissueRoll.PageFreeOffset, rFree)
+    IterableView.Update(header, Klaf.PageTypeOffset, rType)
+    IterableView.Update(header, Klaf.PageIndexOffset, rIndex)
+    IterableView.Update(header, Klaf.PageNextOffset, rNext)
+    IterableView.Update(header, Klaf.PageCountOffset, rCount)
+    IterableView.Update(header, Klaf.PageFreeOffset, rFree)
 
     return header
   }
 
   private _createEmptyPayload(): number[] {
-    return TissueRoll.CreateIterable(this.payloadSize, 0)
+    return Klaf.CreateIterable(this.payloadSize, 0)
   }
   
   private _createEmptyPage(header: Partial<IPageHeader>): number[] {
@@ -581,7 +581,7 @@ export class TissueRoll {
     let { index, lastInternalIndex } = this.metadata
     index++
     this.engine.update(
-      TissueRoll.RootIndexOffset,
+      Klaf.RootIndexOffset,
       IntegerConverter.ToArray32(index)
     )
 
@@ -589,10 +589,10 @@ export class TissueRoll {
     const page = this._createEmptyPage(Object.assign({}, header, { index }))
     this.engine.append(page)
 
-    if (header.type === TissueRoll.InternalType && incrementInternalIndex) {
+    if (header.type === Klaf.InternalType && incrementInternalIndex) {
       lastInternalIndex++
       this.engine.update(
-        TissueRoll.RootLastInternalIndexOffset,
+        Klaf.RootLastInternalIndexOffset,
         IntegerConverter.ToArray32(lastInternalIndex)
       )
     }
@@ -601,7 +601,7 @@ export class TissueRoll {
   }
 
   private _pagePosition(index: number): number {
-    return TissueRoll.RootChunkSize+(this.chunkSize*(index-1))
+    return Klaf.RootChunkSize+(this.chunkSize*(index-1))
   }
 
   private _pagePayloadPosition(index: number): number {
@@ -611,7 +611,7 @@ export class TissueRoll {
   private _cellPosition(index: number, order: number): number {
     const pagePos = this._pagePosition(index)
     const endOfPage = pagePos+this.chunkSize
-    return endOfPage-(TissueRoll.CellSize*order)
+    return endOfPage-(Klaf.CellSize*order)
   }
 
   private _recordPosition(index: number, order: number): number {
@@ -645,13 +645,13 @@ export class TissueRoll {
     const rawId = this._rawRecordId(id)
     const length = IntegerConverter.ToArray32(data.length)
 
-    const recordHeader = TissueRoll.CreateIterable(TissueRoll.RecordHeaderSize, 0)
+    const recordHeader = Klaf.CreateIterable(Klaf.RecordHeaderSize, 0)
     // insert record index
-    IterableView.Update(recordHeader, TissueRoll.RecordHeaderIndexOffset, rawId)
+    IterableView.Update(recordHeader, Klaf.RecordHeaderIndexOffset, rawId)
     // insert record length
-    IterableView.Update(recordHeader, TissueRoll.RecordHeaderLengthOffset, length)
+    IterableView.Update(recordHeader, Klaf.RecordHeaderLengthOffset, length)
     // insert record max length
-    IterableView.Update(recordHeader, TissueRoll.RecordHeaderMaxLengthOffset, length)
+    IterableView.Update(recordHeader, Klaf.RecordHeaderMaxLengthOffset, length)
     
     const record = recordHeader.concat(data)
     return record
@@ -668,8 +668,8 @@ export class TissueRoll {
   }
 
   private _normalizeRecord(record: number[]): NormalizedRecord {
-    const rawHeader   = IterableView.Read(record, 0, TissueRoll.RecordHeaderSize)
-    const rawPayload  = IterableView.Read(record, TissueRoll.RecordHeaderSize)
+    const rawHeader   = IterableView.Read(record, 0, Klaf.RecordHeaderSize)
+    const rawPayload  = IterableView.Read(record, Klaf.RecordHeaderSize)
 
     const header = this._decodingRecordCache
       .cache(rawHeader.join(','), rawHeader)
@@ -694,19 +694,19 @@ export class TissueRoll {
 
   private _normalizeHeader(header: number[]): IPageHeader {
     const type  = IntegerConverter.FromArray32(
-      IterableView.Read(header, TissueRoll.PageTypeOffset, TissueRoll.PageTypeSize)
+      IterableView.Read(header, Klaf.PageTypeOffset, Klaf.PageTypeSize)
     )
     const index = IntegerConverter.FromArray32(
-      IterableView.Read(header, TissueRoll.PageIndexOffset, TissueRoll.PageIndexSize)
+      IterableView.Read(header, Klaf.PageIndexOffset, Klaf.PageIndexSize)
     )
     const next  = IntegerConverter.FromArray32(
-      IterableView.Read(header, TissueRoll.PageNextOffset, TissueRoll.PageNextSize)
+      IterableView.Read(header, Klaf.PageNextOffset, Klaf.PageNextSize)
     )
     const count = IntegerConverter.FromArray32(
-      IterableView.Read(header, TissueRoll.PageCountOffset, TissueRoll.PageCountSize)
+      IterableView.Read(header, Klaf.PageCountOffset, Klaf.PageCountSize)
     )
     const free  = IntegerConverter.FromArray32(
-      IterableView.Read(header, TissueRoll.PageFreeOffset, TissueRoll.PageFreeSize)
+      IterableView.Read(header, Klaf.PageFreeOffset, Klaf.PageFreeSize)
     )
     return {
       type,
@@ -723,7 +723,7 @@ export class TissueRoll {
     }
     while (true) {
       const { type } = this._normalizeHeader(this._getHeader(index))
-      if (type !== TissueRoll.OverflowType) {
+      if (type !== Klaf.OverflowType) {
         break
       }
       index--
@@ -817,7 +817,7 @@ export class TissueRoll {
 
     this._setPagePayload(header.index, header.count+1, record)
     
-    const usage = TissueRoll.RecordHeaderSize+TissueRoll.CellSize+data.length
+    const usage = Klaf.RecordHeaderSize+Klaf.CellSize+data.length
     header.count += 1
     header.free -= usage
 
@@ -834,19 +834,19 @@ export class TissueRoll {
     if (autoIncrement) {
       let { autoIncrement: increment, count } = this.metadata
       this.engine.update(
-        TissueRoll.RootAutoIncrementOffset,
+        Klaf.RootAutoIncrementOffset,
         IntegerConverter.ToArray64(increment+1n)
       )
       this.engine.update(
-        TissueRoll.RootCountOffset,
+        Klaf.RootCountOffset,
         IntegerConverter.ToArray32(count+1)
       )
     }
     
     // 1. 이전 페이지의 공간이 넉넉하여 단일 페이지에 넣을 수 있는 경우
     // 이전 페이지에 넣기
-    const recordSize  = TissueRoll.RecordHeaderSize+data.length
-    const recordUsage = TissueRoll.CellSize+recordSize
+    const recordSize  = Klaf.RecordHeaderSize+data.length
+    const recordUsage = Klaf.CellSize+recordSize
     if (header.free >= recordUsage) {
       const recordId = this._setPage(header, data)
       return recordId
@@ -858,7 +858,7 @@ export class TissueRoll {
     // 하지만 이전 페이지가 사용되지 않은 채 공백으로 남아 있을 수 있습니다.
     // 따라서 사용되었을 경우에만 생성되어야 합니다.
     if (header.count) {
-      index = this._addEmptyPage({ type: TissueRoll.InternalType }, true)
+      index = this._addEmptyPage({ type: Klaf.InternalType }, true)
       header = this._normalizeHeader(this._getHeader(index))
     }
     
@@ -889,9 +889,9 @@ export class TissueRoll {
       this._setPagePayload(currentHeader.index, currentHeader.count+1, chunk)
       
       if (!last) {
-        index = this._addEmptyPage({ type: TissueRoll.OverflowType }, false)
+        index = this._addEmptyPage({ type: Klaf.OverflowType }, false)
       }
-      currentHeader.type = TissueRoll.OverflowType
+      currentHeader.type = Klaf.OverflowType
       currentHeader.free = 0
       currentHeader.next = index
       currentHeader.count += 1
@@ -901,17 +901,17 @@ export class TissueRoll {
       this._setPageHeader(currentHeader)
     }
     const headHeader = this._normalizeHeader(this._getHeader(headIndex))
-    headHeader.type = TissueRoll.InternalType
+    headHeader.type = Klaf.InternalType
     headHeader.count = 1
     headHeader.free = 0
     this._setPageHeader(headHeader)
 
     if (isInternalIndexDeferred) {
       this.engine.update(
-        TissueRoll.RootLastInternalIndexOffset,
+        Klaf.RootLastInternalIndexOffset,
         IntegerConverter.ToArray32(index)
       )
-      this._addEmptyPage({ type: TissueRoll.InternalType }, true)
+      this._addEmptyPage({ type: Klaf.InternalType }, true)
     }
 
     return recordId
@@ -954,13 +954,13 @@ export class TissueRoll {
       let next = header.next
       if (!next) {
         next = this._addEmptyPage({
-          type: TissueRoll.OverflowType,
+          type: Klaf.OverflowType,
           count: 1,
           free: 0
         }, false)
         IterableView.Update(
           rHeader,
-          TissueRoll.PageNextOffset,
+          Klaf.PageNextOffset,
           IntegerConverter.ToArray32(next)
         )
         this.engine.update(
@@ -1003,12 +1003,12 @@ export class TissueRoll {
         const headClone = IterableView.Copy(head.record.rawRecord)
         IterableView.Update(
           headClone,
-          TissueRoll.RecordHeaderAliasIndexOffset,
+          Klaf.RecordHeaderAliasIndexOffset,
           IntegerConverter.ToArray32(index)
         )
         IterableView.Update(
           headClone,
-          TissueRoll.RecordHeaderAliasOrderOffset,
+          Klaf.RecordHeaderAliasOrderOffset,
           IntegerConverter.ToArray32(order)
         )
         this.engine.update(
@@ -1035,7 +1035,7 @@ export class TissueRoll {
     else {
       IterableView.Update(
         record,
-        TissueRoll.RecordHeaderMaxLengthOffset,
+        Klaf.RecordHeaderMaxLengthOffset,
         IntegerConverter.ToArray32(tail.record.header.maxLength)
       )
       if (this._isInternalRecord(tail.record.rawRecord)) {
@@ -1078,12 +1078,12 @@ export class TissueRoll {
   protected callInternalDelete(recordId: string, countDecrement: boolean): void {
     const { index, order } = this._normalizeRecordId(recordId)
     
-    const pos = this._recordPosition(index, order)+TissueRoll.RecordHeaderDeletedOffset
+    const pos = this._recordPosition(index, order)+Klaf.RecordHeaderDeletedOffset
     const buf = IntegerConverter.ToArray8(1)
     if (countDecrement) {
       const { count } = this.metadata
       this.engine.update(
-        TissueRoll.RootCountOffset,
+        Klaf.RootCountOffset,
         IntegerConverter.ToArray32(count-1)
       )
     }

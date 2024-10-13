@@ -1,10 +1,10 @@
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheEntanglementSync } from 'cache-entanglement'
 import { h64 } from 'xxhashjs'
-import { TissueRoll } from '../core/TissueRoll'
-import { TissueRollMediator } from '../core/TissueRollMediator'
-import { TissueRollComparator } from './TissueRollComparator'
-import { TissueRollStrategy } from './TissueRollStrategy'
+import { Klaf } from '../core/Klaf'
+import { KlafMediator } from '../core/KlafMediator'
+import { KlafComparator } from './KlafComparator'
+import { KlafStrategy } from './KlafStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
 import { DelayedExecution } from '../utils/DelayedExecution'
@@ -13,14 +13,14 @@ import { DataEngine } from '../engine/DataEngine'
 export type PrimitiveType = string|number|boolean|null
 export type SupportedType = PrimitiveType|SupportedType[]|{ [key: string]: SupportedType }
 
-export interface TissueRollDocumentRoot {
+export interface KlafDocumentRoot {
   verify: 'TissueRollDocument'
   schemeVersion: number
   reassignments: string[]
   head: Record<string, SerializeStrategyHead|null>
 }
 
-export type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
+export type KlafDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   /**
    * Includes if this value matches the document's property value.
    */
@@ -51,11 +51,11 @@ export type TissueRollDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   like?: string
 }
 
-export interface TissueRollDocumentRecordShape {
+export interface KlafDocumentRecordShape {
   [key: string]: SupportedType
 }
 
-export interface TissueRollDocumentTimestampShape {
+export interface KlafDocumentTimestampShape {
   /**
    * The index when the document was inserted. This value is automatically added when inserted into the database.
    */
@@ -70,20 +70,20 @@ export interface TissueRollDocumentTimestampShape {
   updatedAt: number
 }
 
-export type TissueRollDocumentRecord<
-  T extends TissueRollDocumentRecordShape
-> = T&TissueRollDocumentTimestampShape
+export type KlafDocumentRecord<
+  T extends KlafDocumentRecordShape
+> = T&KlafDocumentTimestampShape
 
-export type TissueRollDocumentQuery<
-  T extends TissueRollDocumentRecord<any>
+export type KlafDocumentQuery<
+  T extends KlafDocumentRecord<any>
 > = {
   /**
    * The property of the document to be searched.
    */
-  [K in keyof T]?: T[K]|TissueRollDocumentQueryCondition<T, K>
+  [K in keyof T]?: T[K]|KlafDocumentQueryCondition<T, K>
 }
 
-export interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<TissueRollDocumentRecordShape>> {
+export interface KlafDocumentOption<T extends KlafDocumentRecord<KlafDocumentRecordShape>> {
   /**
    * Used when retrieving a portion of the searched documents. Specifies the starting offset, with a default value of `0`.
    */
@@ -102,27 +102,27 @@ export interface TissueRollDocumentOption<T extends TissueRollDocumentRecord<Tis
   desc?: boolean
 }
 
-export interface TissueRollDocumentField {
+export interface KlafDocumentField {
   default: () => SupportedType,
   validate?: (v: SupportedType) => boolean
 }
 
-export interface TissueRollDocumentScheme {
-  [key: string]: TissueRollDocumentField
+export interface KlafDocumentScheme {
+  [key: string]: KlafDocumentField
 }
 
-export type TissueRollDocumentSchemeType<T extends TissueRollDocumentScheme> = {
+export type KlafDocumentSchemeType<T extends KlafDocumentScheme> = {
   [K in keyof T]: ReturnType<T[K]['default']>
 }
 
-export interface TissueRollDocumentCreateOption<T extends TissueRollDocumentScheme> {
+export interface KlafDocumentCreateOption<T extends KlafDocumentScheme> {
   /**
    * This is the path where the database file will be created.
    */
   path: string
   /**
    * The engine that determines how the database will function.
-   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `tissue-roll/engine/~` to use them.
+   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `klaf/engine/~` to use them.
    * If desired, you can extend the DataEngine class to implement your own custom engine.
    */
   engine: DataEngine
@@ -135,7 +135,7 @@ export interface TissueRollDocumentCreateOption<T extends TissueRollDocumentSche
    * The property names become field names, and their values perform validation when inserting or updating values.
    * Please refer to the example below.
    * ```
-   * const db = TissueRollDocument.Open({
+   * const db = KlafDocument.Open({
    *   path: 'my-db-path/database.db',
    *   scheme: {
    *     id: {
@@ -164,10 +164,10 @@ export interface TissueRollDocumentCreateOption<T extends TissueRollDocumentSche
   overwrite?: boolean
 }
 
-export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
+export class KlafDocument<T extends KlafDocumentRecordShape> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
-  private static Verify(file: string, payload: string): TissueRollDocumentRoot {
+  private static Verify(file: string, payload: string): KlafDocumentRoot {
     const docRoot = ObjectHelper.Parse(payload, ErrorBuilder.ERR_INVALID_OBJECT(payload))
     // not object
     if (!ObjectHelper.IsObject(docRoot)) {
@@ -176,13 +176,13 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     // check verify
     if (
       !ObjectHelper.VerifyProperties(docRoot, {
-        verify: (v) => v === TissueRollDocument.DB_NAME,
+        verify: (v) => v === KlafDocument.DB_NAME,
         head: (v) => ObjectHelper.IsObject(v)
       })
     ) {
       throw ErrorBuilder.ERR_DB_INVALID(file)
     }
-    return docRoot as unknown as TissueRollDocumentRoot
+    return docRoot as unknown as KlafDocumentRoot
   }
 
   private static OrderN(payloadSize: number, meanValueSize: number): number {
@@ -191,10 +191,10 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     let n = 0
     while (
       reserved +
-      TissueRollMediator.HeaderSize +
+      KlafMediator.HeaderSize +
       (
-        TissueRollMediator.CellSize +
-        TissueRollMediator.RecordHeaderSize +
+        KlafMediator.CellSize +
+        KlafMediator.RecordHeaderSize +
         meanValueSize +
         keySize +
         3 // comma, quotation
@@ -210,8 +210,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param option The database creation options.
    */
   static async Create<
-    T extends TissueRollDocumentScheme
-  >(option: TissueRollDocumentCreateOption<T>): Promise<TissueRollDocument<TissueRollDocumentSchemeType<T>>> {
+    T extends KlafDocumentScheme
+  >(option: KlafDocumentCreateOption<T>): Promise<KlafDocument<KlafDocumentSchemeType<T>>> {
     const {
       path,
       engine,
@@ -220,21 +220,21 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       payloadSize = 1024,
       overwrite = false
     } = option
-    const db = await TissueRoll.Create({ path, engine, payloadSize, overwrite })
-    const docRoot: TissueRollDocumentRoot = {
-      verify: TissueRollDocument.DB_NAME,
+    const db = await Klaf.Create({ path, engine, payloadSize, overwrite })
+    const docRoot: KlafDocumentRoot = {
+      verify: KlafDocument.DB_NAME,
       schemeVersion: 0,
       reassignments: [],
       head: {},
     }
-    const rootId = TissueRollMediator.Put(
+    const rootId = KlafMediator.Put(
       db,
       new Array(db.metadata.payloadSize).fill(0),
       false
     )
     db.update(rootId, JSON.stringify(docRoot))
 
-    return new TissueRollDocument(db, rootId, docRoot, scheme, version, 0)
+    return new KlafDocument(db, rootId, docRoot, scheme, version, 0)
   }
 
   /**
@@ -242,8 +242,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param option The database creation options.
    */
   static async Open<
-    T extends TissueRollDocumentScheme
-  >(option: TissueRollDocumentCreateOption<T>): Promise<TissueRollDocument<TissueRollDocumentSchemeType<T>>> {
+    T extends KlafDocumentScheme
+  >(option: KlafDocumentCreateOption<T>): Promise<KlafDocument<KlafDocumentSchemeType<T>>> {
     const {
       path,
       engine,
@@ -257,44 +257,44 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       if (!payloadSize) {
         throw ErrorBuilder.ERR_DB_NO_EXISTS(path)
       }
-      return await TissueRollDocument.Create(option)
+      return await KlafDocument.Create(option)
     }
 
-    const db = await TissueRoll.Open({ path, engine, payloadSize })
+    const db = await Klaf.Open({ path, engine, payloadSize })
     const record = db.getRecords(1)[0]
-    const docRoot = TissueRollDocument.Verify(path, record.payload)
+    const docRoot = KlafDocument.Verify(path, record.payload)
 
-    return new TissueRollDocument(db, record.header.id, docRoot, scheme, version, 0)
+    return new KlafDocument(db, record.header.id, docRoot, scheme, version, 0)
   }
  
-  protected readonly db: TissueRoll
+  protected readonly db: Klaf
   protected readonly rootId: string
   protected readonly order: number
-  protected readonly comparator: TissueRollComparator
+  protected readonly comparator: KlafComparator
   protected readonly locker: DelayedExecution
-  protected readonly scheme: TissueRollDocumentScheme
+  protected readonly scheme: KlafDocumentScheme
   protected readonly schemeVersion: number
   protected lock: boolean
-  private readonly _trees: ReturnType<TissueRollDocument<T>['_createTreesCache']>
-  private readonly _document: ReturnType<TissueRollDocument<T>['_createDocumentCache']>
-  private _root: TissueRollDocumentRoot
+  private readonly _trees: ReturnType<KlafDocument<T>['_createTreesCache']>
+  private readonly _document: ReturnType<KlafDocument<T>['_createDocumentCache']>
+  private _root: KlafDocumentRoot
   private _metadata: {
     autoIncrement: bigint
     count: number
   }
 
   protected constructor(
-    db: TissueRoll,
+    db: Klaf,
     rootId: string,
-    root: TissueRollDocumentRoot,
-    scheme: TissueRollDocumentScheme,
+    root: KlafDocumentRoot,
+    scheme: KlafDocumentScheme,
     schemeVersion: number,
     writeBack: number
   ) {
     this.db = db
     this.rootId = rootId
-    this.order = Math.max(TissueRollDocument.OrderN(db.metadata.payloadSize, 40), 4)
-    this.comparator = new TissueRollComparator()
+    this.order = Math.max(KlafDocument.OrderN(db.metadata.payloadSize, 40), 4)
+    this.comparator = new KlafComparator()
     this.locker = new DelayedExecution(writeBack)
     this.schemeVersion = schemeVersion
     this.scheme = scheme
@@ -328,7 +328,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   private _createTreesCache() {
     return new CacheEntanglementSync((key) => {
       const tree = new BPTreeSync<string, SupportedType>(
-        new TissueRollStrategy(this.order, key, this.db, this.locker, this.rootId, this._root),
+        new KlafStrategy(this.order, key, this.db, this.locker, this.rootId, this._root),
         this.comparator
       )
       tree.init()
@@ -340,7 +340,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     return new CacheEntanglementSync((
       _key,
       _state,
-      document: TissueRollDocumentRecord<T>
+      document: KlafDocumentRecord<T>
     ) => document)
   }
 
@@ -351,29 +351,29 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     return this._trees.cache(property).raw
   }
 
-  protected updateRoot(root: TissueRollDocumentRoot): void {
+  protected updateRoot(root: KlafDocumentRoot): void {
     this._root = root
     this.db.update(this.rootId, JSON.stringify(root))
   }
 
   private _normalizeOption(
-    option: Partial<TissueRollDocumentOption<TissueRollDocumentRecord<T>>>
-  ): Required<TissueRollDocumentOption<TissueRollDocumentRecord<T>>> {
-    const def: Required<TissueRollDocumentOption<TissueRollDocumentRecord<T>>> = {
+    option: Partial<KlafDocumentOption<KlafDocumentRecord<T>>>
+  ): Required<KlafDocumentOption<KlafDocumentRecord<T>>> {
+    const def: Required<KlafDocumentOption<KlafDocumentRecord<T>>> = {
       start: 0,
       end: Number.MAX_SAFE_INTEGER,
       order: 'documentIndex',
       desc: false
     }
     const merged: Required<
-      TissueRollDocumentOption<TissueRollDocumentRecord<T>>
+      KlafDocumentOption<KlafDocumentRecord<T>>
     > = Object.assign({}, def, option)
     return merged
   }
 
   private _normalizeFlatQuery(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
-  ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>
+  ): KlafDocumentQuery<KlafDocumentRecord<T>> {
     query = Object.assign({}, query)
     for (const property in query) {
       const condition = query[property]
@@ -387,8 +387,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   }
 
   private _normalizeQuery(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
-  ): TissueRollDocumentQuery<TissueRollDocumentRecord<T>> {
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>
+  ): KlafDocumentQuery<KlafDocumentRecord<T>> {
     return Object.assign({
       'documentIndex': {
         gt: 0
@@ -438,11 +438,11 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   private _callInternalPut(
     document: Partial<T>,
     ...overwrite: Partial<T>[]
-  ): TissueRollDocumentRecord<T> {
+  ): KlafDocumentRecord<T> {
     const record = Object.assign(
       this._normalizeRecord(document),
       ...overwrite
-    ) as TissueRollDocumentRecord<T>
+    ) as KlafDocumentRecord<T>
     const stringify = JSON.stringify(record)
     const recordId = this.db.put(stringify)
     for (const property in record) {
@@ -465,7 +465,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * If search functionality is required, store the relevant property separately as a top-level property.
    * @param document The document to be inserted.
    */
-  put(document: Partial<T>): TissueRollDocumentRecord<T> {
+  put(document: Partial<T>): KlafDocumentRecord<T> {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
@@ -474,7 +474,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
       documentIndex: Number(this._metadata.autoIncrement)+1,
       createdAt: now,
       updatedAt: now,
-    } as TissueRollDocumentRecord<T>
+    } as KlafDocumentRecord<T>
     return this._callInternalPut(document, overwrite)
   }
 
@@ -483,7 +483,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param query The scope of the documents to be deleted.
    * @returns The number of documents deleted.
    */
-  delete(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
+  delete(query: KlafDocumentQuery<KlafDocumentRecord<T>>): number {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
@@ -505,13 +505,13 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   }
 
   private _callInternalUpdate(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    update: Partial<T|TissueRollDocumentRecord<T>>|(
-      (record: TissueRollDocumentRecord<T>) => Partial<T>
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    update: Partial<T|KlafDocumentRecord<T>>|(
+      (record: KlafDocumentRecord<T>) => Partial<T>
     ),
     createOverwrite: (
-      before: TissueRollDocumentRecord<T>
-    ) => Partial<TissueRollDocumentRecord<T>>
+      before: KlafDocumentRecord<T>
+    ) => Partial<KlafDocumentRecord<T>>
   ): number {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
@@ -528,14 +528,14 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
           createdAt: before.createdAt,
           updatedAt: before.updatedAt,
         }
-      ) as TissueRollDocumentRecord<T>
+      ) as KlafDocumentRecord<T>
       const partial = typeof update === 'function' ? update(before) : update
       const overwrite = createOverwrite(before)
       const after = Object.assign(
         normalizedBefore,
         partial,
         overwrite
-      ) as unknown as TissueRollDocumentRecord<T>
+      ) as unknown as KlafDocumentRecord<T>
       for (const property in before) {
         const tree = this.getTree(property)
         const value = before[property]
@@ -566,8 +566,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @returns The number of documents updated.
    */
   partialUpdate(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    update: Partial<T>|((record: TissueRollDocumentRecord<T>) => Partial<T>)
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    update: Partial<T>|((record: KlafDocumentRecord<T>) => Partial<T>)
   ): number {
     return this._callInternalUpdate(query, update, () => ({
       updatedAt: Date.now()
@@ -584,8 +584,8 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @returns The number of documents updated.
    */
   fullUpdate(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    update: T|((record: TissueRollDocumentRecord<T>) => T)
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    update: T|((record: KlafDocumentRecord<T>) => T)
   ): number {
     return this._callInternalUpdate(query, update, () => ({
       updatedAt: Date.now()
@@ -593,7 +593,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
   }
   
   protected findRecordIds(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>
   ): string[] {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
@@ -602,7 +602,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
     let result: Set<string>|undefined
     for (const property in query) {
       const tree = this.getTree(property)
-      const condition = query[property]! as TissueRollDocumentQueryCondition<T>
+      const condition = query[property]! as KlafDocumentQueryCondition<T>
       result = tree.keys(condition, result)
     }
     return Array.from(result ?? [])
@@ -615,9 +615,9 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param option Modify the results of the retrieved documents.
    */
   pick(
-    query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>,
-    option: TissueRollDocumentOption<TissueRollDocumentRecord<T>> = {}
-  ): TissueRollDocumentRecord<T>[] {
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    option: KlafDocumentOption<KlafDocumentRecord<T>> = {}
+  ): KlafDocumentRecord<T>[] {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
@@ -648,7 +648,7 @@ export class TissueRollDocument<T extends TissueRollDocumentRecordShape> {
    * @param query The range of documents to be queried.
    * @returns The number of documents matched.
    */
-  count(query: TissueRollDocumentQuery<TissueRollDocumentRecord<T>>): number {
+  count(query: KlafDocumentQuery<KlafDocumentRecord<T>>): number {
     return this.findRecordIds(query).length
   }
 

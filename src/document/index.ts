@@ -1,1 +1,1 @@
-export { TissueRollDocument } from './TissueRollDocument'
+export { KlafDocument } from './KlafDocument'
