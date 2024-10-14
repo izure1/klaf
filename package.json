@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Very simple read/write database with a no-sql.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
@@ -32,8 +32,7 @@
     }
   },
   "files": [
-    "dist/**/*",
-    "docs/asset/**/*"
+    "dist/**/*"
   ],
   "scripts": {
     "test": "jest",
