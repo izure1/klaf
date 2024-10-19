@@ -490,8 +490,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     const ids = this.findRecordIds(query)
     for (const id of ids) {
       const payload = this.db.pick(id).record.payload
-      const hashKey = h64(payload, 0).toString(16)
-      const record = this._document.cache(hashKey, JSON.parse(payload)).raw
+      const record = JSON.parse(payload)
       for (const property in record) {
         const tree = this.getTree(property)
         const value = record[property]
