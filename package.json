@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@noble/ciphers": "^1.0.0",
-    "cache-entanglement": "^1.1.5",
+    "cache-entanglement": "^1.2.0",
     "hookall": "^2.1.0",
     "serializable-bptree": "^4.0.4",
     "xxhashjs": "^0.2.2"
