@@ -1,6 +1,5 @@
 import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
 import { CacheEntanglementSync } from 'cache-entanglement'
-import { h64 } from 'xxhashjs'
 import { Klaf } from '../core/Klaf'
 import { KlafMediator } from '../core/KlafMediator'
 import { KlafComparator } from './KlafComparator'
