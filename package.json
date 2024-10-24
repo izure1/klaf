@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Very simple read/write database with a no-sql.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
@@ -66,6 +66,6 @@
     "@noble/ciphers": "^1.0.0",
     "cache-entanglement": "^1.2.0",
     "hookall": "^2.1.0",
-    "serializable-bptree": "^4.0.4"
+    "serializable-bptree": "^4.0.5"
   }
 }

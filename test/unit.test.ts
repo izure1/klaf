@@ -314,7 +314,7 @@ describe('DOCUMENT', () => {
       { name: 'lee', age: 50, sex: 'female' },
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
 
     const result2 = sql.pick({
@@ -330,7 +330,7 @@ describe('DOCUMENT', () => {
       { name: 'john', age: 20, sex: 'male' },
     ]
     result2.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect2[i]))
+      expect(record).toMatchObject(expect2[i])
     })
 
     await close()
@@ -351,7 +351,7 @@ describe('DOCUMENT', () => {
       { name: 'lee', age: 50, sex: 'female' },
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
 
     sql.delete({})
@@ -382,7 +382,7 @@ describe('DOCUMENT', () => {
       { name: 'kim', age: 22, sex: 'female' }
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
     expect(updatedCount).toBe(1)
 
@@ -407,7 +407,7 @@ describe('DOCUMENT', () => {
       { name: 'unknown', age: 0, sex: 'male' },
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
     expect(updatedCount).toBe(2)
 
@@ -436,7 +436,7 @@ describe('DOCUMENT', () => {
       { name: 'lee', age: 0, sex: 'female' },
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
     expect(updatedCount).toBe(2)
 
@@ -453,7 +453,7 @@ describe('DOCUMENT', () => {
       { name: 'kim', age: 10 }
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
 
     const result2 = sql.pick({
@@ -464,7 +464,7 @@ describe('DOCUMENT', () => {
       { name: 'kim', age: 10 }
     ]
     result2.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect2[i]))
+      expect(record).toMatchObject(expect2[i])
     })
 
     const result3 = sql.pick({
@@ -493,7 +493,7 @@ describe('DOCUMENT', () => {
       { name: 'john', age: 20, sex: 'male' },
     ]
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
 
     const result2 = sql.pick({}, {
@@ -506,7 +506,7 @@ describe('DOCUMENT', () => {
       { name: 'john', age: 20, sex: 'male' },
     ]
     result2.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect2[i]))
+      expect(record).toMatchObject(expect2[i])
     })
 
     const result3 = sql.pick({
@@ -518,7 +518,7 @@ describe('DOCUMENT', () => {
       { name: 'lee', age: 50, sex: 'female' },
     ]
     result3.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect3[i]))
+      expect(record).toMatchObject(expect3[i])
     })
 
     const result4 = sql.pick({
@@ -531,7 +531,7 @@ describe('DOCUMENT', () => {
       { name: 'john', age: 20, sex: 'male' },
     ]
     result4.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect4[i]))
+      expect(record).toMatchObject(expect4[i])
     })
 
     await close()
@@ -558,7 +558,7 @@ describe('DOCUMENT', () => {
     })
     const expect1 = new Array(10).fill(0).map((v, i) => ({ name: 'unknown', age: 31+i }))
     result1.forEach((record, i) => {
-      expect(record).toEqual(expect.objectContaining(expect1[i]))
+      expect(record).toMatchObject(expect1[i])
     })
 
     await close()

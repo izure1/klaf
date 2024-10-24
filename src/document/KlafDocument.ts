@@ -94,7 +94,7 @@ export interface KlafDocumentOption<T extends KlafDocumentRecord<KlafDocumentRec
   /**
    * The property used for sorting the retrieved documents. Results are sorted based on this value, with the default being `documentIndex`.
    */
-  order?: keyof T
+  order?: keyof KlafDocumentRecord<T>&string
   /**
    * The property used for sorting the retrieved documents. If set to `true`, it sorts in descending order. The default value is `false`.
    */
@@ -386,13 +386,14 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private _normalizeQuery(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    properties: Set<keyof KlafDocumentRecord<T>>,
   ): KlafDocumentQuery<KlafDocumentRecord<T>> {
-    return Object.assign({
-      'documentIndex': {
-        gt: 0
-      }
-    }, this._normalizeFlatQuery(query))
+    const richQuery: KlafDocumentQuery<KlafDocumentRecord<T>> = {}
+    for (const property of properties) {
+      richQuery[property] = { gt: undefined }
+    }
+    return Object.assign(richQuery, this._normalizeFlatQuery(query))
   }
 
   private _normalizeRecord(
@@ -591,19 +592,27 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
   
   protected findRecordIds(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>
+    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
+    order: keyof KlafDocumentRecord<T>&string = 'documentIndex',
+    desc = false
   ): string[] {
     if (this.lock) {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
-    query = this._normalizeQuery(query)
-    let result: Set<string>|undefined
-    for (const property in query) {
+    const mustHave: keyof KlafDocumentRecord<T> = 'documentIndex'
+    const properties = new Set<keyof KlafDocumentRecord<T>>([order, mustHave])
+    const normalizedQuery = this._normalizeQuery(query, properties)
+    let filterKeys: Set<string>|undefined = undefined
+    for (const property in normalizedQuery) {
       const tree = this.getTree(property)
-      const condition = query[property]! as KlafDocumentQueryCondition<T>
-      result = tree.keys(condition, result)
+      const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<T>
+      filterKeys = tree.keys(condition, filterKeys)
     }
-    return Array.from(result ?? [])
+    const result = Array.from(filterKeys ?? [])
+    if (desc) {
+      result.reverse()
+    }
+    return result
   }
 
   /**
@@ -620,23 +629,11 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     const { start, end, order, desc } = this._normalizeOption(option)
-    const records = this.findRecordIds(query).map((id) => (
+    const records = this.findRecordIds(query, order, desc).map((id) => (
       this._document
         .cache(id, JSON.parse(this.db.pick(id).record.payload))
         .clone()
     ))
-    if (desc) {
-      records.sort((a, b) => this.comparator.asc(
-        b[order] as PrimitiveType,
-        a[order] as PrimitiveType
-      ))
-    }
-    else {
-      records.sort((a, b) => this.comparator.asc(
-        a[order] as PrimitiveType,
-        b[order] as PrimitiveType
-      ))
-    }
     return records.slice(start, end)
   }
 
