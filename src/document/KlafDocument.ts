@@ -488,7 +488,8 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     const ids = this.findRecordIds(query)
-    for (const id of ids) {
+    for (let i = 0, len = ids.length; i < len; i++) {
+      const id = ids[i]
       const payload = this.db.pick(id).record.payload
       const record = JSON.parse(payload)
       for (const property in record) {
@@ -516,7 +517,8 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_LOCKED()
     }
     const ids = this.findRecordIds(query)
-    for (const id of ids) {
+    for (let i = 0, len = ids.length; i < len; i++) {
+      const id = ids[i]
       const before = this._document
         .cache(id, JSON.parse(this.db.pick(id).record.payload))
         .clone()
