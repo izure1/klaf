@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "0.0.2",
+  "version": "1.0.6",
   "description": "Very simple read/write database with a no-sql.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",

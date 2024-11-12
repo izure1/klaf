@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "1.0.7",
+  "version": "1.0.6",
   "description": "Very simple read/write database with a no-sql.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
