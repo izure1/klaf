@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Very simple read/write database with a no-sql.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",
@@ -16,6 +16,9 @@
     "./engine/WebWorker": "./src/engine/WebWorker.ts"
   },
   "imports": {
+    "node:buffer": "node:buffer",
+    "node:path": "node:path",
+    "node:fs": "node:fs",
     "@noble/ciphers": "npm:@noble/ciphers@^1.0.0",
     "cache-entanglement": "npm:cache-entanglement@^1.2.0",
     "hookall": "npm:hookall@^2.1.0",

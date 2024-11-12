@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { dirname } from 'node:path'
 import { fstatSync, readSync, writeSync, writeFileSync, existsSync, mkdirSync, openSync, closeSync } from 'node:fs'
 import { DataEngine } from './DataEngine'
