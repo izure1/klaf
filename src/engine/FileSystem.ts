@@ -32,7 +32,7 @@ export class FileSystemEngine extends DataEngine {
     return fstatSync(this.fd).size
   }
 
-  read(start: number, length = this.size()-start): number[] {
+  read(start: number, length: number = this.size()-start): number[] {
     const buf = Buffer.alloc(length)
     readSync(this.fd, buf, 0, buf.length, start)
     return Array.from(buf)

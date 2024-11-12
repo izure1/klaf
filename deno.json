@@ -1,0 +1,31 @@
+{
+  "name": "@izure/klaf",
+  "version": "0.0.1",
+  "description": "Very simple read/write database with a no-sql.",
+  "author": "izure1 <admin@izure.org>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/izure1/klaf.git"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./engine/DataEngine": "./src/engine/DataEngine.ts",
+    "./engine/FileSystem": "./src/engine/FileSystem.ts",
+    "./engine/InMemory": "./src/engine/InMemory.ts",
+    "./engine/WebWorker": "./src/engine/WebWorker.ts"
+  },
+  "imports": {
+    "@noble/ciphers": "npm:@noble/ciphers@^1.0.0",
+    "cache-entanglement": "npm:cache-entanglement@^1.2.0",
+    "hookall": "npm:hookall@^2.1.0",
+    "serializable-bptree": "npm:serializable-bptree@^5.0.0"
+  },
+  "publish": {
+    "include": [
+      "LICENSE",
+      "README.md",
+      "src/**/*.ts"
+    ]
+  }
+}

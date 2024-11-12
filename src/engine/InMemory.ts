@@ -31,7 +31,7 @@ export class InMemoryEngine extends DataEngine {
     return this.data.length
   }
 
-  read(start: number, length = this.size()-start): number[] {
+  read(start: number, length: number = this.size()-start): number[] {
     return IterableView.Read(this.data, start, length)
   }
 

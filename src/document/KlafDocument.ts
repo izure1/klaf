@@ -19,6 +19,14 @@ export interface KlafDocumentRoot {
   head: Record<string, SerializeStrategyHead|null>
 }
 
+export interface KlafDocumentMetadata {
+  autoIncrement: bigint
+  count: number
+  payloadSize: number
+  timestamp: bigint
+  schemeVersion: number
+}
+
 export type KlafDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   /**
    * Includes if this value matches the document's property value.
@@ -418,7 +426,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * This metadata contains brief information about the database.
    * For example, the `metadata.autoIncrement` property indicates how many documents have been inserted into the database so far.
    */
-  get metadata() {
+  get metadata(): KlafDocumentMetadata {
     const { autoIncrement, count } = this._metadata
     const { payloadSize, timestamp } = this.db.metadata
     const { schemeVersion } = this
@@ -431,7 +439,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     }
   }
 
-  get engine() {
+  get engine(): typeof this.db.engine {
     return this.db.engine
   }
 

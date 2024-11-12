@@ -306,7 +306,7 @@ export class Klaf {
     return new Array(len).fill(fill)
   }
 
-  protected static CheckDBVerify(engine: DataEngine) {
+  protected static CheckDBVerify(engine: DataEngine): boolean {
     const chunk = engine.read(
       Klaf.RootValidStringOffset,
       Klaf.RootValidStringSize
@@ -777,7 +777,7 @@ export class Klaf {
    * Use the `exists` method to validate the record id.
    * @param recordId The record id what you want pick.
    */
-  pick(recordId: string) {
+  pick(recordId: string): PickResult {
     return this.pickRecord(recordId, true)
   }
 
