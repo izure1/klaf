@@ -56,13 +56,10 @@ export class KlafStrategy<T extends Record<string, SupportedType>> extends Seria
   }
 
   async write(id: string, node: BPTreeNode<string, SupportedType>): Promise<void> {
-    this.throttling.execute(`write:node:${id}`, async () => {
-      await this.db.update(id, JSON.stringify(node))
-    })
+    await this.db.update(id, JSON.stringify(node))
   }
 
   async delete(id: string): Promise<void> {
-    this.throttling.cancel(`write:node:${id}`)
     this.root.reassignments.push(id)
     await this.writeHead(this.head)
   }
@@ -73,11 +70,6 @@ export class KlafStrategy<T extends Record<string, SupportedType>> extends Seria
 
   async writeHead(head: SerializeStrategyHead): Promise<void> {
     this._head = head
-    this.throttling.execute('write:head', async () => {
-      await this.db.update(
-        this.rootId,
-        JSON.stringify(this.root)
-      )
-    })
+    await this.db.update(this.rootId, JSON.stringify(this.root))
   }
 }

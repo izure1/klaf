@@ -251,8 +251,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       scheme,
       version,
       metadata,
-      order,
-      1000
+      order
     )
   }
 
@@ -292,8 +291,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       scheme,
       version,
       metadata,
-      order,
-      1000
+      order
     ) as KlafDocument<KlafDocumentSchemeType<T>>
     await klafDB._alterScheme(version)
     return klafDB
@@ -323,14 +321,13 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     scheme: KlafDocumentScheme,
     schemeVersion: number,
     metadata: IRootHeader,
-    order: number,
-    writeBack: number
+    order: number
   ) {
     this.db = db
     this.rootId = rootId
     this.order = order
     this.comparator = new KlafComparator()
-    this.throttling = new Throttling(writeBack)
+    this.throttling = new Throttling(0)
     this.locker = new Ryoiki()
     this.schemeVersion = schemeVersion
     this.scheme = scheme
