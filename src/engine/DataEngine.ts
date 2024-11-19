@@ -52,7 +52,7 @@ export abstract class DataEngine {
    *  return this.dataArray.length
    * }
    */
-  abstract size(): number
+  abstract size(): Promise<number>
 
   /**
    * Reads content from the database where the data is kept. This method should return an array of integers.
@@ -63,7 +63,7 @@ export abstract class DataEngine {
    *  return this.dataArray.slice(start, start+length)
    * }
    */
-  abstract read(start: number, length: number): number[]
+  abstract read(start: number, length?: number): Promise<number[]>
   
   /**
    * Updates the content in the database where the data is kept. This method should return the updated array of integers.
@@ -79,7 +79,7 @@ export abstract class DataEngine {
    *  return chunk
    * }
    */
-  abstract update(start: number, data: number[]): number[]
+  abstract update(start: number, data: number[]): Promise<number[]>
 
   /**
    *  Appends data to the end of the database, increasing its size.
@@ -89,5 +89,5 @@ export abstract class DataEngine {
    *  this.dataArray.push(data)
    * }
    */
-  abstract append(data: number[]): void
+  abstract append(data: number[]): Promise<void>
 }

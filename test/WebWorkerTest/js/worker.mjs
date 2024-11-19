@@ -19,7 +19,7 @@ const db = await KlafDocument.Open({
 
 console.log('ready!')
 
-onmessage = (e) => {
+onmessage = async (e) => {
   const { data } = e
   const result = {
     type: data.type,
@@ -27,11 +27,11 @@ onmessage = (e) => {
   }
   switch (data.type) {
     case 'put': {
-      result.detail = db.put(structuredClone(data.detail))
+      result.detail = await db.put(structuredClone(data.detail))
       break
     }
     case 'pick': {
-      result.detail = db.pick(data.detail)
+      result.detail = await db.pick(data.detail)
       break
     }
     case 'download': {

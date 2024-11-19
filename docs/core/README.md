@@ -23,36 +23,29 @@ const db = await Klaf.Open({
 })
 
 // INPUT
-const data = 'Data string you want to store'
-const id = db.put(data)
+const data = 'Data string you want to store';
+const id = await db.put(data);
 
-db.pick(id).record.payload // 'Data string you want to store'
+(await db.pick(id)).record.payload; // 'Data string you want to store'
 
 
 // UPDATE
-const modifiedData = 'Modified data string you want to store'
-db.update(id, modifiedData)
-db.pick(id).record.payload // 'Modified data string you want to store'
+const modifiedData = 'Modified data string you want to store';
+await db.update(id, modifiedData);
+(await db.pick(id)).record.payload; // 'Modified data string you want to store'
 
-
-// HOOK - When updating, add '!!!' after the data.
-db.onBefore('update', (record) => {
-  record.data += '!!!'
-  return record
-})
-
-db.update(id, 'POWER')
-db.pick(id).record.payload // 'POWER!!!'
+await db.update(id, 'POWER');
+(await db.pick(id)).record.payload; // 'POWER!!!'
 
 
 // DELETE
-db.delete(id)
-db.pick(id) // Error! The record was destroyed.
+await db.delete(id);
+await db.pick(id); // Error! The record was destroyed.
 
 
-db.metadata.autoIncrement // 1
-db.metadata.count // 0
+db.metadata.autoIncrement; // 1
+db.metadata.count; // 0
 
 // CLOSE DB
-db.close()
+await db.close();
 ```

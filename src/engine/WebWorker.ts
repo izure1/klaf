@@ -22,7 +22,7 @@ export class WebWorkerEngine extends DataEngine {
       }
     }
     if (exists) {
-      exists = !!this.size()
+      exists = !!(await this.size())
     }
     return exists
   }
@@ -49,12 +49,15 @@ export class WebWorkerEngine extends DataEngine {
     this.accessHandle.close()
   }
 
-  size(): number {
+  async size(): Promise<number> {
     return this.accessHandle.getSize()
   }
 
-  read(start: number, length: number): number[] {
-    const size    = Math.min(this.size()-start, length)
+  async read(start: number, length?: number): Promise<number[]> {
+    if (length === undefined) {
+      length = await this.size()-start
+    }
+    const size    = Math.min(await this.size()-start, length)
     const buffer  = new DataView(new ArrayBuffer(size))
     const chunk   = new Array(buffer.byteLength)
 
@@ -65,8 +68,8 @@ export class WebWorkerEngine extends DataEngine {
     return chunk
   }
 
-  update(start: number, data: number[]): number[] {
-    const size      = this.size()
+  async update(start: number, data: number[]): Promise<number[]> {
+    const size      = await this.size()
     const length    = Math.min(data.length, size-start)
     const chunk     = data.slice(0, length)
     const buf       = Uint8Array.from(chunk)
@@ -76,10 +79,10 @@ export class WebWorkerEngine extends DataEngine {
     return chunk
   }
 
-  append(data: number[]): void {
-    const before = this.size()
+  async append(data: number[]): Promise<void> {
+    const before = await this.size()
     this.accessHandle.truncate(before+data.length)
     this.accessHandle.flush()
-    this.update(before, data)
+    await this.update(before, data)
   }
 }

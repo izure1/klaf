@@ -22,4 +22,8 @@ export class ErrorBuilder {
   static ERR_UNSUPPORTED_ENGINE() {
     return new Error(`This feature is not supported by the current database engine.`)
   }
+
+  static ERR_DATABASE_CLOSING() {
+    return new Error('The record cannot be changed because the database is closing.')
+  }
 }

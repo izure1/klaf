@@ -53,7 +53,10 @@ When you insert data, the ID you get back includes information about where the d
 
 The Klaf library is the new name for the TissueRoll library. Klaf 1.x.x corresponds to TissueRoll 6.x.x. Therefore, this migration document is intended for users of TissueRoll 5.x.x.
 
-For migration to version 1.x, please refer to [this link](./docs/migration/6.md).
+|     Version     |     Link      |
+|---------------- |---------------|
+| to 2.x          |[this link](./docs/migration/7.md)|
+| to 1.x          |[this link](./docs/migration/6.md)|
 
 ## Performance Test
 

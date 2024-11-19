@@ -1,7 +1,7 @@
 {
   "name": "klaf.js",
-  "version": "1.0.8",
-  "description": "Very simple read/write database with a no-sql.",
+  "version": "2.0.0",
+  "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
   "types": "./dist/types/index.d.ts",
@@ -36,14 +36,23 @@
   ],
   "scripts": {
     "test": "jest",
-    "test:unit": "jest unit.test.ts",
+    "test:unit": "jest unit.test.ts -t ",
     "test:perf": "jest perf.test.ts --runInBand",
     "build": "node build/index.js && tsc"
   },
   "keywords": [
-    "database",
-    "db",
-    "store"
+    "key-value store",
+    "document database",
+    "async database",
+    "lightweight database",
+    "javascript database",
+    "schema validation",
+    "json storage",
+    "data storage",
+    "b+tree",
+    "embedded database",
+    "modern db",
+    "klaf"
   ],
   "repository": {
     "type": "git",
@@ -67,7 +76,8 @@
   "dependencies": {
     "@noble/ciphers": "^1.0.0",
     "cache-entanglement": "^1.2.1",
-    "hookall": "^2.1.1",
+    "mitt": "^3.0.1",
+    "ryoiki": "^1.0.0",
     "serializable-bptree": "^5.0.0"
   }
 }

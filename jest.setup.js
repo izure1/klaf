@@ -1,5 +1,5 @@
 const { TextDecoder: NodeTextDecoder, TextEncoder: NodeTextEncoder } = require('util')
-const _structuredClone = require('core-js/actual/structured-clone')
+const _structuredClone = require('core-js/stable/structured-clone')
 
 global.TextDecoder = NodeTextDecoder
 global.TextEncoder = NodeTextEncoder

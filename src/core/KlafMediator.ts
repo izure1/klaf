@@ -1,27 +1,27 @@
 import { Klaf, IPageHeader } from './Klaf'
 
 export class KlafMediator extends Klaf {
-  static AddEmptyPage(db: Klaf, head: Partial<IPageHeader>, incrementInternalIndex: boolean): number {
-    return Klaf.CallAddEmptyPage(db, head, incrementInternalIndex)
+  static async AddEmptyPage(db: Klaf, head: Partial<IPageHeader>, incrementInternalIndex: boolean): Promise<number> {
+    return await Klaf.CallAddEmptyPage(db, head, incrementInternalIndex)
   }
 
-  static SetPage(db: Klaf, head: Partial<IPageHeader>, data: number[]): void {
-    return Klaf.CallSetPage(db, head, data)
+  static async SetPage(db: Klaf, head: Partial<IPageHeader>, data: number[]): Promise<void> {
+    return await Klaf.CallSetPage(db, head, data)
   }
 
-  static Put(db: Klaf, data: number[], autoIncrement: boolean): string {
-    return Klaf.CallInternalPut(db, data, autoIncrement)
+  static async Put(db: Klaf, data: number[], autoIncrement: boolean): Promise<string> {
+    return await Klaf.CallInternalPut(db, data, autoIncrement)
   }
 
-  static Update(db: Klaf, id: string, data: string): {
+  static async Update(db: Klaf, id: string, data: string): Promise<{
     id: string
     data: string
-  } {
-    return Klaf.CallInternalUpdate(db, id, data)
+  }> {
+    return await Klaf.CallInternalUpdate(db, id, data)
   }
 
-  static Delete(db: Klaf, id: string, countDecrement: boolean): void {
-    return Klaf.CallInternalDelete(db, id, countDecrement)
+  static async Delete(db: Klaf, id: string, countDecrement: boolean): Promise<void> {
+    return await Klaf.CallInternalDelete(db, id, countDecrement)
   }
 
   static readonly HeaderSize = 100

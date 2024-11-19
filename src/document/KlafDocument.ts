@@ -1,12 +1,13 @@
-import { BPTreeSync, SerializeStrategyHead } from 'serializable-bptree'
-import { CacheEntanglementSync } from 'cache-entanglement'
-import { Klaf } from '../core/Klaf'
+import { BPTreeAsync, SerializeStrategyHead } from 'serializable-bptree'
+import { CacheEntanglementAsync } from 'cache-entanglement'
+import { Ryoiki } from 'ryoiki'
+import { IRootHeader, Klaf } from '../core/Klaf'
 import { KlafMediator } from '../core/KlafMediator'
 import { KlafComparator } from './KlafComparator'
 import { KlafStrategy } from './KlafStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
-import { DelayedExecution } from '../utils/DelayedExecution'
+import { Throttling } from '../utils/Throttling'
 import { DataEngine } from '../engine/DataEngine'
 
 export type PrimitiveType = string|number|boolean|null
@@ -234,14 +235,25 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       reassignments: [],
       head: {},
     }
-    const rootId = KlafMediator.Put(
+    const rootId = await KlafMediator.Put(
       db,
       new Array(db.metadata.payloadSize).fill(0),
       false
     )
-    db.update(rootId, JSON.stringify(docRoot))
+    await db.update(rootId, JSON.stringify(docRoot))
+    const metadata = db.metadata
+    const order = Math.max(KlafDocument.OrderN(metadata.payloadSize, 40), 4)
 
-    return new KlafDocument(db, rootId, docRoot, scheme, version, 0)
+    return new KlafDocument(
+      db,
+      rootId,
+      docRoot,
+      scheme,
+      version,
+      metadata,
+      order,
+      1000
+    )
   }
 
   /**
@@ -268,20 +280,34 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     }
 
     const db = await Klaf.Open({ path, engine, payloadSize })
-    const record = db.getRecords(1)[0]
+    const record = (await db.getRecords(1))[0]
     const docRoot = KlafDocument.Verify(path, record.payload)
+    const metadata = db.metadata
+    const order = Math.max(KlafDocument.OrderN(metadata.payloadSize, 40), 4)
 
-    return new KlafDocument(db, record.header.id, docRoot, scheme, version, 0)
+    const klafDB = new KlafDocument(
+      db,
+      record.header.id,
+      docRoot,
+      scheme,
+      version,
+      metadata,
+      order,
+      1000
+    ) as KlafDocument<KlafDocumentSchemeType<T>>
+    await klafDB._alterScheme(version)
+    return klafDB
   }
  
   protected readonly db: Klaf
   protected readonly rootId: string
   protected readonly order: number
   protected readonly comparator: KlafComparator
-  protected readonly locker: DelayedExecution
+  protected readonly throttling: Throttling
   protected readonly scheme: KlafDocumentScheme
+  protected readonly locker: Ryoiki
   protected readonly schemeVersion: number
-  protected lock: boolean
+  protected closing: boolean
   private readonly _trees: ReturnType<KlafDocument<T>['_createTreesCache']>
   private readonly _document: ReturnType<KlafDocument<T>['_createDocumentCache']>
   private _root: KlafDocumentRoot
@@ -296,31 +322,35 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     root: KlafDocumentRoot,
     scheme: KlafDocumentScheme,
     schemeVersion: number,
+    metadata: IRootHeader,
+    order: number,
     writeBack: number
   ) {
     this.db = db
     this.rootId = rootId
-    this.order = Math.max(KlafDocument.OrderN(db.metadata.payloadSize, 40), 4)
+    this.order = order
     this.comparator = new KlafComparator()
-    this.locker = new DelayedExecution(writeBack)
+    this.throttling = new Throttling(writeBack)
+    this.locker = new Ryoiki()
     this.schemeVersion = schemeVersion
     this.scheme = scheme
-    this.lock = false
+    this.closing = false
     this._root = root
     this._trees = this._createTreesCache()
     this._document = this._createDocumentCache()
 
-    const { autoIncrement, count } = db.metadata
+    const { autoIncrement, count } = metadata
     this._metadata = {
       autoIncrement,
       count,
     }
+  }
 
-    // Needed to alter scheme
+  private async _alterScheme(schemeVersion: number): Promise<void> {
     if (this._root.schemeVersion < schemeVersion) {
       this._root.schemeVersion = schemeVersion
-      this.updateRoot(this._root)
-      this._callInternalUpdate(
+      await this.updateRoot(this._root)
+      await this._callInternalUpdate(
         {},
         (document) => this._normalizeRecord(document as any),
         (document) => ({
@@ -333,34 +363,34 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private _createTreesCache() {
-    return new CacheEntanglementSync((key) => {
-      const tree = new BPTreeSync<string, SupportedType>(
-        new KlafStrategy(this.order, key, this.db, this.locker, this.rootId, this._root),
+    return new CacheEntanglementAsync(async (key) => {
+      const tree = new BPTreeAsync<string, SupportedType>(
+        new KlafStrategy(this.order, key, this.db, this.throttling, this.rootId, this._root),
         this.comparator
       )
-      tree.init()
+      await tree.init()
       return tree
     })
   }
 
   private _createDocumentCache() {
-    return new CacheEntanglementSync((
+    return new CacheEntanglementAsync((
       _key,
       _state,
       document: KlafDocumentRecord<T>
     ) => document)
   }
 
-  protected getTree(property: string): BPTreeSync<string, SupportedType> {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+  protected async getTree(property: string): Promise<BPTreeAsync<string, SupportedType>> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    return this._trees.cache(property).raw
+    return (await this._trees.cache(property)).raw
   }
 
-  protected updateRoot(root: KlafDocumentRoot): void {
+  protected async updateRoot(root: KlafDocumentRoot): Promise<void> {
     this._root = root
-    this.db.update(this.rootId, JSON.stringify(root))
+    await this.db.update(this.rootId, JSON.stringify(root))
   }
 
   private _normalizeOption(
@@ -443,22 +473,22 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     return this.db.engine
   }
 
-  private _callInternalPut(
+  private async _callInternalPut(
     document: Partial<T>,
     ...overwrite: Partial<T>[]
-  ): KlafDocumentRecord<T> {
+  ): Promise<KlafDocumentRecord<T>> {
     const record = Object.assign(
       this._normalizeRecord(document),
       ...overwrite
     ) as KlafDocumentRecord<T>
     const stringify = JSON.stringify(record)
-    const recordId = this.db.put(stringify)
+    const recordId = await this.db.put(stringify)
     for (const property in record) {
-      const tree = this.getTree(property)
+      const tree = await this.getTree(property)
       const value = record[property]
-      tree.insert(recordId, value)
+      await tree.insert(recordId, value)
     }
-    this._document.update(recordId, record)
+    await this._document.update(recordId, record)
     this._metadata.autoIncrement++
     this._metadata.count++
     return Object.assign({}, record)
@@ -473,17 +503,21 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * If search functionality is required, store the relevant property separately as a top-level property.
    * @param document The document to be inserted.
    */
-  put(document: Partial<T>): KlafDocumentRecord<T> {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+  async put(document: Partial<T>): Promise<KlafDocumentRecord<T>> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    const now = Date.now()
-    const overwrite = {
-      documentIndex: Number(this._metadata.autoIncrement)+1,
-      createdAt: now,
-      updatedAt: now,
-    } as KlafDocumentRecord<T>
-    return this._callInternalPut(document, overwrite)
+    let lockId: string
+    return this.locker.writeLock((_lockId) => {
+      lockId = _lockId
+      const now = Date.now()
+      const overwrite = {
+        documentIndex: Number(this._metadata.autoIncrement)+1,
+        createdAt: now,
+        updatedAt: now,
+      } as KlafDocumentRecord<T>
+      return this._callInternalPut(document, overwrite)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   /**
@@ -491,28 +525,32 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param query The scope of the documents to be deleted.
    * @returns The number of documents deleted.
    */
-  delete(query: KlafDocumentQuery<KlafDocumentRecord<T>>): number {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+  async delete(query: KlafDocumentQuery<KlafDocumentRecord<T>>): Promise<number> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    const ids = this.findRecordIds(query)
-    for (let i = 0, len = ids.length; i < len; i++) {
-      const id = ids[i]
-      const payload = this.db.pick(id).record.payload
-      const record = JSON.parse(payload)
-      for (const property in record) {
-        const tree = this.getTree(property)
-        const value = record[property]
-        tree.delete(id, value)
+    let lockId: string
+    return this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      const ids = await this.findRecordIds(query)
+      for (let i = 0, len = ids.length; i < len; i++) {
+        const id = ids[i]
+        const payload = (await this.db.pick(id)).record.payload
+        const record = JSON.parse(payload)
+        for (const property in record) {
+          const tree = await this.getTree(property)
+          const value = record[property]
+          await tree.delete(id, value)
+        }
+        await this.db.delete(id)
+        this._document.delete(id)
       }
-      this.db.delete(id)
-      this._document.delete(id)
-    }
-    this._metadata.count -= ids.length
-    return ids.length
+      this._metadata.count -= ids.length
+      return ids.length
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
-  private _callInternalUpdate(
+  private async _callInternalUpdate(
     query: KlafDocumentQuery<KlafDocumentRecord<T>>,
     update: Partial<T|KlafDocumentRecord<T>>|(
       (record: KlafDocumentRecord<T>) => Partial<T>
@@ -520,15 +558,12 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     createOverwrite: (
       before: KlafDocumentRecord<T>
     ) => Partial<KlafDocumentRecord<T>>
-  ): number {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
-    }
-    const ids = this.findRecordIds(query)
+  ): Promise<number> {
+    const ids = await this.findRecordIds(query)
     for (let i = 0, len = ids.length; i < len; i++) {
       const id = ids[i]
-      const before = this._document
-        .cache(id, JSON.parse(this.db.pick(id).record.payload))
+      const before = (await this._document
+        .cache(id, JSON.parse((await this.db.pick(id)).record.payload)))
         .clone()
       const normalizedBefore = Object.assign(
         this._normalizeRecord(before),
@@ -546,18 +581,18 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         overwrite
       ) as unknown as KlafDocumentRecord<T>
       for (const property in before) {
-        const tree = this.getTree(property)
+        const tree = await this.getTree(property)
         const value = before[property]
-        tree.delete(id, value)
+        await tree.delete(id, value)
       }
       for (const property in after) {
-        const tree = this.getTree(property)
+        const tree = await this.getTree(property)
         const value = after[property]
-        tree.insert(id, value)
+        await tree.insert(id, value)
       }
       const stringify = JSON.stringify(after)
-      this.db.update(id, stringify)
-      this._document.update(id, after)
+      await this.db.update(id, stringify)
+      await this._document.update(id, after)
     }
     return ids.length
   }
@@ -574,13 +609,17 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param update The properties of the documents to be updated.
    * @returns The number of documents updated.
    */
-  partialUpdate(
+  async partialUpdate(
     query: KlafDocumentQuery<KlafDocumentRecord<T>>,
     update: Partial<T>|((record: KlafDocumentRecord<T>) => Partial<T>)
-  ): number {
-    return this._callInternalUpdate(query, update, () => ({
-      updatedAt: Date.now()
-    }) as any)
+  ): Promise<number> {
+    let lockId: string
+    return this.locker.writeLock((_lockId) => {
+      lockId = _lockId
+      return this._callInternalUpdate(query, update, () => ({
+        updatedAt: Date.now()
+      }) as any)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   /**
@@ -592,31 +631,32 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param update The properties of the documents to be updated.
    * @returns The number of documents updated.
    */
-  fullUpdate(
+  async fullUpdate(
     query: KlafDocumentQuery<KlafDocumentRecord<T>>,
     update: T|((record: KlafDocumentRecord<T>) => T)
-  ): number {
-    return this._callInternalUpdate(query, update, () => ({
-      updatedAt: Date.now()
-    }) as any)
+  ): Promise<number> {
+    let lockId: string
+    return this.locker.writeLock((_lockId) => {
+      lockId = _lockId
+      return this._callInternalUpdate(query, update, () => ({
+        updatedAt: Date.now()
+      }) as any)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
   
-  protected findRecordIds(
+  protected async findRecordIds(
     query: KlafDocumentQuery<KlafDocumentRecord<T>>,
     order: keyof KlafDocumentRecord<T>&string = 'documentIndex',
     desc = false
-  ): string[] {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
-    }
+  ): Promise<string[]> {
     const mustHave: keyof KlafDocumentRecord<T> = 'documentIndex'
     const properties = new Set<keyof KlafDocumentRecord<T>>([order, mustHave])
     const normalizedQuery = this._normalizeQuery(query, properties)
     let filterKeys: Set<string>|undefined = undefined
     for (const property in normalizedQuery) {
-      const tree = this.getTree(property)
+      const tree = await this.getTree(property)
       const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<T>
-      filterKeys = tree.keys(condition, filterKeys)
+      filterKeys = await tree.keys(condition, filterKeys)
     }
     const result = Array.from(filterKeys ?? [])
     if (desc) {
@@ -631,20 +671,27 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param query The range of documents to be queried.
    * @param option Modify the results of the retrieved documents.
    */
-  pick(
+  async pick(
     query: KlafDocumentQuery<KlafDocumentRecord<T>>,
     option: KlafDocumentOption<KlafDocumentRecord<T>> = {}
-  ): KlafDocumentRecord<T>[] {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+  ): Promise<KlafDocumentRecord<T>[]> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    const { start, end, order, desc } = this._normalizeOption(option)
-    const records = this.findRecordIds(query, order, desc).map((id) => (
-      this._document
-        .cache(id, JSON.parse(this.db.pick(id).record.payload))
-        .clone()
-    ))
-    return records.slice(start, end)
+    let lockId: string
+    return this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      const { start, end, order, desc } = this._normalizeOption(option)
+      const records = []
+      const ids = await this.findRecordIds(query, order, desc)
+      for (const id of ids) {
+        const record = (await this._document
+          .cache(id, JSON.parse((await this.db.pick(id)).record.payload)))
+          .clone()
+        records.push(record)
+      }
+      return records.slice(start, end)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   /**
@@ -653,8 +700,15 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param query The range of documents to be queried.
    * @returns The number of documents matched.
    */
-  count(query: KlafDocumentQuery<KlafDocumentRecord<T>>): number {
-    return this.findRecordIds(query).length
+  async count(query: KlafDocumentQuery<KlafDocumentRecord<T>>): Promise<number> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
+    }
+    let lockId: string
+    return this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      return (await this.findRecordIds(query)).length
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   /**
@@ -662,18 +716,21 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * The database does not close immediately due to delayed writing.
    * Therefore, this function operates asynchronously, and when the database is closed, the promise is resolved.
    * 
-   * While the database is closing, it is locked, and during this period, you cannot perform read/write operations on the database.
+   * While the database is closing, you cannot perform read/write operations on the database.
    */
-  close(): Promise<void> {
-    if (this.lock) {
-      throw ErrorBuilder.ERR_DATABASE_LOCKED()
+  async close(): Promise<void> {
+    if (this.closing) {
+      throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    this.lock = true
-    return new Promise((resolve) => {
-      this.locker.execute('database-close', () => {
-        this.db.close()
-        resolve()
+    this.closing = true
+    let lockId: string
+    return this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      await new Promise<void>((resolve) => {
+        this.throttling
+          .execute('database-close', () => this.db.close())
+          .then(resolve)
       })
-    })
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 }

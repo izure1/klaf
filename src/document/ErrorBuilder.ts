@@ -5,7 +5,7 @@ export class ErrorBuilder extends CoreErrorBuilder {
     return new Error(`The '${stringify}' string can't be parsed.`)
   }
 
-  static ERR_DATABASE_LOCKED() {
-    return new Error('The record cannot be changed because the database is locked.')
+  static ERR_DATABASE_CLOSING() {
+    return new Error('The record cannot be changed because the database is closing.')
   }
 }

@@ -27,23 +27,26 @@ export class InMemoryEngine extends DataEngine {
     this.data.length = 0
   }
 
-  size(): number {
+  async size(): Promise<number> {
     return this.data.length
   }
 
-  read(start: number, length: number = this.size()-start): number[] {
+  async read(start: number, length?: number): Promise<number[]> {
+    if (length === undefined) {
+      length = await this.size()-start
+    }
     return IterableView.Read(this.data, start, length)
   }
 
-  update(start: number, data: number[]): number[] {
-    const size      = this.size()
+  async update(start: number, data: number[]): Promise<number[]> {
+    const size      = await this.size()
     const length    = Math.min(data.length, size-start)
     const chunk     = data.slice(0, length)
     IterableView.Update(this.data, start, chunk)
     return chunk
   }
 
-  append(data: number[]): void {
+  async append(data: number[]): Promise<void> {
     this.data.push(...data)
   }
 
