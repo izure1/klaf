@@ -786,7 +786,7 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.readLock(async (_lockId) => {
+    return await this.locker.readLock(async (_lockId) => {
       lockId = _lockId
       const headIndex = await this._getHeadPageIndex(index)
       const header = this._normalizeHeader(await this._getHeader(headIndex))
@@ -813,7 +813,7 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.readLock((_lockId) => {
+    return await this.locker.readLock((_lockId) => {
       lockId = _lockId
       return this.pickRecord(recordId, true)
     }).finally(() => this.locker.readUnlock(lockId))
@@ -969,10 +969,10 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       const rData = TextConverter.ToArray(data)
-      return this.callInternalPut(rData, true)
+      return await this.callInternalPut(rData, true)
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 
@@ -1124,7 +1124,7 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       const information = await this.callInternalUpdate(recordId, data)
       return information.id
@@ -1177,10 +1177,10 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker
-      .readLock((_lockId) => {
+    return await this.locker
+      .readLock(async (_lockId) => {
         lockId = _lockId
-        return this.pickRecord(recordId, false)
+        return await this.pickRecord(recordId, false)
       })
       .then(() => true)
       .catch(() => false)
@@ -1200,9 +1200,9 @@ export class Klaf {
     }
     this.closing = true
     let lockId: string
-    await this.locker.writeLock((_lockId) => {
+    await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      return this.engine.close()
+      return await this.engine.close()
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 }

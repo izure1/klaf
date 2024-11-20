@@ -510,7 +510,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock((_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       const now = Date.now()
       const overwrite = {
@@ -518,7 +518,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         createdAt: now,
         updatedAt: now,
       } as KlafDocumentRecord<T>
-      return this._callInternalPut(document, overwrite)
+      return await this._callInternalPut(document, overwrite)
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 
@@ -532,7 +532,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       const ids = await this.findRecordIds(query)
       for (let i = 0, len = ids.length; i < len; i++) {
@@ -621,9 +621,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     update: Partial<T>|((record: KlafDocumentRecord<T>) => Partial<T>)
   ): Promise<number> {
     let lockId: string
-    return this.locker.writeLock((_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      return this._callInternalUpdate(query, update, () => ({
+      return await this._callInternalUpdate(query, update, () => ({
         updatedAt: Date.now()
       }) as any)
     }).finally(() => this.locker.writeUnlock(lockId))
@@ -643,9 +643,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     update: T|((record: KlafDocumentRecord<T>) => T)
   ): Promise<number> {
     let lockId: string
-    return this.locker.writeLock((_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      return this._callInternalUpdate(query, update, () => ({
+      return await this._callInternalUpdate(query, update, () => ({
         updatedAt: Date.now()
       }) as any)
     }).finally(() => this.locker.writeUnlock(lockId))
@@ -686,7 +686,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       const { start, end, order, desc } = this._normalizeOption(option)
       const records = []
@@ -717,7 +717,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       return (await this.findRecordIds(query)).length
     }).finally(() => this.locker.writeUnlock(lockId))
@@ -736,14 +736,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     }
     this.closing = true
     let lockId: string
-    return this.locker.writeLock(async (_lockId) => {
+    return await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      return this.db.close()
-      // await new Promise<void>((resolve) => {
-      //   this.throttling
-      //     .execute('database-close', () => this.db.close())
-      //     .then(resolve)
-      // })
+      return await this.db.close()
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 }

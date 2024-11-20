@@ -29,7 +29,7 @@ export class KlafStrategy<T extends Record<string, SupportedType>> extends Seria
   }
 
   private async _addOverflowRecord(): Promise<string> {
-    return KlafMediator.Put(
+    return await KlafMediator.Put(
       this.db,
       new Array(this.db.metadata.payloadSize),
       false
