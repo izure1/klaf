@@ -176,7 +176,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
   private static Verify(file: string, payload: string): KlafDocumentRoot {
-    const docRoot = ObjectHelper.Parse(payload, ErrorBuilder.ERR_INVALID_OBJECT(payload))
+    const docRoot = ObjectHelper.Parse(
+      payload,
+      ErrorBuilder.ERR_INVALID_OBJECT(payload)
+    )
     // not object
     if (!ObjectHelper.IsObject(docRoot)) {
       throw ErrorBuilder.ERR_INVALID_OBJECT(payload)
@@ -382,7 +385,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     if (this.closing) {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
-    return (await this._trees.cache(property)).raw
+    return (
+      await this._trees.cache(property)
+    ).raw
   }
 
   protected async updateRoot(root: KlafDocumentRoot): Promise<void> {
@@ -559,9 +564,14 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     const ids = await this.findRecordIds(query)
     for (let i = 0, len = ids.length; i < len; i++) {
       const id = ids[i]
-      const before = (await this._document
-        .cache(id, JSON.parse((await this.db.pick(id)).record.payload)))
-        .clone()
+      const before = (
+        await this._document.cache(
+          id,
+          JSON.parse(
+            (await this.db.pick(id)).record.payload
+          )
+        )
+      ).clone()
       const normalizedBefore = Object.assign(
         this._normalizeRecord(before),
         {
@@ -682,9 +692,14 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       const records = []
       const ids = await this.findRecordIds(query, order, desc)
       for (const id of ids) {
-        const record = (await this._document
-          .cache(id, JSON.parse((await this.db.pick(id)).record.payload)))
-          .clone()
+        const record = (
+          await this._document.cache(
+            id,
+            JSON.parse(
+              (await this.db.pick(id)).record.payload
+            )
+          )
+        ).clone()
         records.push(record)
       }
       return records.slice(start, end)
@@ -723,11 +738,12 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     let lockId: string
     return this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      await new Promise<void>((resolve) => {
-        this.throttling
-          .execute('database-close', () => this.db.close())
-          .then(resolve)
-      })
+      return this.db.close()
+      // await new Promise<void>((resolve) => {
+      //   this.throttling
+      //     .execute('database-close', () => this.db.close())
+      //     .then(resolve)
+      // })
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 }

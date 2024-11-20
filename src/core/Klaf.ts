@@ -184,7 +184,7 @@ export class Klaf {
 
     await engine.boot(path)
 
-    if (await engine.exists(path) && !overwrite) {
+    if ((await engine.exists(path)) && !overwrite) {
       throw ErrorBuilder.ERR_DB_ALREADY_EXISTS(path)
     }
     await engine.create(path, metadata)
@@ -216,7 +216,7 @@ export class Klaf {
     }
 
     await engine.open(path)
-    if (!Klaf.CheckDBVerify(engine)) {
+    if (!(await Klaf.CheckDBVerify(engine))) {
       await engine.close()
       throw ErrorBuilder.ERR_DB_INVALID(path)
     }
@@ -614,9 +614,13 @@ export class Klaf {
   }
 
   private async _recordPosition(index: number, order: number): Promise<number> {
-    return (await this._recordPositionCache
-      .cache(`${index}/${order}`, index, order))
-      .raw
+    return (
+      await this._recordPositionCache.cache(
+        `${index}/${order}`,
+        index,
+        order
+      )
+    ).raw
   }
 
   private async _get(index: number): Promise<number[]> {
@@ -625,18 +629,22 @@ export class Klaf {
   }
 
   private async _recordId(index: number, order: number): Promise<string> {
-    return (await this._encodingIdCache
-      .cache(`${index}/${order}`, index, order))
-      .raw
+    return (
+      await this._encodingIdCache.cache(
+        `${index}/${order}`,
+        index,
+        order
+      )
+    ).raw
   }
 
   private async _normalizeRecordId(recordId: string): Promise<{
     index: number
     order: number
   }> {
-    return (await this._decodingIdCache
-      .cache(recordId))
-      .clone('object-shallow-copy')
+    return (
+      await this._decodingIdCache.cache(recordId)
+    ).clone('object-shallow-copy')
   }
 
   private async _rawRecordId(recordId: string): Promise<number[]> {
@@ -667,18 +675,25 @@ export class Klaf {
   }
 
   private async _getRecord(index: number, order: number): Promise<number[]> {
-    return (await this._recordCache
-      .cache(`${index}/${order}`, index, order))
-      .clone('array-shallow-copy') as number[]
+    return (
+      await this._recordCache.cache(
+        `${index}/${order}`,
+        index,
+        order
+      )
+    ).clone('array-shallow-copy') as number[]
   }
 
   private async _normalizeRecord(record: number[]): Promise<NormalizedRecord> {
     const rawHeader   = IterableView.Read(record, 0, Klaf.RecordHeaderSize)
     const rawPayload  = IterableView.Read(record, Klaf.RecordHeaderSize)
 
-    const header = (await this._decodingRecordCache
-      .cache(rawHeader.join(','), rawHeader))
-      .clone('object-shallow-copy')
+    const header = (
+      await this._decodingRecordCache.cache(
+        rawHeader.join(','),
+        rawHeader
+      )
+    ).clone('object-shallow-copy')
 
     const rawRecord = rawHeader.concat(rawPayload)
     const payload = TextConverter.FromArray(rawPayload)
@@ -692,9 +707,9 @@ export class Klaf {
   }
 
   private async _getHeader(index: number): Promise<number[]> {
-    return (await this._pageHeaderCache
-      .cache(`${index}`, index))
-      .clone('array-shallow-copy') as number[]
+    return (
+      await this._pageHeaderCache.cache(`${index}`, index)
+    ).clone('array-shallow-copy') as number[]
   }
 
   private _normalizeHeader(header: number[]): IPageHeader {
@@ -742,7 +757,11 @@ export class Klaf {
     const raw     = await this._getRecord(index, order)
     const record  = await this._normalizeRecord(raw)
     
-    if (recursiveAlias && record.header.aliasIndex && record.header.aliasOrder) {
+    if (
+      recursiveAlias &&
+      record.header.aliasIndex &&
+      record.header.aliasOrder
+    ) {
       return await this.pickRecord(record.header.aliasId, recursiveAlias)
     }
 
@@ -957,12 +976,19 @@ export class Klaf {
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 
-  private async _overwriteInternalRecord(index: number, order: number, record: number[]): Promise<number> {
+  private async _overwriteInternalRecord(
+    index: number,
+    order: number,
+    record: number[]
+  ): Promise<number> {
     await this.engine.update(await this._recordPosition(index, order), record)
     return index
   }
 
-  private async _overwriteOverflowedRecord(index: number, record: number[]): Promise<number> {
+  private async _overwriteOverflowedRecord(
+    index: number,
+    record: number[]
+  ): Promise<number> {
     while (index) {
       const size = Math.min(this.maximumFreeSize, record.length)
       const chunk = IterableView.Read(record, 0, size)
@@ -1023,7 +1049,7 @@ export class Klaf {
     const record = await this._createRecord(tail.record.header.id, payload)
 
     if (tail.record.rawRecord.length < record.length) {
-      if (await this._isInternalRecord(tail.record.rawRecord)) {
+      if ((await this._isInternalRecord(tail.record.rawRecord))) {
         const id = await this.callInternalPut(payload, false)
         const { index, order } = await this._normalizeRecordId(id)
         const headClone = IterableView.Copy(head.record.rawRecord)
@@ -1064,7 +1090,7 @@ export class Klaf {
         Klaf.RecordHeaderMaxLengthOffset,
         IntegerConverter.ToArray32(tail.record.header.maxLength)
       )
-      if (await this._isInternalRecord(tail.record.rawRecord)) {
+      if ((await this._isInternalRecord(tail.record.rawRecord))) {
         await this._overwriteInternalRecord(
           tail.record.header.index,
           tail.record.header.order,
@@ -1105,7 +1131,10 @@ export class Klaf {
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 
-  protected async callInternalDelete(recordId: string, countDecrement: boolean): Promise<void> {
+  protected async callInternalDelete(
+    recordId: string,
+    countDecrement: boolean
+  ): Promise<void> {
     const { index, order } = await this._normalizeRecordId(recordId)
     
     const pos = await this._recordPosition(index, order)+Klaf.RecordHeaderDeletedOffset

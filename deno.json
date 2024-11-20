@@ -21,7 +21,7 @@
     "node:fs": "node:fs",
     "@noble/ciphers": "npm:@noble/ciphers@^1.0.0",
     "cache-entanglement": "jsr:@izure/cache-entanglement@^1.2.1",
-    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.1",
+    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.2",
     "ryoiki": "jsr:@izure/ryoiki@^1.0.0",
     "mitt": "npm:mitt@^3.0.1"
   },

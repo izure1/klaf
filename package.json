@@ -78,6 +78,6 @@
     "cache-entanglement": "^1.2.1",
     "mitt": "^3.0.1",
     "ryoiki": "^1.0.0",
-    "serializable-bptree": "^5.0.1"
+    "serializable-bptree": "^5.0.2"
   }
 }

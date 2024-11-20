@@ -86,7 +86,7 @@ describe('Create test', () => {
     expect(typeof minorVersion).toBe('number')
     expect(typeof patchVersion).toBe('number')
     expect(timestamp > Date.now()).toBeFalsy()
-    await close()
+    // await close()
   })
 })
 
