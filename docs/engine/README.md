@@ -142,11 +142,11 @@ This method is called when the database is opened. You can handle tasks such as 
 
 This method is called when the database is closed. You can use it to clean up any resources or data used by the database.
 
-### size(): `number`
+### size(): `Promise<number>`
 
 This returns the size of the database. You should return the size of the database file in bytes.
 
-### read(start: `number`, length: `number`): `number[]`
+### read(start: `number`, length: `number`): `Promise<number[]>`
 
 This method implements reading part of the database file. It should return a byte array (as a number array) from a specific location in the file for the given length. Below is an explanation of the parameters.
 
@@ -159,7 +159,7 @@ For example, if the **start** parameter is 100 and the **length** parameter is 1
 
 **Note:** If the file size is 105, you should return a number array of size 5 containing the byte codes from positions 100 to 105.
 
-### update(start: `number`, data: `number[]`): `number[]`
+### update(start: `number`, data: `number[]`): `Promise<number[]>`
 
 This method implements modifying part of the database file. You should modify the contents at a specific location in the file for the length of the **data** parameter array. Below is an explanation of the parameters.
 
@@ -172,6 +172,6 @@ For example, if the **start** parameter is 100 and the length of the **data** pa
 
 **Note:** If the file size is 105, only positions 100 to 105 should be modified, and only the modified 5 bytes should be returned as an array.
 
-### append(data: `number[]`): `void`
+### append(data: `number[]`): `Promise<void>`
 
 The values from the **data** parameter should be added to the end of the database file. This will increase the size of the database file.
