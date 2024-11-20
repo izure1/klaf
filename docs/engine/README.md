@@ -114,7 +114,7 @@ if (!databaseExisting) {
   await engine.create(databasePath)
 }
 
-await engine.open(engine.exists(databasePath))
+await engine.open(databasePath)
 ```
 
 ### boot(file: `string`): `Promise<void>`
