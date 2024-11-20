@@ -54,7 +54,7 @@ export class FileSystemEngine extends DataEngine {
 
   protected static Close(fd: number): Promise<void> {
     return new Promise((resolve) => {
-      return close(fd, resolve as () => void)
+      close(fd, resolve as () => void)
     })
   }
 
@@ -85,49 +85,81 @@ export class FileSystemEngine extends DataEngine {
   }
 
   async create(file: string, initialData: number[]): Promise<void> {
-    await mkdir(dirname(file), { recursive: true })
-    await writeFile(file, Buffer.from(initialData))
+    let lockId: string
+    await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, Buffer.from(initialData))
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
   
   async open(file: string): Promise<void> {
-    this.fd = await FileSystemEngine.Open(file, 'r+')
+    let lockId: string
+    await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      this.fd = await FileSystemEngine.Open(file, 'r+')
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   async close(): Promise<void> {
-    if (this.fd === undefined) {
-      return
-    }
-    return FileSystemEngine.Close(this.fd)
+    let lockId: string
+    return await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      if (this.fd === undefined) {
+        return
+      }
+      return await FileSystemEngine.Close(this.fd)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   async size(): Promise<number> {
+    let lockId: string
+    return await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      return await this._size()
+    }).finally(() => this.locker.writeUnlock(lockId))
+  }
+  
+  private async _size(): Promise<number> {
     const stats = await FileSystemEngine.FStats(this.fd)
     return stats.size
   }
 
   async read(start: number, length?: number): Promise<number[]> {
-    if (length === undefined) {
-      length = await this.size()-start
-    }
-    const buf = Buffer.alloc(length)
-    await FileSystemEngine.Read(this.fd, buf, 0, buf.length, start)
-    return Array.from(buf)
+    let lockId: string
+    return await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      if (length === undefined) {
+        length = await this._size()-start
+      }
+      const buf = Buffer.alloc(length)
+      await FileSystemEngine.Read(this.fd, buf, 0, buf.length, start)
+      return Array.from(buf)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   async update(start: number, data: number[]): Promise<number[]> {
-    const size      = await this.size()
-    const length    = Math.min(data.length, size-start)
-    const chunk     = data.slice(0, length)
-    const buf       = Uint8Array.from(chunk)
+    let lockId: string
+    return await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      const size      = await this._size()
+      const length    = Math.min(data.length, size-start)
+      const chunk     = data.slice(0, length)
+      const buf       = Uint8Array.from(chunk)
 
-    await FileSystemEngine.Write(this.fd, buf, 0, buf.length, start)
-    return chunk
+      await FileSystemEngine.Write(this.fd, buf, 0, buf.length, start)
+      return chunk
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 
   async append(data: number[]): Promise<void> {
-    const buf = Uint8Array.from(data)
-    const pos = await this.size()
+    let lockId: string
+    await this.locker.writeLock(async (_lockId) => {
+      lockId = _lockId
+      const buf = Uint8Array.from(data)
+      const pos = await this._size()
 
-    await FileSystemEngine.Write(this.fd, buf, 0, buf.length, pos)
+      await FileSystemEngine.Write(this.fd, buf, 0, buf.length, pos)
+    }).finally(() => this.locker.writeUnlock(lockId))
   }
 }
