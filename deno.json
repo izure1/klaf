@@ -20,8 +20,8 @@
     "node:path": "node:path",
     "node:fs": "node:fs",
     "@noble/ciphers": "npm:@noble/ciphers@^1.0.0",
-    "cache-entanglement": "jsr:@izure/cache-entanglement@^1.2.1",
-    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.2",
+    "cache-entanglement": "jsr:@izure/cache-entanglement@^1.2.2",
+    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.3",
     "ryoiki": "jsr:@izure/ryoiki@^1.0.0",
     "mitt": "npm:mitt@^3.0.1"
   },
