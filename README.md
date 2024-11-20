@@ -17,6 +17,14 @@ For details on how to use each database, please refer to the links below.
 * [**Document-oriented Database**](./docs/document/README.md)
 * [**Key-value Database**](./docs/core/README.md)
 
+## Engine
+
+Klaf.js introduces the concept of an engine, which is an instance responsible for handling how data is stored. Currently, three types of engines are supported by default: **FileSystem**, **InMemory**, and **WebWorker**. If needed, you can also create your own custom engine.  
+Choose the engine that best fits your needs.
+
+For a detailed list of the supported engines and more information, refer to [this link](./docs/engine/README.md).  
+If you're unsure what to choose, select the **FileSystem** engine.
+
 ## Install
 
 ```bash
@@ -48,15 +56,6 @@ When you insert data, the ID you get back includes information about where the d
 ### How many can I own data?
 
 **klaf** can make a unsigned 32bit range of page block. This is a **4,294,967,296**. And each page can own unsigned 32bit range of records also. So you can theoretically insert **4,294,967,295** * **4,294,967,295** records.
-
-## Migration
-
-The Klaf library is the new name for the TissueRoll library. Klaf 1.x.x corresponds to TissueRoll 6.x.x. Therefore, this migration document is intended for users of TissueRoll 5.x.x.
-
-|     Version     |     Link      |
-|---------------- |---------------|
-| to 2.x          |[this link](./docs/migration/7.md)|
-| to 1.x          |[this link](./docs/migration/6.md)|
 
 ## Performance Test
 
@@ -105,6 +104,15 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 |---|---|
 |**NPM**|[View](https://www.npmjs.com/package/klaf.js)|
 |**Github**|[View](https://github.com/izure1/klaf)|
+
+## Migration
+
+The Klaf library is the new name for the TissueRoll library.
+
+|     Version                         |     Link      |
+|-------------------------------------|---------------|
+| From Klaf 1.x to Klaf 2.x           |[Link](./docs/migration/7.md)|
+| From TissueRoll 5.x.x to Klaf 1.x   |[Link](./docs/migration/6.md)|
 
 ## License
 
