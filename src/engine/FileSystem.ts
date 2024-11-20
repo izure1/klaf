@@ -54,7 +54,7 @@ export class FileSystemEngine extends DataEngine {
 
   protected static Close(fd: number): Promise<void> {
     return new Promise((resolve) => {
-      close(fd, resolve as () => void)
+      return close(fd, resolve as () => void)
     })
   }
 
@@ -97,7 +97,7 @@ export class FileSystemEngine extends DataEngine {
     if (this.fd === undefined) {
       return
     }
-    return await FileSystemEngine.Close(this.fd)
+    return FileSystemEngine.Close(this.fd)
   }
 
   async size(): Promise<number> {
