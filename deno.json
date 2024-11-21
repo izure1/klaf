@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",
@@ -20,8 +20,8 @@
     "node:path": "node:path",
     "node:fs": "node:fs",
     "@noble/ciphers": "npm:@noble/ciphers@^1.0.0",
-    "cache-entanglement": "jsr:@izure/cache-entanglement@^1.2.1",
-    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.2",
+    "cache-entanglement": "jsr:@izure/cache-entanglement@^1.2.2",
+    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.0.3",
     "ryoiki": "jsr:@izure/ryoiki@^1.0.0",
     "mitt": "npm:mitt@^3.0.1"
   },

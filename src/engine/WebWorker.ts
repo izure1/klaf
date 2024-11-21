@@ -55,9 +55,9 @@ export class WebWorkerEngine extends DataEngine {
 
   async read(start: number, length?: number): Promise<number[]> {
     if (length === undefined) {
-      length = await this.size()-start
+      length = (await this.size())-start
     }
-    const size    = Math.min(await this.size()-start, length)
+    const size    = Math.min((await this.size())-start, length)
     const buffer  = new DataView(new ArrayBuffer(size))
     const chunk   = new Array(buffer.byteLength)
 

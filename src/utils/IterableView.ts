@@ -32,7 +32,7 @@ export class IterableView {
     return IterableView.Update(array, start, data)
   }
 
-  ensure<T>(array: T[], len: number, fill: T): T[] {
+  ensure<T>(array: T[], length: number, fill: T): T[] {
     return IterableView.Ensure(array, length, fill)
   }
 }

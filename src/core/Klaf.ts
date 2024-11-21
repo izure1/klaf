@@ -786,7 +786,7 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return await this.locker.writeLock(async (_lockId) => {
+    return await this.locker.readLock(async (_lockId) => {
       lockId = _lockId
       const headIndex = await this._getHeadPageIndex(index)
       const header = this._normalizeHeader(await this._getHeader(headIndex))
@@ -799,7 +799,7 @@ export class Klaf {
         records.push(record)
       }
       return records
-    }).finally(() => this.locker.writeUnlock(lockId))
+    }).finally(() => this.locker.readUnlock(lockId))
   }
 
   /**
@@ -813,10 +813,10 @@ export class Klaf {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return await this.locker.writeLock((_lockId) => {
+    return await this.locker.readLock((_lockId) => {
       lockId = _lockId
       return this.pickRecord(recordId, true)
-    }).finally(() => this.locker.writeUnlock(lockId))
+    }).finally(() => this.locker.readUnlock(lockId))
   }
 
   private async _setPageHeader(header: IPageHeader): Promise<void> {
