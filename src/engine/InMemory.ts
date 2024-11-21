@@ -33,7 +33,7 @@ export class InMemoryEngine extends DataEngine {
 
   async read(start: number, length?: number): Promise<number[]> {
     if (length === undefined) {
-      length = await this.size()-start
+      length = (await this.size())-start
     }
     return IterableView.Read(this.data, start, length)
   }

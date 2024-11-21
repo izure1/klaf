@@ -686,7 +686,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return await this.locker.writeLock(async (_lockId) => {
+    return await this.locker.readLock(async (_lockId) => {
       lockId = _lockId
       const { start, end, order, desc } = this._normalizeOption(option)
       const records = []
@@ -703,7 +703,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         records.push(record)
       }
       return records.slice(start, end)
-    }).finally(() => this.locker.writeUnlock(lockId))
+    }).finally(() => this.locker.readUnlock(lockId))
   }
 
   /**
@@ -717,10 +717,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
     let lockId: string
-    return await this.locker.writeLock(async (_lockId) => {
+    return await this.locker.readLock(async (_lockId) => {
       lockId = _lockId
       return (await this.findRecordIds(query)).length
-    }).finally(() => this.locker.writeUnlock(lockId))
+    }).finally(() => this.locker.readUnlock(lockId))
   }
 
   /**

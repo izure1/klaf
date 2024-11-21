@@ -97,7 +97,7 @@ export class FileSystemEngine extends DataEngine {
     if (this.fd === undefined) {
       return
     }
-    return FileSystemEngine.Close(this.fd)
+    await FileSystemEngine.Close(this.fd)
   }
 
   async size(): Promise<number> {
@@ -107,7 +107,7 @@ export class FileSystemEngine extends DataEngine {
 
   async read(start: number, length?: number): Promise<number[]> {
     if (length === undefined) {
-      length = await this.size()-start
+      length = (await this.size())-start
     }
     const buf = Buffer.alloc(length)
     await FileSystemEngine.Read(this.fd, buf, 0, buf.length, start)

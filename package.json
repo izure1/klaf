@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
@@ -62,14 +62,11 @@
   "license": "MIT",
   "devDependencies": {
     "@types/chance": "^1.1.6",
-    "@types/core-js": "^2.5.8",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.9.0",
     "chance": "^1.1.12",
-    "core-js": "^3.39.0",
     "esbuild": "^0.24.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.2.5",
     "typescript": "^5.6.3"
   },
