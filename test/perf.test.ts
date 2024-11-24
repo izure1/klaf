@@ -10,8 +10,8 @@ async function createDatabase(name: string) {
     engine,
     overwrite: true
   })
-  const close = () => {
-    db.close()
+  const close = async () => {
+    await db.close()
     unlink(`perf-${name}.db`)
   }
 
@@ -63,84 +63,92 @@ function createFakeUser() {
   }
 }
 
-describe('perf:core', async () => {
-  const { db, close } = await createDatabase('klaf')
+const JEST_TIMEOUT = 2147483647
 
-  afterAll(() => {
-    close()
+describe('perf:core', () => {
+  jest.setTimeout(JEST_TIMEOUT)
+  let db: Awaited<ReturnType<typeof createDatabase>>['db']
+  let close: Awaited<ReturnType<typeof createDatabase>>['close']
+  beforeAll(async () => {
+    const database = await createDatabase('klaf')
+    db = database.db
+    close = database.close
   })
-
-  test('write:1000', () => {
+  afterAll(async () => await close())
+  test('write:1000', async () => {
     for (let i = 0; i < 1000; i++) {
-      db.put(`Simple Text - ${i}`)
+      await db.put(`Simple Text - ${i}`)
     }
   })
-  test('read:1000', () => {
-    db.pick(db.getRecords(1)[0].header.id)
+  test('read:1000', async () => {
+    await db.pick((await db.getRecords(1))[0].header.id)
   })
-  test('write:2000', () => {
+  test('write:2000', async () => {
     for (let i = 1000; i < 2000; i++) {
-      db.put(`Simple Text - ${i}`)
+      await db.put(`Simple Text - ${i}`)
     }
   })
-  test('read:2000', () => {
-    db.pick(db.getRecords(2)[0].header.id)
+  test('read:2000', async () => {
+    await db.pick((await db.getRecords(2))[0].header.id)
   })
-  test('write:4000', () => {
+  test('write:4000', async () => {
     for (let i = 2000; i < 4000; i++) {
-      db.put(`Simple Text - ${i}`)
+      await db.put(`Simple Text - ${i}`)
     }
   })
-  test('read:4000', () => {
-    db.pick(db.getRecords(3)[0].header.id)
+  test('read:4000', async () => {
+    await db.pick((await db.getRecords(3))[0].header.id)
   })
-  test('write:8000', () => {
+  test('write:8000', async () => {
     for (let i = 4000; i < 8000; i++) {
-      db.put(`Simple Text - ${i}`)
+      await db.put(`Simple Text - ${i}`)
     }
   })
-  test('read:8000', () => {
-    db.pick(db.getRecords(4)[0].header.id)
+  test('read:8000', async () => {
+    await db.pick((await db.getRecords(4))[0].header.id)
   })
 })
 
-describe('perf:document', async () => {
-  const { db, close } = await createSqlDatabase('klaf-sql')
-
-  afterAll(() => {
-    close()
+describe('perf:document', () => {
+  jest.setTimeout(JEST_TIMEOUT)
+  let db: Awaited<ReturnType<typeof createSqlDatabase>>['db']
+  let close: Awaited<ReturnType<typeof createSqlDatabase>>['close']
+  beforeAll(async () => {
+    const database = await createSqlDatabase('klaf')
+    db = database.db
+    close = database.close
   })
-
-  test('write:1000', () => {
+  afterAll(async () => await close())
+  test('write:1000', async () => {
     for (let i = 0; i < 1000; i++) {
-      db.put(createFakeUser())
+      await db.put(createFakeUser())
     }
   })
-  test('read:1000', () => {
-    db.pick({ age: 30 })
+  test('read:1000', async () => {
+    await db.pick({ age: 30 })
   })
-  test('write:2000', () => {
+  test('write:2000', async () => {
     for (let i = 1000; i < 2000; i++) {
-      db.put(createFakeUser())
+      await db.put(createFakeUser())
     }
   })
-  test('read:2000', () => {
-    db.pick({ age: 31 })
+  test('read:2000', async () => {
+    await db.pick({ age: 31 })
   })
-  test('write:4000', () => {
+  test('write:4000', async () => {
     for (let i = 2000; i < 4000; i++) {
-      db.put(createFakeUser())
+      await db.put(createFakeUser())
     }
   })
-  test('read:4000', () => {
-    db.pick({ age: 32 })
+  test('read:4000', async () => {
+    await db.pick({ age: 32 })
   })
-  test('write:8000', () => {
+  test('write:8000', async () => {
     for (let i = 4000; i < 8000; i++) {
-      db.put(createFakeUser())
+      await db.put(createFakeUser())
     }
   })
-  test('read:8000', () => {
-    db.pick({ age: 33 })
+  test('read:8000', async () => {
+    await db.pick({ age: 33 })
   })
 })

@@ -330,7 +330,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     this.rootId = rootId
     this.order = order
     this.comparator = new KlafComparator()
-    this.throttling = new Throttling(0)
+    this.throttling = new Throttling(150)
     this.locker = new Ryoiki()
     this.schemeVersion = schemeVersion
     this.scheme = scheme
@@ -736,9 +736,12 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     }
     this.closing = true
     let lockId: string
-    return await this.locker.writeLock(async (_lockId) => {
+    await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
-      return await this.db.close()
+      await Promise.all([
+        this.throttling.done('sync-head'),
+        this.throttling.done('sync-nodes'),
+      ]).then(() => this.db.close())
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 }

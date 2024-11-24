@@ -3,7 +3,7 @@ import { randomBytes } from '@noble/ciphers/webcrypto'
 import { hexToBytes, utf8ToBytes, bytesToUtf8, bytesToHex, numberToBytesBE, bytesToNumberBE } from '@noble/ciphers/utils'
 
 export class CryptoHelper {
-  protected static readonly CachedCipher = new Map<Uint8Array, ReturnType<typeof ecb>>()
+  protected static readonly CachedCipher = new Map<string, ReturnType<typeof ecb>>()
 
   static RandomBytes(size: number): Uint8Array {
     return randomBytes(size)
@@ -34,10 +34,11 @@ export class CryptoHelper {
   }
 
   protected static GetCipher(key: Uint8Array): ReturnType<typeof ecb> {
-    if (!CryptoHelper.CachedCipher.has(key)) {
-      CryptoHelper.CachedCipher.set(key, ecb(key))
+    const stringifyKey = key.join(',')
+    if (!CryptoHelper.CachedCipher.has(stringifyKey)) {
+      CryptoHelper.CachedCipher.set(stringifyKey, ecb(key))
     }
-    return CryptoHelper.CachedCipher.get(key)!
+    return CryptoHelper.CachedCipher.get(stringifyKey)!
   }
 
   static Encrypt(plain: string, key: Uint8Array): string {

@@ -4,28 +4,39 @@ import { Klaf } from '../core/Klaf'
 import { Throttling } from '../utils/Throttling'
 import { KlafMediator } from '../core/KlafMediator'
 
-export class KlafStrategy<T extends Record<string, SupportedType>> extends SerializeStrategyAsync<string, SupportedType> {
+export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> {
   protected readonly property: string
   protected readonly rootId: string
   protected readonly db: Klaf
   protected readonly throttling: Throttling
   protected readonly root: KlafDocumentRoot
+  private readonly _writeQueue: Map<string, BPTreeNode<string, SupportedType>>
+  private readonly _deleteQueue: Set<string>
 
-  constructor(order: number, property: string, db: Klaf, throttling: Throttling, rootId: string, root: KlafDocumentRoot) {
+  constructor(
+    order: number,
+    property: string,
+    db: Klaf,
+    throttling: Throttling,
+    rootId: string,
+    root: KlafDocumentRoot
+  ) {
     super(order)
     this.property = property
     this.rootId = rootId
     this.db = db
     this.throttling = throttling
     this.root = root
+    this._writeQueue = new Map()
+    this._deleteQueue = new Set()
   }
 
-  private get _head(): SerializeStrategyHead|null {
-    return this.root.head[this.property] ?? null
-  }
-
-  private set _head(head: SerializeStrategyHead) {
+  private _setRootHead(head: SerializeStrategyHead) {
     this.root.head[this.property] = head
+  }
+
+  private _getRootHead(): SerializeStrategyHead|null {
+    return this.root.head[this.property] ?? null
   }
 
   private async _addOverflowRecord(): Promise<string> {
@@ -42,6 +53,25 @@ export class KlafStrategy<T extends Record<string, SupportedType>> extends Seria
     return node
   }
 
+  private _requestSyncNodes() {
+    this.throttling.execute('sync-nodes', async () => {
+      for (const [id, node] of this._writeQueue) {
+        await this.db.update(id, JSON.stringify(node))
+      }
+      for (const id of this._deleteQueue) {
+        await this.db.delete(id)
+      }
+      this._writeQueue.clear()
+      this._deleteQueue.clear()
+    })
+  }
+
+  private _requestSyncHead() {
+    this.throttling.execute('sync-head', async () => {
+      await this.db.update(this.rootId, JSON.stringify(this.root))
+    })
+  }
+
   async id(): Promise<string> {
     if (this.root.reassignments.length) {
       const id = this.root.reassignments.shift()!
@@ -52,24 +82,32 @@ export class KlafStrategy<T extends Record<string, SupportedType>> extends Seria
   }
 
   async read(id: string): Promise<BPTreeNode<string, SupportedType>> {
-    return await this._getRecordOwnNode(id)
+    if (!this._writeQueue.has(id)) {
+      const node = await this._getRecordOwnNode(id)
+      this._writeQueue.set(id, node)
+    }
+    return structuredClone(this._writeQueue.get(id)!)
   }
 
   async write(id: string, node: BPTreeNode<string, SupportedType>): Promise<void> {
-    await this.db.update(id, JSON.stringify(node))
+    this._writeQueue.set(id, node)
+    this._requestSyncNodes()
   }
 
   async delete(id: string): Promise<void> {
     this.root.reassignments.push(id)
+    this._writeQueue.delete(id)
+    this._deleteQueue.add(id)
+    this._requestSyncNodes()
     await this.writeHead(this.head)
   }
 
   async readHead(): Promise<SerializeStrategyHead|null> {
-    return this._head ?? null
+    return this._getRootHead()
   }
 
   async writeHead(head: SerializeStrategyHead): Promise<void> {
-    this._head = head
-    await this.db.update(this.rootId, JSON.stringify(this.root))
+    this._setRootHead(head)
+    this._requestSyncHead()
   }
 }

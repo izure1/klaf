@@ -86,7 +86,7 @@ describe('Create test', () => {
     expect(typeof minorVersion).toBe('number')
     expect(typeof patchVersion).toBe('number')
     expect(timestamp > Date.now()).toBeFalsy()
-    await close()
+    close()
   })
 })
 
@@ -107,7 +107,7 @@ describe('DB', () => {
 
     const res = await db.pick(target)
     expect(res.record.payload).toBe(guess)
-    await close()
+    close()
   })
 
   test('DB:put record that longer than page size', async () => {
@@ -130,7 +130,7 @@ describe('DB', () => {
     const res = await db.pick(id)
     expect(res.record.payload).toBe(content)
 
-    await close()
+    close()
   })
 
   test('DB:update', async () => {
@@ -166,7 +166,7 @@ describe('DB', () => {
     const res5 = await db.pick(id)
     expect(res5.record.payload).toBe(longestContent)
 
-    await close()
+    close()
   })
 
   test('DB:delete', async () => {
@@ -182,7 +182,7 @@ describe('DB', () => {
     const id2 = await db.put('test content')
     await expect(db.delete('incorrected id')).rejects.toThrow()
     await db.delete(id2)
-    await close()
+    close()
   })
 
   test('DB:invalid record', async () => {
@@ -192,7 +192,7 @@ describe('DB', () => {
     await expect(db.pick(invalidId)).rejects.toThrow()
     await expect(db.update(invalidId, 'test')).rejects.toThrow()
     await expect(db.delete(invalidId)).rejects.toThrow()
-    await close()
+    close()
   })
 
   test('DB:exists', async () => {
@@ -203,7 +203,7 @@ describe('DB', () => {
 
     expect(await db.exists(correctId)).toBe(true)
     expect(await db.exists(invalidId)).toBe(false)
-    await close()
+    close()
   })
 
   test('DB:getRecords', async () => {
@@ -226,7 +226,7 @@ describe('DB', () => {
     expect(records[0].payload).toBe(guessData1)
     expect(records[1].payload).toBe(guessData2)
     expect(records[2].payload).toBe(guessData3)
-    await close()
+    close()
   })
 
   test('DB:autoIncrement', async () => {
@@ -245,7 +245,7 @@ describe('DB', () => {
     await db.delete(sampleId)
     expect(Number((db.metadata).autoIncrement)).toBe(5)
 
-    await close()
+    close()
   })
 
   test('DB:count', async () => {
@@ -264,7 +264,7 @@ describe('DB', () => {
     await db.delete(sampleId)
     expect(Number((db.metadata).count)).toBe(4)
 
-    await close()
+    close()
   })
 
   test('DB:close lock', async () => {
@@ -312,7 +312,7 @@ describe('DOCUMENT', () => {
       expect(record).toMatchObject(expect2[i])
     })
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:delete', async () => {
@@ -337,7 +337,7 @@ describe('DOCUMENT', () => {
     expect(delCount).toBe(1)
     expect(await sql.pick({})).toEqual([])
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:update:partial', async () => {
@@ -365,7 +365,7 @@ describe('DOCUMENT', () => {
     })
     expect(updatedCount).toBe(1)
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:update:full-1', async () => {
@@ -390,7 +390,7 @@ describe('DOCUMENT', () => {
     })
     expect(updatedCount).toBe(2)
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:update:full-2', async () => {
@@ -419,7 +419,7 @@ describe('DOCUMENT', () => {
     })
     expect(updatedCount).toBe(2)
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:pick:query', async () => {
@@ -452,7 +452,7 @@ describe('DOCUMENT', () => {
     })
     expect(result3).toEqual([])
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:pick:range-1', async () => {
@@ -513,7 +513,7 @@ describe('DOCUMENT', () => {
       expect(record).toMatchObject(expect4[i])
     })
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:pick:range-2', async () => {
@@ -540,7 +540,7 @@ describe('DOCUMENT', () => {
       expect(record).toMatchObject(expect1[i])
     })
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:autoIncrement', async () => {
@@ -553,11 +553,11 @@ describe('DOCUMENT', () => {
     await sql.delete({ name: 'kim' })
     expect((sql.metadata).autoIncrement).toBe(4n)
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:count', async () => {
-    const { sql, close } = await createDocumentDatabase('doc-count.db')
+    const { sql, close } = await createDocumentDatabase('doc-count-1.db')
     expect((sql.metadata).count).toBe(4)
 
     await sql.partialUpdate({ name: 'kim' }, { name: 'kim'.repeat(10000) })
@@ -569,11 +569,11 @@ describe('DOCUMENT', () => {
     await sql.delete({ sex: 'male' })
     expect((sql.metadata).count).toBe(2)
 
-    await close()
+    close()
   })
 
   test('DOCUMENT:count method', async () => {
-    const { sql, close } = await createDocumentDatabase('doc-count.db')
+    const { sql, close } = await createDocumentDatabase('doc-count-2.db')
     expect(await sql.count({
       age: {
         gt: 10
@@ -598,7 +598,7 @@ describe('DOCUMENT', () => {
       }
     })).toBe(2)
     
-    await close()
+    close()
   })
 
   test('DOCUMENT:close lock', async () => {

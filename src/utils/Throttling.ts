@@ -1,76 +1,82 @@
-import type { Emitter } from 'mitt'
-import mitt from 'mitt'
-
-type ThrottlingCallback = () => Promise<void>
-
-type ThrottlingEvents = {
-  [key: string]: Error|undefined
-}
-
-interface ThrottlingExecution {
-  id: string
-  handleId: NodeJS.Timeout|number
-  callback: () => Promise<void>
-}
+import { Catcher } from './Catcher'
 
 export class Throttling {
-  private readonly _executions: Map<string, ThrottlingExecution>
-  private readonly _emitter: Emitter<ThrottlingEvents>
-  private readonly _delay: number
+  private _delay: number
+  private _timeouts: Map<string, NodeJS.Timeout>
+  private _activePromises: Map<string, { resolve: Function; reject: Function }[]>
+  private _activeExecution: Map<string, Promise<any>>
 
-  protected static async CatchError<T>(promise: Promise<T>): Promise<[undefined, T]|[Error]> {
-    return await promise
-      .then((v) => [undefined, v] as [undefined, T])
-      .catch((err) => [err])
-  }
-
-  constructor(delay: number = 0) {
-    this._executions = new Map()
-    this._emitter = mitt()
+  constructor(delay: number) {
     this._delay = delay
+    this._timeouts = new Map()
+    this._activePromises = new Map()
+    this._activeExecution = new Map()
   }
 
-  private _stopExecution(id: string) {
-    const execution = this._executions.get(id)
-    if (!execution) {
-      return
+  async execute<T = any>(id: string, callback: () => Promise<T>): Promise<T> {
+    if (this._timeouts.has(id)) {
+      clearTimeout(this._timeouts.get(id)!)
     }
-    clearTimeout(execution.handleId)
-  }
 
-  execute(id: string, callback: ThrottlingCallback): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this._stopExecution(id)
-      const handleId = setTimeout(async () => {
-        this._executions.delete(id)
-        const [err] = await Throttling.CatchError(callback())
-        this._emitter.emit(id, err)
-      }, this._delay)
-      this._executions.set(id, {
-        id,
-        handleId,
-        callback,
-      })
-      const onFinally = (err?: Error|undefined) => {
-        this._executions.delete(id)
-        this._emitter.off(id, onFinally)
+    return new Promise<T>((resolve, reject) => {
+      if (!this._activePromises.has(id)) {
+        this._activePromises.set(id, [])
+      }
+      this._activePromises.get(id)!.push({ resolve, reject })
+
+      const timeout = setTimeout(async () => {
+        this._timeouts.delete(id)
+
+        const promises = this._activePromises.get(id) || []
+        this._activePromises.delete(id)
+
+        const execute = async () => {
+          const result = await callback()
+          for (const { resolve } of promises) resolve(result)
+          return result
+        }
+        const execution = execute()
+        const [err] = await Catcher.CatchError(execution)
         if (err instanceof Error) {
-          reject(err)
+          for (const { reject } of promises) reject(err)
         }
         else {
-          resolve()
+          this._activeExecution.set(id, execution)
+          await execution.finally(() => this._activeExecution.delete(id))
         }
-      }
-      this._emitter.on(id, onFinally)
+      }, this._delay)
+
+      this._timeouts.set(id, timeout)
     })
   }
 
   cancel(id: string): void {
-    const execution = this._executions.get(id)
-    if (!execution) {
-      return
+    if (this._timeouts.has(id)) {
+      clearTimeout(this._timeouts.get(id)!)
+      this._timeouts.delete(id)
     }
-    this._stopExecution(id)
-    this._emitter.emit(id, new Error('Canceled'))
+
+    const promises = this._activePromises.get(id) || []
+    this._activePromises.delete(id)
+
+    const error = new Error(`Execution with id "${id}" was canceled.`)
+    for (const { reject } of promises) reject(error)
+  }
+
+  async done<T = any>(id: string): Promise<T|undefined> {
+    if (!this._timeouts.has(id) && !this._activePromises.has(id)) {
+      return Promise.resolve(undefined)
+    }
+
+    if (this._activeExecution.has(id)) {
+      return this._activeExecution.get(id)!
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      if (!this._activePromises.has(id)) {
+        this._activePromises.set(id, [])
+      }
+      this._activePromises.get(id)!.push({ resolve, reject })
+    })
   }
 }
