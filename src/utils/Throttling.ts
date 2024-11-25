@@ -1,13 +1,13 @@
 import { Catcher } from './Catcher'
 
 export class Throttling {
-  private _delay: number
+  readonly delay: number
   private _timeouts: Map<string, NodeJS.Timeout>
   private _activePromises: Map<string, { resolve: Function; reject: Function }[]>
   private _activeExecution: Map<string, Promise<any>>
 
   constructor(delay: number) {
-    this._delay = delay
+    this.delay = delay
     this._timeouts = new Map()
     this._activePromises = new Map()
     this._activeExecution = new Map()
@@ -44,7 +44,7 @@ export class Throttling {
           this._activeExecution.set(id, execution)
           await execution.finally(() => this._activeExecution.delete(id))
         }
-      }, this._delay)
+      }, this.delay)
 
       this._timeouts.set(id, timeout)
     })

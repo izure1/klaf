@@ -330,7 +330,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     this.rootId = rootId
     this.order = order
     this.comparator = new KlafComparator()
-    this.throttling = new Throttling(150)
+    this.throttling = new Throttling(100)
     this.locker = new Ryoiki()
     this.schemeVersion = schemeVersion
     this.scheme = scheme
@@ -382,9 +382,6 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   protected async getTree(property: string): Promise<BPTreeAsync<string, SupportedType>> {
-    if (this.closing) {
-      throw ErrorBuilder.ERR_DATABASE_CLOSING()
-    }
     return (
       await this._trees.cache(property)
     ).raw
@@ -739,8 +736,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       await Promise.all([
-        this.throttling.done('sync-head'),
-        this.throttling.done('sync-nodes'),
+        this.throttling.done('sync')
       ]).then(() => this.db.close())
     }).finally(() => this.locker.writeUnlock(lockId))
   }
