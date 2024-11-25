@@ -21,7 +21,7 @@ async function createDatabase(name: string) {
   }
 }
 
-async function createSqlDatabase(name: string) {
+async function createDocumentDatabase(name: string) {
   const engine = new FileSystemEngine()
   const db = await KlafDocument.Create({
     path: `perf-${name}.db`,
@@ -111,10 +111,10 @@ describe('perf:core', () => {
 
 describe('perf:document', () => {
   jest.setTimeout(JEST_TIMEOUT)
-  let db: Awaited<ReturnType<typeof createSqlDatabase>>['db']
-  let close: Awaited<ReturnType<typeof createSqlDatabase>>['close']
+  let db: Awaited<ReturnType<typeof createDocumentDatabase>>['db']
+  let close: Awaited<ReturnType<typeof createDocumentDatabase>>['close']
   beforeAll(async () => {
-    const database = await createSqlDatabase('klaf')
+    const database = await createDocumentDatabase('klaf-document')
     db = database.db
     close = database.close
   })
