@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
@@ -71,7 +71,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "@noble/ciphers": "^1.0.0",
+    "@noble/ciphers": "1.0.0",
     "cache-entanglement": "^1.2.2",
     "ryoiki": "^1.1.0",
     "serializable-bptree": "^5.0.5"
