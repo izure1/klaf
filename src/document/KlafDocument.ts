@@ -247,7 +247,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     const metadata = db.metadata
     const order = Math.max(KlafDocument.OrderN(metadata.payloadSize, 40), 4)
 
-    return new KlafDocument(
+    const klafDB = new KlafDocument(
       db,
       rootId,
       docRoot,
@@ -255,7 +255,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       version,
       metadata,
       order
-    )
+    ) as KlafDocument<KlafDocumentSchemeType<T>>
+    await klafDB._createTrees()
+    return klafDB
   }
 
   /**
@@ -296,6 +298,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
       metadata,
       order
     ) as KlafDocument<KlafDocumentSchemeType<T>>
+    await klafDB._createTrees()
     await klafDB._alterScheme(version)
     return klafDB
   }
@@ -309,7 +312,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   protected readonly locker: Ryoiki
   protected readonly schemeVersion: number
   protected closing: boolean
-  private readonly _trees: ReturnType<KlafDocument<T>['_createTreesCache']>
+  private readonly _trees: Map<keyof KlafDocumentScheme, BPTreeAsync<string, SupportedType>>
   private readonly _document: ReturnType<KlafDocument<T>['_createDocumentCache']>
   private _root: KlafDocumentRoot
   private _metadata: {
@@ -336,7 +339,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     this.scheme = scheme
     this.closing = false
     this._root = root
-    this._trees = this._createTreesCache()
+    this._trees = new Map()
     this._document = this._createDocumentCache()
 
     const { autoIncrement, count } = metadata
@@ -362,15 +365,33 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     }
   }
 
-  private _createTreesCache() {
-    return new CacheEntanglementAsync(async (key) => {
+  private async _createTrees(): Promise<void> {
+    const defaultProperties: (keyof KlafDocumentTimestampShape)[] = [
+      'documentIndex',
+      'createdAt',
+      'updatedAt',
+    ]
+    const schemeProperties = new Set<string>([
+      ...Object.keys(this.scheme),
+      ...defaultProperties,
+    ])
+    const updateQueue = new Map()
+    for (const property of schemeProperties) {
       const tree = new BPTreeAsync<string, SupportedType>(
-        new KlafStrategy(this.order, key, this.db, this.throttling, this.rootId, this._root),
+        new KlafStrategy(
+          this.order,
+          property,
+          updateQueue,
+          this.db,
+          this.throttling,
+          this.rootId,
+          this._root
+        ),
         this.comparator
       )
       await tree.init()
-      return tree
-    })
+      this._trees.set(property, tree)
+    }
   }
 
   private _createDocumentCache() {
@@ -381,10 +402,8 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     ) => document)
   }
 
-  protected async getTree(property: string): Promise<BPTreeAsync<string, SupportedType>> {
-    return (
-      await this._trees.cache(property)
-    ).raw
+  protected getTree(property: string): BPTreeAsync<string, SupportedType>|null {
+    return this._trees.get(property) ?? null
   }
 
   protected async updateRoot(root: KlafDocumentRoot): Promise<void> {
@@ -483,7 +502,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     const stringify = JSON.stringify(record)
     const recordId = await this.db.put(stringify)
     for (const property in record) {
-      const tree = await this.getTree(property)
+      const tree = this.getTree(property)
+      if (!tree) {
+        continue
+      }
       const value = record[property]
       await tree.insert(recordId, value)
     }
@@ -537,7 +559,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         const payload = (await this.db.pick(id)).record.payload
         const record = JSON.parse(payload)
         for (const property in record) {
-          const tree = await this.getTree(property)
+          const tree = this.getTree(property)
+          if (!tree) {
+            continue
+          }
           const value = record[property]
           await tree.delete(id, value)
         }
@@ -585,12 +610,18 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         overwrite
       ) as unknown as KlafDocumentRecord<T>
       for (const property in before) {
-        const tree = await this.getTree(property)
+        const tree = this.getTree(property)
+        if (!tree) {
+          continue
+        }
         const value = before[property]
         await tree.delete(id, value)
       }
       for (const property in after) {
-        const tree = await this.getTree(property)
+        const tree = this.getTree(property)
+        if (!tree) {
+          continue
+        }
         const value = after[property]
         await tree.insert(id, value)
       }
@@ -658,7 +689,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     const normalizedQuery = this._normalizeQuery(query, properties)
     let filterKeys: Set<string>|undefined = undefined
     for (const property in normalizedQuery) {
-      const tree = await this.getTree(property)
+      const tree = this.getTree(property)
+      if (!tree) {
+        continue
+      }
       const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<T>
       filterKeys = await tree.keys(condition, filterKeys)
     }

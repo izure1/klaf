@@ -5,21 +5,22 @@ import { Klaf } from '../core/Klaf'
 import { Throttling } from '../utils/Throttling'
 import { KlafMediator } from '../core/KlafMediator'
 
-interface QueueUnit {
-  command: 'add'|'update'|'delete'
+enum QueueType {
+  'Update',
+  'Delete',
 }
 
-interface QueueAddUnit extends QueueUnit {
-  command: 'add'
+interface QueueUnit {
+  command: QueueType
 }
 
 interface QueueUpdateUnit extends QueueUnit {
-  command: 'update'
+  command: QueueType.Update
   node: BPTreeNode<string, SupportedType>|KlafDocumentRoot
 }
 
 interface QueueDeleteUnit extends QueueUnit {
-  command: 'delete'
+  command: QueueType.Delete
 }
 
 export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> {
@@ -28,12 +29,13 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   protected readonly db: Klaf
   protected readonly throttling: Throttling
   protected readonly root: KlafDocumentRoot
-  private readonly _queue: Map<string, QueueAddUnit|QueueDeleteUnit|QueueUpdateUnit>
+  private readonly _queue: Map<string, QueueDeleteUnit|QueueUpdateUnit>
   private readonly _temps: Map<string, BPTreeNode<string, SupportedType>|KlafDocumentRoot>
 
   constructor(
     order: number,
     property: string,
+    updateQueue: Map<string, QueueDeleteUnit|QueueUpdateUnit>,
     db: Klaf,
     throttling: Throttling,
     rootId: string,
@@ -45,15 +47,17 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
     this.db = db
     this.throttling = throttling
     this.root = root
-    this._queue = new Map()
+    this._queue = updateQueue
     this._temps = new Map()
+
+    this._temps.set(rootId, root)
   }
 
-  private _setRootHead(head: SerializeStrategyHead): void {
+  private _setHeadToRoot(head: SerializeStrategyHead): void {
     this.root.head[this.property] = head
   }
 
-  private _getRootHead(): SerializeStrategyHead|null {
+  private _getHeadInRoot(): SerializeStrategyHead|null {
     return this.root.head[this.property] ?? null
   }
 
@@ -75,24 +79,23 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
     return this.throttling.execute('sync', async () => {
       const queue = Array.from(this._queue)
       this._queue.clear()
-      this._temps.clear()
-      for (let i = 0, len = queue.length; i < len; i++) {
-        const [id, unit] = queue[i]
-        switch (unit.command) {
-          case 'delete': {
-            await this.db.delete(id)
-            break
-          }
-          case 'add': {
-            await this._addOverflowRecord()
-            break
-          }
-          case 'update': {
-            await this.db.update(id, JSON.stringify(unit.node))
-            break
-          }
-        }
-      }
+
+      const deleteQueue = queue.filter(([id, unit]) => unit.command === QueueType.Delete) as [string, QueueDeleteUnit][]
+      const updateQueue = queue.filter(([id, unit]) => unit.command === QueueType.Update) as [string, QueueUpdateUnit][]
+      
+      const deletePromises = deleteQueue.map(([id]) => {
+        return this.db.delete(id).then(() => {
+          this._temps.delete(id)
+        })
+      })
+      const updatePromises = updateQueue.map(([id, unit]) => {
+        return this.db.update(id, JSON.stringify(unit.node)).then(() => {
+          this._temps.delete(id)
+        })
+      })
+      
+      await Promise.all(deletePromises)
+      await Promise.all(updatePromises)
     })
   }
 
@@ -115,25 +118,25 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   }
 
   async write(id: string, node: BPTreeNode<string, SupportedType>): Promise<void> {
-    this._queue.set(id, { command: 'update', node })
+    this._queue.set(id, { command: QueueType.Update, node })
     this._temps.set(id, node)
     this._requestSyncToRepository()
   }
 
   async delete(id: string): Promise<void> {
     this.root.reassignments.push(id)
-    this._queue.set(id, { command: 'delete' })
+    this._queue.set(id, { command: QueueType.Delete })
     this._temps.delete(id)
-    await this.writeHead(this.head)
+    this._requestSyncToRepository()
   }
 
   async readHead(): Promise<SerializeStrategyHead|null> {
-    return this._getRootHead()
+    return this._getHeadInRoot()
   }
 
   async writeHead(head: SerializeStrategyHead): Promise<void> {
-    this._setRootHead(head)
-    this._queue.set(this.rootId, { command: 'update', node: this.root })
+    this._setHeadToRoot(head)
+    this._queue.set(this.rootId, { command: QueueType.Update, node: this.root })
     this._temps.set(this.rootId, this.root)
     this._requestSyncToRepository()
   }
