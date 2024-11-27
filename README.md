@@ -59,7 +59,8 @@ When you insert data, the ID you get back includes information about where the d
 
 ## Performance Test
 
-The test result is the average value from 10 attempts.
+The test result is the average value from 10 attempts.  
+The latest performance benchmarking was conducted based on version **2.0.6**.
 
 **klaf** supports two databases, and this test tested the core functions of data reading/writing of the two databases. Therefore, it's not a perfect test result, but it's enough to show the time complexity.
 
@@ -67,15 +68,14 @@ If you're adding data to the database in real-time, the results would be as foll
 
 ### WRITE
 
-For a little data, JSON is faster, but when you've got a big file, it's the other way around, and the gap gets bigger.
+Overall, Klaf supports faster writes than JSON. As the size increases, this gap becomes even larger.
 
 |`WRITE`|JSON|KLAF|`RESULT`|
 |---|---|---|---|
-|1,000 times|1014ms|1990ms|*-49% Slower*|
-|2,000 times|2200ms|3800ms|*-42% Slower*|
-|4,000 times|5674ms|7509ms|*-24% Slower*|
-|8,000 times|15332ms|14788ms|***+4% Faster***|
-|16,000 times|46617ms|29755ms|***+57% Faster***|
+|1,000 times|1014ms|864ms|***+15% Faster***|
+|2,000 times|2200ms|1700ms|***+23% Faster***|
+|4,000 times|5674ms|3163ms|***+44% Faster***|
+|8,000 times|15332ms|5925ms|***+61% Faster***|
 
 ### READ
 
@@ -83,11 +83,11 @@ For a little data, JSON is faster, but when you've got a big file, it's the othe
 
 |`READ`|JSON|KLAF|`RESULT`|
 |---|---|---|---|
-|from 8,000 records|1.8ms|5.6ms|*-68% Slower*|
+|from 8,000 records|1.8ms|2ms|*-10% Slower*|
 |from 16,000 records|4ms|2ms|***+100% Faster***|
-|from 32,000 records|5.4ms|2.2ms|***+145% Faster***|
+|from 32,000 records|5.4ms|2ms|***+170% Faster***|
 |from 64,000 records|11.4ms|2ms|***+470% Faster***|
-|from 128,000 records|26.4ms|2.6ms|***+915% Faster***|
+|from 128,000 records|26.4ms|2ms|***+1220% Faster***|
 
 ### RESULT
 
