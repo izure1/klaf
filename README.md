@@ -1,9 +1,10 @@
 # Klaf
 
+[![jsdelivr](https://data.jsdelivr.com/v1/package/npm/klaf.js/badge)](https://www.jsdelivr.com/package/npm/klaf.js)
 ![node.js workflow](https://github.com/izure1/klaf/actions/workflows/node.js.yml/badge.svg)
 
 <p align="center">
-  <img width="50%" alt="klaf logo" src="./docs/asset/image/logo_klaf.png" style="min-width: 256px; max-width:1024px;">
+  <img width="50%" alt="klaf logo" src="./docs/asset/image/logo_klaf.svg" style="min-width:256px; max-width:1024px; background-color:rgba(16, 7, 7); border-radius:15%;">
 </p>
 
 Very simple read/write database with a **NoSQL**.  
@@ -149,7 +150,7 @@ Overall, Klaf supports faster writes than JSON. As the size increases, this gap 
 |---|---|
 |**NPM**|[View](https://www.npmjs.com/package/klaf.js)|
 |**JSR**|[View](https://jsr.io/@izure/klaf)|
-|**jsdelivr**|[View](www.jsdelivr.com/package/npm/klaf.js)|
+|**jsdelivr**|[View](https://www.jsdelivr.com/package/npm/klaf.js)|
 |**Github**|[View](https://github.com/izure1/klaf)|
 
 ## Migration
