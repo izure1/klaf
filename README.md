@@ -3,11 +3,38 @@
 ![node.js workflow](https://github.com/izure1/klaf/actions/workflows/node.js.yml/badge.svg)
 
 <p align="center">
-  <img src="./docs/asset/image/logo_klaf.svg">
+  <img width="50%" alt="klaf logo" src="./docs/asset/image/logo_klaf.png" style="min-width: 256px; max-width:1024px;">
 </p>
 
 Very simple read/write database with a **NoSQL**.  
 It's written in JavaScript using pure Node.js API and pretty easy and small.
+
+```typescript
+import { KlafDocument } from 'klaf.js'
+import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
+
+const db = await KlafDocument.Open({
+  path: 'my-database-path.db',
+  version: 0,
+  engine: new FileSystemEngine(),
+  scheme: {
+    id: {
+      default: () => crypto.randomUUID()
+    },
+    nickname: {
+      default: () => 'Anonymous',
+      validate: (v) => typeof v === 'string',
+    },
+    gender: {
+      default: () => 'other',
+      validate: (v) => ['male', 'female', 'other'].includes(v),
+    }
+  }
+})
+
+await db.put({ nickname: 'faker', gender: 'male' })
+const documents = await db.pick({ gender: 'male' })
+```
 
 **klaf** comes in two flavors: **key-value** database and **document-oriented** database.  
 You have the freedom to choose based on your needs, **but most users will likely prefer the *document-oriented* database.**
@@ -17,7 +44,7 @@ For details on how to use each database, please refer to the links below.
 * [**Document-oriented Database**](./docs/document/README.md)
 * [**Key-value Database**](./docs/core/README.md)
 
-## Engine
+## [Engine](./docs/engine/README.md)
 
 Klaf.js introduces the concept of an engine, which is an instance responsible for handling how data is stored. Currently, three types of engines are supported by default: **FileSystem**, **InMemory**, and **WebWorker**. If needed, you can also create your own custom engine.  
 Choose the engine that best fits your needs.
@@ -27,8 +54,26 @@ If you're unsure what to choose, select the **FileSystem** engine.
 
 ## Install
 
+### Node.js (NPM)
+
 ```bash
 npm i klaf.js
+```
+
+### Deno (JSR)
+
+```bash
+deno add jsr:@izure/klaf
+```
+
+### Browser (ESM)
+
+```javascript
+import { Klaf, KlafDocument } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/index.mjs'
+
+// engines
+import { InMemoryEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/engine/InMemory.mjs'
+import { WebWorkerEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/engine/WebWorker.mjs'
 ```
 
 ## Why
@@ -49,7 +94,7 @@ When the **JSON** files get large, quick data read and write operations can beco
 
 ### How does **klaf** work?
 
-**klaf** manages files by breaking them into blocks called pages. You can set the page size when creating the database.
+**klaf** manages files by breaking them into logical blocks called pages. You can set the page size when creating the database.
 
 When you insert data, the ID you get back includes information about where the data is stored on the page. This makes it possible to work with large files quickly. This value could be seen by users, but it's encrypted to make it hard to predict. This way, it stops users from trying to steal data by requesting fake record IDs.
 
@@ -96,13 +141,15 @@ Overall, Klaf supports faster writes than JSON. As the size increases, this gap 
 
 **NOTICE!**
 
-*This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and klaf has a speed of **O(1)**.*
+*This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and klaf has a speed of **O(1)** or **O(log n)**.*
 
-## Install
+## Repository
 
 |Site|Link|
 |---|---|
 |**NPM**|[View](https://www.npmjs.com/package/klaf.js)|
+|**JSR**|[View](https://jsr.io/@izure/klaf)|
+|**jsdelivr**|[View](www.jsdelivr.com/package/npm/klaf.js)|
 |**Github**|[View](https://github.com/izure1/klaf)|
 
 ## Migration

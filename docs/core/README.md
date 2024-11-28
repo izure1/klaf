@@ -13,13 +13,9 @@ import { Klaf } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
-const path = 'my_file_path.db'
-const engine = new FileSystemEngine()
-const payloadSize = 1024
 const db = await Klaf.Open({
-  path,
-  engine,
-  payloadSize
+  path: 'my_file_path.db',
+  engine: new FileSystemEngine(),
 })
 
 // INPUT

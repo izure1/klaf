@@ -20,34 +20,22 @@ const db = await KlafDocument.Open({
   scheme: {
     name: {
       default: () => 'Anonymous',
-      validate: (v) => typeof v === 'string'
+      validate: (v) => typeof v === 'string',
     },
     age: {
       default: () => 0,
-      validate: (v) => typeof v === 'number'
+      validate: (v) => typeof v === 'number',
     }
   },
   payloadSize: 1024,
 })
 
-await db.put({
-  name: 'john'
-})
-
-await db.put({
-  name: 'park',
-  age: 25
-})
-
-await db.put({
-  name: 'sato',
-  age: 10
-})
+await db.put({ name: 'john' })
+await db.put({ name: 'park', age: 25 })
+await db.put({ name: 'sato', age: 10 })
 
 const result = await db.pick({
-  age: {
-    gt: 15
-  }
+  age: { gt: 15 }
 })
 
 console.log(result) // [{ name: 'park', age: 25 }]
@@ -89,15 +77,15 @@ const db = await KlafDocument.Open({
   scheme: {
     name: {
       default: () => 'Anonymous',
-      validate: (v) => typeof v === 'string'
+      validate: (v) => typeof v === 'string',
     },
     age: {
       default: () => 0,
-      validate: (v) => typeof v === 'number'
+      validate: (v) => typeof v === 'number',
     },
     sex: {
       default: (): 'male'|'female'|null => null,
-      validate: (v) => v === 'male' || v === 'female' || v === null
+      validate: (v) => v === 'male' || v === 'female' || v === null,
     }
   },
   payloadSize: 1024,
@@ -128,11 +116,11 @@ However, you may want to extend the properties of the scheme. For example, let's
     ...
     student: {
       default: () => true,
-      validate: (v) => typeof v === 'boolean'
+      validate: (v) => typeof v === 'boolean',
     }
-  }
+  },
   // If the scheme structure has been modified, you must increment the version!
-  version: 1
+  version: 1,
 }
 ```
 
@@ -148,7 +136,7 @@ When migrating to delete an existing property, properties that do not exist in t
 
 Please note that this migration process can affect application performance if there are many inserted documents, as it updates all inserted documents.
 
-### Optimization
+### Database Indexing
 
 **KlafDocument** inserts data in the form of **JSON** records, which are referred to as documents. A document has a **key-value** relationship, and the values can be of type **string**, **number**, **boolean**, or **null**. It follows the same format as **JSON**, and there is no limit to the depth of the document.
 
@@ -165,7 +153,7 @@ For example, you can insert a document like the following:
       sales: [100, 0, 20, 35]
     }
   },
-  products: [13223, 1992, 4582]
+  products: [13223, 1992, 4582],
 }
 ```
 
@@ -187,7 +175,7 @@ If you want to use **more.price** as a query condition, you need to make it a to
       sales: [100, 0, 20, 35]
     }
   },
-  products: [13223, 1992, 4582]
+  products: [13223, 1992, 4582],
 }
 ```
 
@@ -195,9 +183,7 @@ Afterward, you can use the **price** property in the **pick** method to perform 
 
 ```typescript
 const result = await db.pick({
-  price: {
-    gt: 100
-  }
+  price: { gt: 100 }
 })
 ```
 
@@ -207,12 +193,10 @@ When retrieving inserted documents, you can specify queries using the document's
 
 ```typescript
 const result = await db.pick({
-  name: {
-    equal: 'pit'
-  },
+  name: { equal: 'pit' },
   price: {
     gt: 100,
-    lt: 3000
+    lt: 3000,
   }
 })
 ```
@@ -227,12 +211,10 @@ If the query conditional is **equal**, you can directly input this value as a pr
 
 ```typescript
 const result = await db.pick({
-  name: {
-    equal: 'pit'
-  },
+  name: { equal: 'pit' },
   price: {
     gt: 100,
-    lt: 3000
+    lt: 3000,
   }
 })
 // The above code works the same as below.
@@ -240,7 +222,7 @@ const result = await db.pick({
   name: 'pit',
   price: {
     gt: 100,
-    lt: 3000
+    lt: 3000,
   }
 })
 ```
@@ -251,9 +233,7 @@ Starting from version 3.0.0, **like** search is supported. **Like** search retri
 
 ```typescript
 const result = await db.pick({
-  name: {
-    like: 'p%t'
-  }
+  name: { like: 'p%t' }
 })
 ```
 
@@ -261,9 +241,7 @@ This searches for all documents that start with **'p'** and end with **'t'**. If
 
 ```typescript
 const result = await db.pick({
-  name: {
-    like: 'p%'
-  }
+  name: { like: 'p%' }
 })
 ```
 
@@ -271,9 +249,7 @@ If you want to select only **'pit'** and **'put'** from the values **'pit'**, **
 
 ```typescript
 const result = await db.pick({
-  name: {
-    like: 'p_t'
-  }
+  name: { like: 'p_t' }
 })
 ```
 
@@ -288,7 +264,7 @@ const result = await db.pick({}, {
   start: 0,
   end: 30,
   order: 'age',
-  desc: true
+  desc: true,
 })
 ```
 
