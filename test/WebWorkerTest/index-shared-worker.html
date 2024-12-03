@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Klaf Database Shared Worker Example</title>
+</head>
+<body>
+    <h1>Shared Worker 데이터베이스 데모</h1>
+
+    <form id="dataForm">
+        <input type="text" id="nameInput" placeholder="이름">
+        <input type="number" id="ageInput" placeholder="나이">
+        <button type="submit">데이터 추가</button>
+    </form>
+
+    <button id="pickButton">데이터 조회</button>
+
+    <div id="result"></div>
+
+    <script type="module">
+        // Shared Worker 생성
+        const worker = new SharedWorker('klaf-shared-worker.js', { type: 'module' });
+        const form = document.getElementById('dataForm');
+        const resultDiv = document.getElementById('result');
+        const pickButton = document.getElementById('pickButton');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('nameInput').value;
+            const age = parseInt(document.getElementById('ageInput').value);
+
+            worker.port.postMessage({
+                type: 'put',
+                detail: { name, age }
+            });
+        });
+
+        pickButton.addEventListener('click', () => {
+            worker.port.postMessage({
+                type: 'pick',
+                detail: {} // 모든 데이터 조회
+            });
+        });
+
+        worker.port.onmessage = (e) => {
+            const { type, detail } = e.data;
+            resultDiv.textContent = `작업 유형: ${type}, 결과: ${JSON.stringify(detail)}`;
+        };
+
+        // 포트 시작
+        worker.port.start();
+    </script>
+</body>
+</html>
