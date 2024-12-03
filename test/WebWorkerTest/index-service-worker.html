@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Klaf Database Service Worker Example</title>
+</head>
+<body>
+    <h1>Service Worker 데이터베이스 데모</h1>
+
+    <form id="dataForm">
+        <input type="text" id="nameInput" placeholder="이름">
+        <input type="number" id="ageInput" placeholder="나이">
+        <button type="submit">데이터 추가</button>
+    </form>
+
+    <button id="pickButton">데이터 조회</button>
+
+    <div id="result"></div>
+
+    <script type="module">
+        // Service Worker 등록 및 메시지 통신
+        async function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.register('klaf-service-worker.js', { type: 'module' });
+                    console.log('Service Worker 등록 성공:', registration);
+
+                    // 메시지 수신 핸들러
+                    navigator.serviceWorker.addEventListener('message', (e) => {
+                        const { type, detail } = e.data;
+                        document.getElementById('result').textContent = 
+                            `작업 유형: ${type}, 결과: ${JSON.stringify(detail)}`;
+                    });
+
+                    return registration;
+                } catch (error) {
+                    console.error('Service Worker 등록 실패:', error);
+                }
+            }
+        }
+
+        // 페이지 로드 시 Service Worker 등록
+        registerServiceWorker();
+
+        const form = document.getElementById('dataForm');
+        const pickButton = document.getElementById('pickButton');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('nameInput').value;
+            const age = parseInt(document.getElementById('ageInput').value);
+
+            // Service Worker에 메시지 전송
+            if (navigator.serviceWorker.controller) {
+                const channel = new MessageChannel();
+                navigator.serviceWorker.controller.postMessage({
+                    type: 'put',
+                    detail: { name, age }
+                }, [channel.port2]);
+            }
+        });
+
+        pickButton.addEventListener('click', () => {
+            if (navigator.serviceWorker.controller) {
+                const channel = new MessageChannel();
+                navigator.serviceWorker.controller.postMessage({
+                    type: 'pick',
+                    detail: {} // 모든 데이터 조회
+                }, [channel.port2]);
+            }
+        });
+    </script>
+</body>
+</html>

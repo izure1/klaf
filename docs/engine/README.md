@@ -2,6 +2,18 @@
 
 **klaf** has introduced the concept of engines to support cross-platform compatibility. Engines are supported as ESM modules. You can choose an engine that suits your needs, or if necessary, extend an existing engine to create your own.
 
+## TL;DR - Which one should I choose?
+
+Follow these steps:
+
+1. Do you not need to store data permanently?  
+   Choose the [**InMemoryEngine**](#InMemoryEngine).  
+
+2. If not, are you using a JavaScript runtime like Node.js, Bun.sh, or Deno?  
+   Choose the [**FileSystemEngine**](#FileSystemEngine).  
+
+For all other cases, choose the [**WebWorkerEngine**](#WebWorkerEngine).
+
 ## Available Engines
 
 Currently, **klaf** supports three engines by default.
@@ -50,7 +62,7 @@ This engine offers high performance because it does not rely on file I/O operati
 
 ### WebWorkerEngine
 
-**WebWorkerEngine** operates exclusively in the dedicated web worker environment of browsers. It uses the browser's **FileSystemFileHandle API** to manage files. However, if multiple tabs are opened, a separate database will be created for each web worker. When a tab is closed, the corresponding database file will be automatically deleted.
+The **WebWorkerEngine** operates in the main thread, dedicated workers, shared workers, and service workers of the browser. It manages files using the browser's [OPFS (Origin Private File System)](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) and the **FileSystemFileHandle API**, so please note that the files are not stored permanently.
 
 ```typescript
 import { KlafDocument } from 'klaf.js'
@@ -67,7 +79,7 @@ const db = await KlafDocument.Open({
 })
 ```
 
-This engine is useful when you want to create a database on the web and download it as a file. Please note that it does not store data permanently. For instance, if you're working on an online spreadsheet and want to save it as a database, you can use this method.
+This engine is useful when you want to create a database on the web and download it as a file. For example, if you're working on an online spreadsheet and want to save it as a database, you can use this method. Additionally, if you need a document-based database rather than a key-value store like IndexedDB, this engine can be a great alternative.
 
 ```typescript
 // worker.js
@@ -82,6 +94,10 @@ worker.onmessage = async (e) => {
   console.log(url) // Blob file download link
 }
 ```
+
+This engine utilizes the most optimal read/write strategies depending on the browser environment. For example, in dedicated web workers, the [createSyncAccessHandle](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle) synchronous method is supported, enabling fast read and write operations on files without loading the entire database into memory. However, this method is not available in shared workers, service workers, or the main thread.  
+
+As a fallback, it uses the [getFile](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/getFile) and [createWritable](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable) methods. For performance optimization, this approach loads the entire database into memory during database operations, updates it in memory, and writes it back to the file using a write-back strategy. This process is resource-intensive, and as the database size increases, the performance will degrade significantly.
 
 ## Implementing Your Own Engine
 
