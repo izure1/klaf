@@ -4,15 +4,10 @@
 
 ## TL;DR - Which one should I choose?
 
-Follow these steps:
-
-1. Do you not need to store data permanently?  
-   Choose the [**InMemoryEngine**](#InMemoryEngine).  
-
-2. If not, are you using a JavaScript runtime like Node.js, Bun.sh, or Deno?  
-   Choose the [**FileSystemEngine**](#FileSystemEngine).  
-
-For all other cases, choose the [**WebWorkerEngine**](#WebWorkerEngine).
+|  | Require store data | No require store data |
+|-------|------|------|
+| **Web Browser** | [WebWorkerEngine](#webworkerengine) | [InMemoryEngine](#inmemoryengine) |
+| **Node.js, Bun, Deno** | [FileSystemEngine](#filesystemengine) | [InMemoryEngine](#inmemoryengine) |
 
 ## Available Engines
 
@@ -20,7 +15,7 @@ Currently, **klaf** supports three engines by default.
 
 ### FileSystemEngine
 
-**FileSystemEngine** works exclusively in Node.js environments. It operates using Node.js's file system module, allowing the creation of database files on your computer to ensure data persistence.
+**FileSystemEngine** works exclusively in Node.js, Bun, Deno environments. It operates using Node.js's file system module, allowing the creation of database files on your computer to ensure data persistence.
 
 ```typescript
 import { KlafDocument } from 'klaf.js'
@@ -37,11 +32,11 @@ const db = await KlafDocument.Open({
 })
 ```
 
-This engine is used when you want to build a typical database. Although it only works in a Node.js environment, it can store data permanently.
+This engine is used when you want to build a typical database. Although it only works in a JavaScript Runtime environment, it can store data permanently.
 
 ### InMemoryEngine
 
-**InMemoryEngine** works in both Node.js and browser environments. This engine does not create any files; it only stores data in the computer's memory. As a result, all data is lost when the instance is terminated.
+**InMemoryEngine** works in both JavaScript runtime and web browser environments. This engine does not create any files; it only stores data in the computer's memory. As a result, all data is lost when the instance is terminated.
 
 ```typescript
 import { KlafDocument } from 'klaf.js'

@@ -8,7 +8,32 @@
 </p>
 
 Very simple read/write database with a **NoSQL**.  
-It's written in JavaScript using pure Node.js API and pretty easy and small.
+It's written in JavaScript using pure Node.js API and pretty easy and small.  
+This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https://bun.sh/), and [Deno](https://deno.com/).
+
+Choose the [database](#database) and [engine](#engine) that best fit your needs to handle your data efficiently!
+
+## Database
+
+**klaf** comes in two flavors: **key-value** database and **document-oriented** database.  
+You have the freedom to choose based on your needs, **but most users will likely prefer the *document-oriented* database.**
+
+For details on how to use each database, please refer to the links below.
+
+* [**Document-oriented Database**](./docs/document/README.md)
+* [**Key-value Database**](./docs/core/README.md)
+
+## [Engine](./docs/engine/README.md)
+
+Klaf.js introduces the concept of an engine, which is an instance responsible for handling how data is stored. Currently, three types of engines are supported by default: **FileSystem**, **InMemory**, and **WebWorker**. If needed, you can also create your own custom engine.  
+Choose the engine that best fits your needs.
+
+For a detailed list of the supported engines and more information, refer to [this link](./docs/engine/README.md).  
+If you're unsure what to choose, select the **FileSystem** engine.
+
+## Example
+
+This example shows how to build a database using the document-oriented database **KlafDocument** and the **FileSystem** engine.
 
 ```typescript
 import { KlafDocument } from 'klaf.js'
@@ -37,21 +62,21 @@ await db.put({ nickname: 'faker', gender: 'male' })
 const documents = await db.pick({ gender: 'male' })
 ```
 
-**klaf** comes in two flavors: **key-value** database and **document-oriented** database.  
-You have the freedom to choose based on your needs, **but most users will likely prefer the *document-oriented* database.**
+The following example demonstrates how to build a database using the key-value database **Klaf** and the **WebWorker** engine.
 
-For details on how to use each database, please refer to the links below.
+```typescript
+import { Klaf } from 'klaf.js'
+import { WebWorkerEngine } from 'klaf.js/engine/WebWorker'
 
-* [**Document-oriented Database**](./docs/document/README.md)
-* [**Key-value Database**](./docs/core/README.md)
+const db = await Klaf.Open({
+  path: 'my-database-path.db',
+  version: 0,
+  engine: new WebWorkerEngine(),
+})
 
-## [Engine](./docs/engine/README.md)
-
-Klaf.js introduces the concept of an engine, which is an instance responsible for handling how data is stored. Currently, three types of engines are supported by default: **FileSystem**, **InMemory**, and **WebWorker**. If needed, you can also create your own custom engine.  
-Choose the engine that best fits your needs.
-
-For a detailed list of the supported engines and more information, refer to [this link](./docs/engine/README.md).  
-If you're unsure what to choose, select the **FileSystem** engine.
+const key = await db.put('Faker, GOAT.')
+const record = (await db.pick(key)).record.payload // "Faker, GOAT."
+```
 
 ## Install
 
