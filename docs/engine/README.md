@@ -4,7 +4,7 @@
 
 ## TL;DR - Which one should I choose?
 
-|  | Require store data | No require store data |
+|  | Data persistence required. | Data persistence NO required. |
 |-------|------|------|
 | **Web Browser** | [WebWorkerEngine](#webworkerengine) | [InMemoryEngine](#inmemoryengine) |
 | **Node.js, Bun, Deno** | [FileSystemEngine](#filesystemengine) | [InMemoryEngine](#inmemoryengine) |

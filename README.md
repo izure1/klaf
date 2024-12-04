@@ -70,7 +70,6 @@ import { WebWorkerEngine } from 'klaf.js/engine/WebWorker'
 
 const db = await Klaf.Open({
   path: 'my-database-path.db',
-  version: 0,
   engine: new WebWorkerEngine(),
 })
 
