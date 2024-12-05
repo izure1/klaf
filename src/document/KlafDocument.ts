@@ -7,7 +7,7 @@ import { KlafComparator } from './KlafComparator'
 import { KlafStrategy } from './KlafStrategy'
 import { ErrorBuilder } from './ErrorBuilder'
 import { ObjectHelper } from '../utils/ObjectHelper'
-import { Throttling } from '../utils/Throttling'
+import { Debounce } from '../utils/Debounce'
 import { DataEngine } from '../engine/DataEngine'
 
 export type PrimitiveType = string|number|boolean|null
@@ -307,7 +307,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   protected readonly rootId: string
   protected readonly order: number
   protected readonly comparator: KlafComparator
-  protected readonly throttling: Throttling
+  protected readonly debounce: Debounce
   protected readonly scheme: KlafDocumentScheme
   protected readonly locker: Ryoiki
   protected readonly schemeVersion: number
@@ -333,7 +333,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     this.rootId = rootId
     this.order = order
     this.comparator = new KlafComparator()
-    this.throttling = new Throttling(100)
+    this.debounce = new Debounce(100)
     this.locker = new Ryoiki()
     this.schemeVersion = schemeVersion
     this.scheme = scheme
@@ -383,7 +383,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
           property,
           updateQueue,
           this.db,
-          this.throttling,
+          this.debounce,
           this.rootId,
           this._root
         ),
@@ -770,7 +770,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     await this.locker.writeLock(async (_lockId) => {
       lockId = _lockId
       await Promise.all([
-        this.throttling.done('sync')
+        this.debounce.done('sync')
       ]).then(() => this.db.close())
     }).finally(() => this.locker.writeUnlock(lockId))
   }

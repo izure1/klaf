@@ -1,6 +1,6 @@
 import { Catcher } from './Catcher'
 
-export class Throttling {
+export class Debounce {
   readonly delay: number
   private _timeouts: Map<string, NodeJS.Timeout>
   private _activePromises: Map<string, { resolve: Function; reject: Function }[]>

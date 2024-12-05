@@ -2,7 +2,7 @@ import type { BPTreeNode, SerializeStrategyHead } from 'serializable-bptree'
 import type { SupportedType, KlafDocumentRoot } from './KlafDocument'
 import { SerializeStrategyAsync } from 'serializable-bptree'
 import { Klaf } from '../core/Klaf'
-import { Throttling } from '../utils/Throttling'
+import { Debounce } from '../utils/Debounce'
 import { KlafMediator } from '../core/KlafMediator'
 
 enum QueueType {
@@ -27,7 +27,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   protected readonly property: string
   protected readonly rootId: string
   protected readonly db: Klaf
-  protected readonly throttling: Throttling
+  protected readonly debounce: Debounce
   protected readonly root: KlafDocumentRoot
   private readonly _queue: Map<string, QueueDeleteUnit|QueueUpdateUnit>
   private readonly _temps: Map<string, BPTreeNode<string, SupportedType>|KlafDocumentRoot>
@@ -37,7 +37,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
     property: string,
     updateQueue: Map<string, QueueDeleteUnit|QueueUpdateUnit>,
     db: Klaf,
-    throttling: Throttling,
+    debounce: Debounce,
     rootId: string,
     root: KlafDocumentRoot
   ) {
@@ -45,7 +45,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
     this.property = property
     this.rootId = rootId
     this.db = db
-    this.throttling = throttling
+    this.debounce = debounce
     this.root = root
     this._queue = updateQueue
     this._temps = new Map()
@@ -76,7 +76,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   }
 
   private _requestSyncToRepository(): Promise<void> {
-    return this.throttling.execute('sync', async () => {
+    return this.debounce.execute('sync', async () => {
       const queue = Array.from(this._queue)
       this._queue.clear()
 

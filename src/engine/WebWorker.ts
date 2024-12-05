@@ -1,5 +1,5 @@
 import { DataEngine } from './DataEngine'
-import { Throttling } from '../utils/Throttling'
+import { Debounce } from '../utils/Debounce'
 
 abstract class WebWorkerStrategy extends DataEngine {
   readonly directoryHandle: FileSystemDirectoryHandle
@@ -98,18 +98,18 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
 
 class WritableStreamStrategy extends WebWorkerStrategy {
   protected fileData!: Uint8Array
-  private readonly _throttling: Throttling
+  private readonly _debounce: Debounce
 
   constructor(
     directoryHandle: FileSystemDirectoryHandle,
     fileHandle: FileSystemFileHandle
   ) {
     super(directoryHandle, fileHandle)
-    this._throttling = new Throttling(100)
+    this._debounce = new Debounce(100)
   }
 
   private async _commit(): Promise<void> {
-    return this._throttling.execute('commit', async () => {
+    return this._debounce.execute('commit', async () => {
       const stream = await this.fileHandle.createWritable()
       await stream.write(this.fileData)
       await stream.close()
