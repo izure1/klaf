@@ -1,1 +1,1 @@
-export { KlafDocument } from './KlafDocument'
+export { KlafDocument, KlafDocumentable, KlafDocumentShape } from './KlafDocument'

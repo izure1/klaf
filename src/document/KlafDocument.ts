@@ -59,11 +59,11 @@ export type KlafDocumentQueryCondition<T, K extends keyof T = keyof T> = {
   like?: string
 }
 
-export interface KlafDocumentRecordShape {
+export interface KlafDocumentable {
   [key: string]: SupportedType
 }
 
-export interface KlafDocumentTimestampShape {
+export interface KlafDocumentBase {
   /**
    * The index when the document was inserted. This value is automatically added when inserted into the database.
    */
@@ -78,12 +78,12 @@ export interface KlafDocumentTimestampShape {
   updatedAt: number
 }
 
-export type KlafDocumentRecord<
-  T extends KlafDocumentRecordShape
-> = T&KlafDocumentTimestampShape
+export type KlafDocumentShape<
+  T extends KlafDocumentable
+> = T&KlafDocumentBase
 
 export type KlafDocumentQuery<
-  T extends KlafDocumentRecord<any>
+  T extends KlafDocumentShape<any>
 > = {
   /**
    * The property of the document to be searched.
@@ -91,7 +91,7 @@ export type KlafDocumentQuery<
   [K in keyof T]?: T[K]|KlafDocumentQueryCondition<T, K>
 }
 
-export interface KlafDocumentOption<T extends KlafDocumentRecord<KlafDocumentRecordShape>> {
+export interface KlafDocumentOption<T extends KlafDocumentShape<KlafDocumentable>> {
   /**
    * Used when retrieving a portion of the searched documents. Specifies the starting offset, with a default value of `0`.
    */
@@ -103,7 +103,7 @@ export interface KlafDocumentOption<T extends KlafDocumentRecord<KlafDocumentRec
   /**
    * The property used for sorting the retrieved documents. Results are sorted based on this value, with the default being `documentIndex`.
    */
-  order?: keyof KlafDocumentRecord<T>&string
+  order?: keyof KlafDocumentShape<T>&string
   /**
    * The property used for sorting the retrieved documents. If set to `true`, it sorts in descending order. The default value is `false`.
    */
@@ -172,7 +172,7 @@ export interface KlafDocumentCreateOption<T extends KlafDocumentScheme> {
   overwrite?: boolean
 }
 
-export class KlafDocument<T extends KlafDocumentRecordShape> {
+export class KlafDocument<T extends KlafDocumentable> {
   protected static readonly DB_NAME = 'TissueRollDocument'
 
   private static Verify(file: string, payload: string): KlafDocumentRoot {
@@ -366,7 +366,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private async _createTrees(): Promise<void> {
-    const defaultProperties: (keyof KlafDocumentTimestampShape)[] = [
+    const defaultProperties: (keyof KlafDocumentBase)[] = [
       'documentIndex',
       'createdAt',
       'updatedAt',
@@ -398,7 +398,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
     return new CacheEntanglementAsync((
       _key,
       _state,
-      document: KlafDocumentRecord<T>
+      document: KlafDocumentShape<T>
     ) => document)
   }
 
@@ -412,23 +412,23 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private _normalizeOption(
-    option: Partial<KlafDocumentOption<KlafDocumentRecord<T>>>
-  ): Required<KlafDocumentOption<KlafDocumentRecord<T>>> {
-    const def: Required<KlafDocumentOption<KlafDocumentRecord<T>>> = {
+    option: Partial<KlafDocumentOption<KlafDocumentShape<T>>>
+  ): Required<KlafDocumentOption<KlafDocumentShape<T>>> {
+    const def: Required<KlafDocumentOption<KlafDocumentShape<T>>> = {
       start: 0,
       end: Number.MAX_SAFE_INTEGER,
       order: 'documentIndex',
       desc: false
     }
     const merged: Required<
-      KlafDocumentOption<KlafDocumentRecord<T>>
+      KlafDocumentOption<KlafDocumentShape<T>>
     > = Object.assign({}, def, option)
     return merged
   }
 
   private _normalizeFlatQuery(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>
-  ): KlafDocumentQuery<KlafDocumentRecord<T>> {
+    query: KlafDocumentQuery<KlafDocumentShape<T>>
+  ): KlafDocumentQuery<KlafDocumentShape<T>> {
     query = Object.assign({}, query)
     for (const property in query) {
       const condition = query[property]
@@ -442,10 +442,10 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private _normalizeQuery(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    properties: Set<keyof KlafDocumentRecord<T>>,
-  ): KlafDocumentQuery<KlafDocumentRecord<T>> {
-    const richQuery: KlafDocumentQuery<KlafDocumentRecord<T>> = {}
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    properties: Set<keyof KlafDocumentShape<T>>,
+  ): KlafDocumentQuery<KlafDocumentShape<T>> {
+    const richQuery: KlafDocumentQuery<KlafDocumentShape<T>> = {}
     for (const property of properties) {
       richQuery[property] = { gt: undefined }
     }
@@ -494,11 +494,11 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   private async _callInternalPut(
     document: Partial<T>,
     ...overwrite: Partial<T>[]
-  ): Promise<KlafDocumentRecord<T>> {
+  ): Promise<KlafDocumentShape<T>> {
     const record = Object.assign(
       this._normalizeRecord(document),
       ...overwrite
-    ) as KlafDocumentRecord<T>
+    ) as KlafDocumentShape<T>
     const stringify = JSON.stringify(record)
     const recordId = await this.db.put(stringify)
     for (const property in record) {
@@ -524,7 +524,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * If search functionality is required, store the relevant property separately as a top-level property.
    * @param document The document to be inserted.
    */
-  async put(document: Partial<T>): Promise<KlafDocumentRecord<T>> {
+  async put(document: Partial<T>): Promise<KlafDocumentShape<T>> {
     if (this.closing) {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -536,7 +536,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
         documentIndex: Number(this._metadata.autoIncrement)+1,
         createdAt: now,
         updatedAt: now,
-      } as KlafDocumentRecord<T>
+      } as KlafDocumentShape<T>
       return await this._callInternalPut(document, overwrite)
     }).finally(() => this.locker.writeUnlock(lockId))
   }
@@ -546,7 +546,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param query The scope of the documents to be deleted.
    * @returns The number of documents deleted.
    */
-  async delete(query: KlafDocumentQuery<KlafDocumentRecord<T>>): Promise<number> {
+  async delete(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<number> {
     if (this.closing) {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -575,13 +575,13 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
 
   private async _callInternalUpdate(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    update: Partial<T|KlafDocumentRecord<T>>|(
-      (record: KlafDocumentRecord<T>) => Partial<T>
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    update: Partial<T|KlafDocumentShape<T>>|(
+      (record: KlafDocumentShape<T>) => Partial<T>
     ),
     createOverwrite: (
-      before: KlafDocumentRecord<T>
-    ) => Partial<KlafDocumentRecord<T>>
+      before: KlafDocumentShape<T>
+    ) => Partial<KlafDocumentShape<T>>
   ): Promise<number> {
     const ids = await this.findRecordIds(query)
     for (let i = 0, len = ids.length; i < len; i++) {
@@ -601,14 +601,14 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
           createdAt: before.createdAt,
           updatedAt: before.updatedAt,
         }
-      ) as KlafDocumentRecord<T>
+      ) as KlafDocumentShape<T>
       const partial = typeof update === 'function' ? update(before) : update
       const overwrite = createOverwrite(before)
       const after = Object.assign(
         normalizedBefore,
         partial,
         overwrite
-      ) as unknown as KlafDocumentRecord<T>
+      ) as unknown as KlafDocumentShape<T>
       for (const property in before) {
         const tree = this.getTree(property)
         if (!tree) {
@@ -645,8 +645,8 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @returns The number of documents updated.
    */
   async partialUpdate(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    update: Partial<T>|((record: KlafDocumentRecord<T>) => Partial<T>)
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    update: Partial<T>|((record: KlafDocumentShape<T>) => Partial<T>)
   ): Promise<number> {
     let lockId: string
     return await this.locker.writeLock(async (_lockId) => {
@@ -667,8 +667,8 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @returns The number of documents updated.
    */
   async fullUpdate(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    update: T|((record: KlafDocumentRecord<T>) => T)
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    update: T|((record: KlafDocumentShape<T>) => T)
   ): Promise<number> {
     let lockId: string
     return await this.locker.writeLock(async (_lockId) => {
@@ -680,12 +680,12 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
   }
   
   protected async findRecordIds(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    order: keyof KlafDocumentRecord<T>&string = 'documentIndex',
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    order: keyof KlafDocumentShape<T>&string = 'documentIndex',
     desc = false
   ): Promise<string[]> {
-    const mustHave: keyof KlafDocumentRecord<T> = 'documentIndex'
-    const properties = new Set<keyof KlafDocumentRecord<T>>([order, mustHave])
+    const mustHave: keyof KlafDocumentShape<T> = 'documentIndex'
+    const properties = new Set<keyof KlafDocumentShape<T>>([order, mustHave])
     const normalizedQuery = this._normalizeQuery(query, properties)
     let filterKeys: Set<string>|undefined = undefined
     for (const property in normalizedQuery) {
@@ -710,9 +710,9 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param option Modify the results of the retrieved documents.
    */
   async pick(
-    query: KlafDocumentQuery<KlafDocumentRecord<T>>,
-    option: KlafDocumentOption<KlafDocumentRecord<T>> = {}
-  ): Promise<KlafDocumentRecord<T>[]> {
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    option: KlafDocumentOption<KlafDocumentShape<T>> = {}
+  ): Promise<KlafDocumentShape<T>[]> {
     if (this.closing) {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -743,7 +743,7 @@ export class KlafDocument<T extends KlafDocumentRecordShape> {
    * @param query The range of documents to be queried.
    * @returns The number of documents matched.
    */
-  async count(query: KlafDocumentQuery<KlafDocumentRecord<T>>): Promise<number> {
+  async count(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<number> {
     if (this.closing) {
       throw ErrorBuilder.ERR_DATABASE_CLOSING()
     }

@@ -1,2 +1,2 @@
-export { Klaf } from './core/index'
-export { KlafDocument } from './document/index'
+export * from './core/index'
+export * from './document/index'
