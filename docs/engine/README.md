@@ -124,8 +124,8 @@ const isOverwriting = option.overwrite
 if (databaseExisting) {
   if (isOverwriting) {
     await engine.unlink(databasePath)
+    await engine.create(databasePath)
   }
-  await engine.create(databasePath)
 }
 else {
   await engine.create(databasePath)

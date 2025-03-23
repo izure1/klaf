@@ -5,7 +5,7 @@
 
 Very simple read/write database with a **NoSQL**.  
 It's written in JavaScript using pure Node.js API and pretty easy and small.  
-This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https://bun.sh/) [Deno](https://deno.com/), and Browser, and Web worker!
+This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https://bun.sh/) [Deno](https://deno.com/), and Browser, and Web worker.
 
 Choose the [database](#database) and [engine](#engine) that best fit your needs to handle your data efficiently!
 
@@ -109,8 +109,6 @@ This particular solution is ideal for situations where you need to store data fo
 
 Since it is implemented in pure JavaScript, there is no need for pre-builds or configuration based on the Node.js version. It is compatible with all versions!
 
-it's compatible with Node.js, Bun, Deno, and Browser. Cross platform!
-
 ### Why should I use this instead of **JSON**?
 
 When the **JSON** files get large, quick data read and write operations can become challenging.  
@@ -170,8 +168,6 @@ Overall, Klaf supports faster writes than JSON. As the size increases, this gap 
 *This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and klaf has a speed of **O(1)** or **O(log n)**.*
 
 *The Journal feature is designed to enhance database stability. However, it may slightly reduce performance, approximately by **25~30%**.*
-
-*The performance difference is not significant, but it's important to note that there is a difference.*
 
 ## Repository
 
