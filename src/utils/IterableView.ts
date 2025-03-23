@@ -1,4 +1,8 @@
 export class IterableView {
+  static Create<T>(length: number, fill: T): T[] {
+    return new Array(length).fill(fill)
+  }
+
   static Copy<T>(array: T[]): T[] {
     return array.slice()
   }

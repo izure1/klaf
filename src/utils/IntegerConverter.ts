@@ -61,6 +61,18 @@ export class IntegerConverter {
     return BigInt('0x' + hex)
   }
 
+  static FromAuto(array: number[]|Uint8Array, size: number): number|bigint {
+    switch (size) {
+      case 1:   return IntegerConverter.FromArray8(array)
+      case 2:   return IntegerConverter.FromArray16(array)
+      case 4:   return IntegerConverter.FromArray32(array)
+      case 8:   return IntegerConverter.FromArray64(array)
+      case 16:  return IntegerConverter.FromArray128(array)
+      case 32:  return IntegerConverter.FromArray256(array)
+      default:  throw new Error(`Invalid size: ${size}`)
+    }
+  }
+
   static ToArray8(num: number): number[] {
     const view = IntegerConverter.View8
     view.setUint8(0, num)
@@ -121,5 +133,24 @@ export class IntegerConverter {
       array[i] = parseInt(hex.substring(j, j+2), 16)
     }
     return array
+  }
+
+  static ToAuto(num: number|bigint, size: number): number[] {
+    if (typeof num === 'number') {
+      switch (size) {
+        case 1:   return IntegerConverter.ToArray8(num)
+        case 2:   return IntegerConverter.ToArray16(num)
+        case 4:   return IntegerConverter.ToArray32(num)
+        default:  throw new Error(`Invalid size: ${size}`)
+      }
+    }
+    else {
+      switch (size) {
+        case 8:   return IntegerConverter.ToArray64(num)
+        case 16:  return IntegerConverter.ToArray128(num)
+        case 32:  return IntegerConverter.ToArray256(num)
+        default:  throw new Error(`Invalid size: ${size}`)
+      }
+    }
   }
 }

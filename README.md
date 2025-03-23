@@ -3,13 +3,9 @@
 [![jsdelivr](https://data.jsdelivr.com/v1/package/npm/klaf.js/badge)](https://www.jsdelivr.com/package/npm/klaf.js)
 ![node.js workflow](https://github.com/izure1/klaf/actions/workflows/node.js.yml/badge.svg)
 
-<p align="center">
-  <img width="50%" alt="klaf logo" src="./docs/asset/image/logo_klaf.svg" style="max-width:1024px;">
-</p>
-
 Very simple read/write database with a **NoSQL**.  
 It's written in JavaScript using pure Node.js API and pretty easy and small.  
-This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https://bun.sh/), and [Deno](https://deno.com/).
+This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https://bun.sh/) [Deno](https://deno.com/), and Browser, and Web worker!
 
 Choose the [database](#database) and [engine](#engine) that best fit your needs to handle your data efficiently!
 
@@ -36,13 +32,14 @@ If you're unsure what to choose, select the **FileSystem** engine.
 This example shows how to build a database using the document-oriented database **KlafDocument** and the **FileSystem** engine.
 
 ```typescript
-import { KlafDocument } from 'klaf.js'
+import { KlafDocument, DataJournal } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 const db = await KlafDocument.Open({
   path: 'my-database-path.db',
   version: 0,
   engine: new FileSystemEngine(),
+  journal: new DataJournal(new FileSystemEngine())m
   scheme: {
     id: {
       default: () => crypto.randomUUID()
@@ -59,22 +56,23 @@ const db = await KlafDocument.Open({
 })
 
 await db.put({ nickname: 'faker', gender: 'male' })
-const documents = await db.pick({ gender: 'male' })
+const [err, documents] = await db.pick({ gender: 'male' })
 ```
 
 The following example demonstrates how to build a database using the key-value database **Klaf** and the **WebWorker** engine.
 
 ```typescript
-import { Klaf } from 'klaf.js'
+import { Klaf, DataJournal } from 'klaf.js'
 import { WebWorkerEngine } from 'klaf.js/engine/WebWorker'
 
 const db = await Klaf.Open({
   path: 'my-database-path.db',
   engine: new WebWorkerEngine(),
+  journal: new DataJournal(new WebWorkerEngine())
 })
 
-const key = await db.put('Faker, GOAT.')
-const record = (await db.pick(key)).record.payload // "Faker, GOAT."
+const [errPut, key] = await db.put('Faker, GOAT.')
+const [errPick, record] = (await db.pick(key)).record.payload // "Faker, GOAT."
 ```
 
 ## Install
@@ -109,6 +107,8 @@ JavaScript has numerous fantastic database libraries available, but at times, th
 This particular solution is ideal for situations where you need to store data for an extended period, making it well-suited for less critical data that doesn't require a rigid structure.
 
 Since it is implemented in pure JavaScript, there is no need for pre-builds or configuration based on the Node.js version. It is compatible with all versions!
+
+it's compatible with Node.js, Bun, Deno, and Browser. Cross platform!
 
 ### Why should I use this instead of **JSON**?
 
@@ -168,6 +168,10 @@ Overall, Klaf supports faster writes than JSON. As the size increases, this gap 
 
 *This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and klaf has a speed of **O(1)** or **O(log n)**.*
 
+The Journal feature is designed to enhance database stability. However, it may slightly reduce performance, approximately by **25~30%**.
+
+The performance difference is not significant, but it's important to note that there is a difference.
+
 ## Repository
 
 |Site|Link|
@@ -183,6 +187,7 @@ The Klaf library is the new name for the TissueRoll library.
 
 |     Version                         |     Link      |
 |-------------------------------------|---------------|
+| From Klaf 2.x to Klaf 3.x           |[Link](./docs/migration/8.md)|
 | From Klaf 1.x to Klaf 2.x           |[Link](./docs/migration/7.md)|
 | From TissueRoll 5.x.x to Klaf 1.x   |[Link](./docs/migration/6.md)|
 

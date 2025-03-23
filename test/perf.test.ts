@@ -1,13 +1,16 @@
 import { unlink } from 'node:fs/promises'
 import Chance from 'chance'
-import { Klaf, KlafDocument } from 'klaf.js'
+import { DataJournal, Klaf, KlafDocument } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 async function createDatabase(name: string) {
+  name = `_${name}`
   const engine = new FileSystemEngine()
+  const journal = new DataJournal(new FileSystemEngine())
   const db = await Klaf.Create({
     path: `perf-${name}.db`,
     engine,
+    journal,
     overwrite: true
   })
   const close = async () => {
@@ -22,11 +25,14 @@ async function createDatabase(name: string) {
 }
 
 async function createDocumentDatabase(name: string) {
+  name = `_${name}`
   const engine = new FileSystemEngine()
+  const journal = new DataJournal(new FileSystemEngine())
   const db = await KlafDocument.Create({
     path: `perf-${name}.db`,
     version: 0,
     engine,
+    journal,
     scheme: {
       id: {
         default: () => '',
@@ -81,7 +87,8 @@ describe('perf:core', () => {
     }
   })
   test('read:1000', async () => {
-    await db.pick((await db.getRecords(1))[0].header.id)
+    const [_err, records] = await db.getRecords(1)
+    await db.pick(records![0].header.id)
   })
   test('write:2000', async () => {
     for (let i = 1000; i < 2000; i++) {
@@ -89,7 +96,8 @@ describe('perf:core', () => {
     }
   })
   test('read:2000', async () => {
-    await db.pick((await db.getRecords(2))[0].header.id)
+    const [_err, records] = await db.getRecords(2)
+    await db.pick(records![0].header.id)
   })
   test('write:4000', async () => {
     for (let i = 2000; i < 4000; i++) {
@@ -97,7 +105,8 @@ describe('perf:core', () => {
     }
   })
   test('read:4000', async () => {
-    await db.pick((await db.getRecords(3))[0].header.id)
+    const [_err, records] = await db.getRecords(3)
+    await db.pick(records![0].header.id)
   })
   test('write:8000', async () => {
     for (let i = 4000; i < 8000; i++) {
@@ -105,7 +114,8 @@ describe('perf:core', () => {
     }
   })
   test('read:8000', async () => {
-    await db.pick((await db.getRecords(4))[0].header.id)
+    const [_err, records] = await db.getRecords(4)
+    await db.pick(records![0].header.id)
   })
 })
 

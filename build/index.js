@@ -9,6 +9,17 @@ const KlafConfig = {
   ],
 }
 
+const pluginPathBrowserify = {
+  name: 'node-path-polyfill',
+  setup(build) {
+    build.onResolve({ filter: /^node:path$/ }, args => {
+      return {
+        path: require.resolve('path-browserify')
+      }
+    })
+  }
+}
+
 esbuild.build({
   ...KlafConfig,
   platform: 'browser',
@@ -17,6 +28,9 @@ esbuild.build({
   outExtension: {
     '.js': '.mjs'
   },
+  plugins: [
+    pluginPathBrowserify
+  ],
 })
 
 esbuild.build({
@@ -45,7 +59,10 @@ esbuild.build({
   },
   entryPoints: [
     { in: 'src/engine/DataEngine.ts', out: 'DataEngine' }
-  ]
+  ],
+  plugins: [
+    pluginPathBrowserify
+  ],
 })
 
 esbuild.build({
@@ -71,7 +88,10 @@ esbuild.build({
   },
   entryPoints: [
     { in: 'src/engine/InMemory.ts', out: 'InMemory' }
-  ]
+  ],
+  plugins: [
+    pluginPathBrowserify
+  ],
 })
 
 esbuild.build({
@@ -125,5 +145,8 @@ esbuild.build({
   },
   entryPoints: [
     { in: 'src/engine/WebWorker.ts', out: 'WebWorker' }
-  ]
+  ],
+  plugins: [
+    pluginPathBrowserify
+  ],
 })

@@ -9,39 +9,43 @@ This database is suitable for a website that simply stores values in the databas
 ## Usage
 
 ```typescript
-import { Klaf } from 'klaf.js'
+import { Klaf, DataJournal } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const db = await Klaf.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
+  journal: new DataJournal(new FileSystemEngine()),
 })
 
 // INPUT
-const data = 'Data string you want to store';
-const id = await db.put(data);
-
-(await db.pick(id)).record.payload; // 'Data string you want to store'
+const data = 'Data string you want to store'
+const [errPut, id] = await db.put(data)
+const [errPick, result] = await db.pick(id)
+result.record.payload; // 'Data string you want to store'
 
 
 // UPDATE
-const modifiedData = 'Modified data string you want to store';
-await db.update(id, modifiedData);
-(await db.pick(id)).record.payload; // 'Modified data string you want to store'
+const modifiedData = 'Modified data string you want to store'
+await db.update(id, modifiedData)
 
-await db.update(id, 'POWER');
-(await db.pick(id)).record.payload; // 'POWER!!!'
+const [errPickModified, resultModified] = await db.pick(id)
+resultModified.record.payload // 'Modified data string you want to store'
+
+await db.update(id, 'POWER')
+const [errPickModified2, resultModified2] = await db.pick(id)
+resultModified2.record.payload // 'POWER!!!'
 
 
 // DELETE
-await db.delete(id);
-await db.pick(id); // Error! The record was destroyed.
+await db.delete(id)
+await db.pick(id) // Error! The record was destroyed.
 
 
-db.metadata.autoIncrement; // 1
-db.metadata.count; // 0
+db.metadata.autoIncrement // 1
+db.metadata.count // 0
 
 // CLOSE DB
-await db.close();
+await db.close()
 ```

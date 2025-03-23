@@ -2,81 +2,153 @@ import { Catcher } from './Catcher'
 
 export class Debounce {
   readonly delay: number
-  private _timeouts: Map<string, NodeJS.Timeout>
-  private _activePromises: Map<string, { resolve: Function; reject: Function }[]>
-  private _activeExecution: Map<string, Promise<any>>
+  private _executing: Set<string>
+  private _timers: Map<string, NodeJS.Timeout>
+  private _promises: Map<string, { resolve: Function, reject: Function }[]>
+  private _pendingExecutions: Map<string, () => Promise<any>>
+  private _currentExecutions: Map<string, Promise<any>>
 
   constructor(delay: number) {
     this.delay = delay
-    this._timeouts = new Map()
-    this._activePromises = new Map()
-    this._activeExecution = new Map()
+    this._executing = new Set()
+    this._timers = new Map()
+    this._promises = new Map()
+    this._pendingExecutions = new Map()
+    this._currentExecutions = new Map()
   }
 
-  async execute<T = any>(id: string, callback: () => Promise<T>): Promise<T> {
-    if (this._timeouts.has(id)) {
-      clearTimeout(this._timeouts.get(id)!)
+  /**
+   * Executes a function after debouncing any previous calls with the same ID.
+   * @param id The identifier for this execution group
+   * @param execute The function to execute
+   * @returns A promise that resolves with the result of the executed function
+   */
+  execute<T = any>(id: string, execute: () => Promise<T>): Promise<T> {
+    // Store the execution function to be called after delay
+    this._pendingExecutions.set(id, execute)
+
+    // Clear any existing timer for this ID
+    if (this._timers.has(id)) {
+      clearTimeout(this._timers.get(id)!)
     }
 
-    return new Promise<T>((resolve, reject) => {
-      if (!this._activePromises.has(id)) {
-        this._activePromises.set(id, [])
+    // Create a new promise for this execution
+    const promise = new Promise<T>((resolve, reject) => {
+      // Add the promise handlers to the array of promises for this ID
+      if (!this._promises.has(id)) {
+        this._promises.set(id, [])
       }
-      this._activePromises.get(id)!.push({ resolve, reject })
-
-      const timeout = setTimeout(async () => {
-        this._timeouts.delete(id)
-
-        const promises = this._activePromises.get(id) || []
-        this._activePromises.delete(id)
-
-        const execute = async () => {
-          const result = await callback()
-          for (const { resolve } of promises) resolve(result)
-          return result
-        }
-        const execution = execute()
-        const [err] = await Catcher.CatchError(execution)
-        if (err instanceof Error) {
-          for (const { reject } of promises) reject(err)
-        }
-        else {
-          this._activeExecution.set(id, execution)
-          await execution.finally(() => this._activeExecution.delete(id))
-        }
-      }, this.delay)
-
-      this._timeouts.set(id, timeout)
+      this._promises.get(id)!.push({ resolve, reject })
     })
-  }
 
-  cancel(id: string): void {
-    if (this._timeouts.has(id)) {
-      clearTimeout(this._timeouts.get(id)!)
-      this._timeouts.delete(id)
-    }
+    // Set a new timer for this ID
+    this._timers.set(id, setTimeout(async () => {
+      // Get the function to execute (the latest one set)
+      const fn = this._pendingExecutions.get(id)!
+      
+      // Clear the debounce timer
+      this._timers.delete(id)
+      this._pendingExecutions.delete(id)
+      
+      // Mark as executing
+      this._executing.add(id)
+      
+      // Execute the function and store the promise
+      const executionPromise = fn()
+      this._currentExecutions.set(id, executionPromise)
+      
+      // Wait for the result
+      const [err, result] = await Catcher.CatchError(executionPromise)
 
-    const promises = this._activePromises.get(id) || []
-    this._activePromises.delete(id)
+      // Mark as no longer executing and clean up
+      this._executing.delete(id)
+      this._currentExecutions.delete(id)
 
-    const error = new Error(`Execution with id "${id}" was canceled.`)
-    for (const { reject } of promises) reject(error)
-  }
+      const promises = this._promises.get(id) || []
 
-  async done<T = any>(id: string): Promise<T|undefined> {
-    if (!this._timeouts.has(id) && !this._activePromises.has(id)) {
-      return Promise.resolve(undefined)
-    }
-
-    if (this._activeExecution.has(id)) {
-      return this._activeExecution.get(id)!
-    }
-
-    return new Promise<T>((resolve, reject) => {
-      if (!this._activePromises.has(id)) {
-        this._activePromises.set(id, [])
+      if (err) {
+        // Reject all promises with the error
+        promises.forEach(p => p.reject(err))
+        this._promises.delete(id)
       }
-      this._activePromises.get(id)!.push({ resolve, reject })
+      else {
+        // Resolve all promises with the result
+        promises.forEach(p => p.resolve(result))
+        this._promises.delete(id)
+        
+        return result
+      }
+    }, this.delay))
+
+    return promise
+  }
+
+  /**
+   * Cancels any pending execution with the given ID.
+   * @param id The identifier for the execution group to cancel
+   */
+  cancel(id: string): void {
+    const cancellationError = new Error(`Execution with ID ${id} was cancelled`)
+    
+    // Clear the timer if it exists
+    if (this._timers.has(id)) {
+      clearTimeout(this._timers.get(id)!)
+      this._timers.delete(id)
+    }
+    
+    // Reject all pending promises
+    if (this._promises.has(id)) {
+      const promises = this._promises.get(id)!
+      promises.forEach(p => p.reject(cancellationError))
+      this._promises.delete(id)
+    }
+    
+    // Clean up
+    this._pendingExecutions.delete(id)
+    this._executing.delete(id)
+    this._currentExecutions.delete(id)
+  }
+
+  /**
+   * Checks if an execution with the given ID is currently running.
+   * @param id The identifier to check
+   * @returns True if the execution is running, false otherwise
+   */
+  isExecuting(id: string): boolean {
+    return this._executing.has(id)
+  }
+
+  /**
+   * Checks if an execution with the given ID is currently being debounced.
+   * @param id The identifier to check
+   * @returns True if the execution is being debounced, false otherwise
+   */
+  isDebouncing(id: string): boolean {
+    return this._timers.has(id)
+  }
+
+  /**
+   * Waits for any pending or executing function with the given ID to complete.
+   * @param id The identifier to wait for
+   * @returns A promise that resolves with the result of the executed function
+   */
+  async done<T = any>(id: string): Promise<T | undefined> {
+    // If nothing is happening with this ID, return undefined
+    if (!this.isDebouncing(id) && !this.isExecuting(id)) {
+      return undefined
+    }
+
+    // If the execution is already running, we can wait for its promise directly
+    if (this.isExecuting(id) && this._currentExecutions.has(id)) {
+      return this._currentExecutions.get(id) as Promise<T>
+    }
+
+    // Otherwise, we need to wait for the debounce to complete and execute
+    return new Promise<T | undefined>((resolve, reject) => {
+      if (!this._promises.has(id)) {
+        this._promises.set(id, [])
+      }
+      this._promises.get(id)!.push({ resolve, reject })
     })
   }
 }

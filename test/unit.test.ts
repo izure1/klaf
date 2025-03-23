@@ -1,5 +1,5 @@
 import { unlinkSync } from 'node:fs'
-import { Klaf, KlafDocument } from 'klaf.js'
+import { Klaf, KlafDocument, DataJournal } from 'klaf.js'
 import { DataEngine } from 'klaf.js/engine/DataEngine'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 import { InMemoryEngine } from 'klaf.js/engine/InMemory'
@@ -7,13 +7,46 @@ import { InMemoryEngine } from 'klaf.js/engine/InMemory'
 const IN_MEMORY = process.env.npm_config_in_memory === 'true'
 
 const createDatabase = async (name: string) => {
+  name = `_${name}`
   let engine: DataEngine = new FileSystemEngine()
+  let journal: DataJournal = new DataJournal(new FileSystemEngine())
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
+    journal = new DataJournal(new InMemoryEngine())
   }
   const db = await Klaf.Create({
     path: name,
     engine,
+    journal,
+    payloadSize: 1024,
+    overwrite: true
+  })
+  
+  const close = async () => {
+    await db.close()
+    if (engine instanceof FileSystemEngine) {
+      unlinkSync(name)
+    }
+  }
+
+  return {
+    db,
+    close
+  }
+}
+
+const openDatabase = async (name: string) => {
+  name = `_${name}`
+  let engine: DataEngine = new FileSystemEngine()
+  let journal: DataJournal = new DataJournal(new FileSystemEngine())
+  if (IN_MEMORY) {
+    engine = new InMemoryEngine()
+    journal = new DataJournal(new InMemoryEngine())
+  }
+  const db = await Klaf.Open({
+    path: name,
+    engine,
+    journal,
     payloadSize: 1024,
     overwrite: true
   })
@@ -32,14 +65,18 @@ const createDatabase = async (name: string) => {
 }
 
 const createDocumentDatabase = async (name: string) => {
+  name = `_${name}`
   let engine: DataEngine = new FileSystemEngine()
+  let journal: DataJournal = new DataJournal(new FileSystemEngine())
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
+    journal = new DataJournal(new InMemoryEngine())
   }
 
   const sql = await KlafDocument.Create({
     path: name,
     engine,
+    journal,
     version: 0,
     payloadSize: 1024,
     overwrite: true,
@@ -78,8 +115,8 @@ const createDocumentDatabase = async (name: string) => {
 }
 
 describe('Create test', () => {
-  test('db open', async () => {
-    const { db, close } = await createDatabase('db-open.db')
+  test('db create', async () => {
+    const { db, close } = await createDatabase('db-create.db')
     const { index, majorVersion, minorVersion, patchVersion, timestamp } = db.metadata
     expect(typeof index).toBe('number')
     expect(typeof majorVersion).toBe('number')
@@ -87,6 +124,20 @@ describe('Create test', () => {
     expect(typeof patchVersion).toBe('number')
     expect(timestamp > Date.now()).toBeFalsy()
     close()
+  })
+
+  test('db open', async () => {
+    const created = await createDatabase('db-open.db')
+    const { index, majorVersion, minorVersion, patchVersion, timestamp } = created.db.metadata
+    await created.db.close()
+
+    const opened = await openDatabase('db-open.db')
+    expect(typeof index).toBe('number')
+    expect(typeof majorVersion).toBe('number')
+    expect(typeof minorVersion).toBe('number')
+    expect(typeof patchVersion).toBe('number')
+    expect(timestamp > Date.now()).toBeFalsy()
+    await opened.close()
   })
 })
 
@@ -97,16 +148,17 @@ describe('DB', () => {
     const ids: string[] = []
     for (let i = 0; i < max; i++) {
       const content = `:db-put-test-${i}:`
-      const id = await db.put(content)
-      ids.push(id)
+      const [_err, id] = await db.put(content)
+      ids.push(id!)
     }
 
     const rand = Math.floor(Math.random()*max)
     const target = ids[rand]
     const guess = `:db-put-test-${rand}:`
 
-    const res = await db.pick(target)
-    expect(res.record.payload).toBe(guess)
+    const [err, res] = await db.pick(target)
+    expect(err).toBe(undefined)
+    expect(res!.record.payload).toBe(guess)
     close()
   })
 
@@ -123,12 +175,12 @@ describe('DB', () => {
     
     Etiam molestie purus imperdiet nisi dignissim, id fermentum turpis laoreet. Sed ut nibh lacinia, maximus massa non, convallis mi. In id diam blandit, pulvinar nisl a, maximus diam. Etiam dignissim euismod libero eget congue. Vivamus iaculis pulvinar odio ac maximus. Pellentesque ac placerat nulla. Aliquam erat volutpat. Nam eget enim eget est varius commodo. Suspendisse efficitur ante vel rutrum suscipit. Morbi pulvinar lobortis elit, quis efficitur lectus dapibus ac. Mauris leo tellus, mattis et ornare pharetra, facilisis nec lectus. Aenean sed ornare felis. Aenean vestibulum accumsan tortor vel ullamcorper. Maecenas eleifend enim libero, at convallis sem ullamcorper eget.`
 
-    const id = await db.put(content)
-
+    const [err1, id] = await db.put(content)
     await db.put('meaningless dummy data')
-
-    const res = await db.pick(id)
-    expect(res.record.payload).toBe(content)
+    const [err2, res] = await db.pick(id!)
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
+    expect(res!.record.payload).toBe(content)
 
     close()
   })
@@ -143,28 +195,34 @@ describe('DB', () => {
     const longerContent3 = 'very more more longer text'.repeat(100)
     const longestContent = 'very more more longest text'.repeat(100)
 
-    const id = await db.put(content)
+    const [err, id] = await db.put(content)
+    expect(err).toBe(undefined)
     
-    await db.update(id, longerContent)
-    const res1 = await db.pick(id)
-    expect(res1.record.payload).toBe(longerContent)
-    expect(res1.record.header.maxLength).toBe(longerContent.length)
+    await db.update(id!, longerContent)
+    const [err1, res1] = await db.pick(id!)
+    expect(err1).toBe(undefined)
+    expect(res1!.record.payload).toBe(longerContent)
+    expect(res1!.record.header.maxLength).toBe(longerContent.length)
 
-    await db.update(id, longerContent2)
-    const res2 = await db.pick(id)
-    expect(res2.record.payload).toBe(longerContent2)
+    await db.update(id!, longerContent2)
+    const [err2, res2] = await db.pick(id!)
+    expect(err2).toBe(undefined)
+    expect(res2!.record.payload).toBe(longerContent2)
     
-    await db.update(id, shorterContent)
-    const res3 = await db.pick(id)
-    expect(res3.record.payload).toBe(shorterContent)
+    await db.update(id!, shorterContent)
+    const [err3, res3] = await db.pick(id!)
+    expect(err3).toBe(undefined)
+    expect(res3!.record.payload).toBe(shorterContent)
     
-    await db.update(id, longerContent3)
-    const res4 = await db.pick(id)
-    expect(res4.record.payload).toBe(longerContent3)
+    await db.update(id!, longerContent3)
+    const [err4, res4] = await db.pick(id!)
+    expect(err4).toBe(undefined)
+    expect(res4!.record.payload).toBe(longerContent3)
 
-    await db.update(id, longestContent)
-    const res5 = await db.pick(id)
-    expect(res5.record.payload).toBe(longestContent)
+    await db.update(id!, longestContent)
+    const [err5, res5] = await db.pick(id!)
+    expect(err5).toBe(undefined)
+    expect(res5!.record.payload).toBe(longestContent)
 
     close()
   })
@@ -174,14 +232,19 @@ describe('DB', () => {
 
     const content = 'you should can not read this'
 
-    const id = await db.put(content)
-    await db.delete(id)
-    await expect(db.pick(id)).rejects.toThrow()
-    await expect(db.update(id, 'error')).rejects.toThrow()
+    const [err, id] = await db.put(content)
+    expect(err).toBe(undefined)
+    await db.delete(id!)
+    const [pickError] = await db.pick(id!)
+    const [updateError] = await db.update(id!, 'error')
+    expect(pickError).toBeInstanceOf(Error)
+    expect(updateError).toBeInstanceOf(Error)
 
-    const id2 = await db.put('test content')
-    await expect(db.delete('incorrected id')).rejects.toThrow()
-    await db.delete(id2)
+    const [err2, id2] = await db.put('test content')
+    const [deleteError] = await db.delete('incorrected id')
+    expect(err2).toBe(undefined)
+    expect(deleteError).toBeInstanceOf(Error)
+    await db.delete(id2!)
     close()
   })
 
@@ -189,20 +252,29 @@ describe('DB', () => {
     const { db, close } = await createDatabase('db-invalid-record.db')
 
     const invalidId = btoa('1928399199299331123')
-    await expect(db.pick(invalidId)).rejects.toThrow()
-    await expect(db.update(invalidId, 'test')).rejects.toThrow()
-    await expect(db.delete(invalidId)).rejects.toThrow()
+    const [pickError] = await db.pick(invalidId)
+    const [updateError] = await db.update(invalidId, 'test')
+    const [deleteError] = await db.delete(invalidId)
+    expect(pickError).toBeInstanceOf(Error)
+    expect(updateError).toBeInstanceOf(Error)
+    expect(deleteError).toBeInstanceOf(Error)
     close()
   })
 
   test('DB:exists', async () => {
     const { db, close } = await createDatabase('db-exists.db')
 
-    const correctId = await db.put('test')
+    const [err, correctId] = await db.put('test')
     const invalidId = correctId+'1'
 
-    expect(await db.exists(correctId)).toBe(true)
-    expect(await db.exists(invalidId)).toBe(false)
+    const [notErr, existing] = await db.exists(correctId!)
+    const [foundError, notExisting] = await db.exists(invalidId)
+
+    expect(err).toBe(undefined)
+    expect(notErr).toBe(undefined)
+    expect(foundError).toBe(undefined)
+    expect(existing).toBe(true)
+    expect(notExisting).toBe(false)
     close()
   })
 
@@ -216,33 +288,39 @@ describe('DB', () => {
     const guessData2 = 'b'
     const guessData3 = 'c'
 
-    const id = await db.put(guessData1)
+    const [err1, id] = await db.put(guessData1)
+    expect(err1).toBe(undefined)
+
     await db.put(guessData2)
     await db.put(guessData3)
 
-    const record = await db.pick(id)
-    const records = await db.getRecords(record.page.index)
+    const [err2, record] = await db.pick(id!)
+    expect(err2).toBe(undefined)
+    const [err, records] = await db.getRecords(record!.page.index)
 
-    expect(records[0].payload).toBe(guessData1)
-    expect(records[1].payload).toBe(guessData2)
-    expect(records[2].payload).toBe(guessData3)
+    expect(err).toBe(undefined)
+    expect(records![0].payload).toBe(guessData1)
+    expect(records![1].payload).toBe(guessData2)
+    expect(records![2].payload).toBe(guessData3)
     close()
   })
 
   test('DB:autoIncrement', async () => {
     const { db, close } = await createDatabase('db-auto-increment.db')
 
-    const sampleId = await db.put('a')
+    const [err, sampleId] = await db.put('a')
+    expect(err).toBe(undefined)
+
     await db.put('b')
     await db.put('c')
     await db.put('longer'.repeat(1000))
     await db.put('e')
     expect(Number((db.metadata).autoIncrement)).toBe(5)
 
-    await db.update(sampleId, 'more longer')
+    await db.update(sampleId!, 'more longer')
     expect(Number((db.metadata).autoIncrement)).toBe(5)
 
-    await db.delete(sampleId)
+    await db.delete(sampleId!)
     expect(Number((db.metadata).autoIncrement)).toBe(5)
 
     close()
@@ -251,17 +329,19 @@ describe('DB', () => {
   test('DB:count', async () => {
     const { db, close } = await createDatabase('db-count.db')
 
-    const sampleId = await db.put('a')
+    const [err, sampleId] = await db.put('a')
+    expect(err).toBe(undefined)
+
     await db.put('b')
     await db.put('c')
     await db.put('longer'.repeat(1000))
     await db.put('e')
     expect(Number((db.metadata).count)).toBe(5)
 
-    await db.update(sampleId, 'more longer')
+    await db.update(sampleId!, 'more longer')
     expect(Number((db.metadata).count)).toBe(5)
 
-    await db.delete(sampleId)
+    await db.delete(sampleId!)
     expect(Number((db.metadata).count)).toBe(4)
 
     close()
@@ -270,11 +350,17 @@ describe('DB', () => {
   test('DB:close lock', async () => {
     const { db, close } = await createDatabase('db-close-lock.db')
 
-    const recordId = await db.put('a')
-    close()
-    await expect(db.put('a')).rejects.toThrow()
-    await expect(db.pick(recordId)).rejects.toThrow()
-    await expect(db.delete(recordId)).rejects.toThrow()
+    const [err, recordId] = await db.put('a')
+    await close()
+
+    const [putError] = await db.put('a')
+    const [pickError] = await db.pick(recordId!)
+    const [deleteError] = await db.delete(recordId!)
+    
+    expect(err).toBe(undefined)
+    expect(putError).not.toBe(undefined)
+    expect(pickError).not.toBe(undefined)
+    expect(deleteError).not.toBe(undefined)
   })
 })
 
@@ -282,7 +368,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:put', async () => {
     const { sql, close } = await createDocumentDatabase('doc-put.db')
 
-    const result1 = await sql.pick({
+    const [err1, result1] = await sql.pick({
       age: {
         gt: 15
       }
@@ -292,11 +378,11 @@ describe('DOCUMENT', () => {
       { name: 'john', age: 20, sex: 'male' },
       { name: 'lee', age: 50, sex: 'female' },
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
 
-    const result2 = await sql.pick({
+    const [err2, result2] = await sql.pick({
       name: {
         notEqual: 'lee'
       },
@@ -308,34 +394,43 @@ describe('DOCUMENT', () => {
     const expect2 = [
       { name: 'john', age: 20, sex: 'male' },
     ]
-    result2.forEach((record, i) => {
+    result2!.forEach((record, i) => {
       expect(record).toMatchObject(expect2[i])
     })
 
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
     close()
   })
 
   test('DOCUMENT:delete', async () => {
     const { sql, close } = await createDocumentDatabase('doc-delete.db') 
 
-    const delCount = await sql.delete({
+    const [err1, delCount] = await sql.delete({
       name: {
         equal: 'tomas'
       }
     })
-    const result1 = await sql.pick({})
+    expect(delCount).toBe(1)
+    const [err2, result1] = await sql.pick({})
+
     const expect1 = [
       { name: 'kim', age: 10 },
       { name: 'john', age: 20, sex: 'male' },
       { name: 'lee', age: 50, sex: 'female' },
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
 
     await sql.delete({})
-    expect(delCount).toBe(1)
-    expect(await sql.pick({})).toEqual([])
+
+    const [err3, result2] = await sql.pick({})
+    expect(result2).toEqual([])
+
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
+    expect(err3).toBe(undefined)
 
     close()
   })
@@ -343,7 +438,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:partial', async () => {
     const { sql, close } = await createDocumentDatabase('doc-update-partial.db')
 
-    const updatedCount = await sql.partialUpdate({
+    const [err, updatedCount] = await sql.partialUpdate({
       name: {
         equal: 'kim'
       }
@@ -352,17 +447,21 @@ describe('DOCUMENT', () => {
       sex: 'female'
     })
 
-    const result1 = await sql.pick({
+    const [err1, result1] = await sql.pick({
       name: {
         equal: 'kim'
       }
     })
+
     const expect1 = [
       { name: 'kim', age: 22, sex: 'female' }
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
+
+    expect(err).toBe(undefined)
+    expect(err1).toBe(undefined)
     expect(updatedCount).toBe(1)
 
     close()
@@ -371,23 +470,26 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:full-1', async () => {
     const { sql, close } = await createDocumentDatabase('doc-update-full-1.db')
 
-    const updatedCount = await sql.fullUpdate({
+    const [err, updatedCount] = await sql.fullUpdate({
       age: {
         gt: 15,
         lt: 75
       }
     }, { name: 'unknown', age: 0, sex: 'male' })
 
-    const result1 = await sql.pick({})
+    const [err1, result1] = await sql.pick({})
     const expect1 = [
       { name: 'kim', age: 10 },
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'unknown', age: 0, sex: 'male' },
       { name: 'unknown', age: 0, sex: 'male' },
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
+
+    expect(err).toBe(undefined)
+    expect(err1).toBe(undefined)
     expect(updatedCount).toBe(2)
 
     close()
@@ -396,7 +498,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:update:full-2', async () => {
     const { sql, close } = await createDocumentDatabase('doc-update-full-2.db')
 
-    const updatedCount = await sql.fullUpdate({
+    const [err, updatedCount] = await sql.fullUpdate({
       age: {
         gt: 15,
         lt: 75
@@ -407,16 +509,19 @@ describe('DOCUMENT', () => {
       sex: record.sex
     }))
 
-    const result1 = await sql.pick({})
+    const [err1, result1] = await sql.pick({})
     const expect1 = [
       { name: 'kim', age: 10 },
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 0, sex: 'male' },
       { name: 'lee', age: 0, sex: 'female' },
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
+
+    expect(err).toBe(undefined)
+    expect(err1).toBe(undefined)
     expect(updatedCount).toBe(2)
 
     close()
@@ -425,32 +530,36 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:pick:query', async () => {
     const { sql, close } = await createDocumentDatabase('doc-pick-query.db')
 
-    const result1 = await sql.pick({
+    const [err1, result1] = await sql.pick({
       name: 'kim'
     })
     const expect1 = [
       { name: 'kim', age: 10 }
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
 
-    const result2 = await sql.pick({
+    const [err2, result2] = await sql.pick({
       name: 'kim',
       age: 10
     })
     const expect2 = [
       { name: 'kim', age: 10 }
     ]
-    result2.forEach((record, i) => {
+    result2!.forEach((record, i) => {
       expect(record).toMatchObject(expect2[i])
     })
 
-    const result3 = await sql.pick({
+    const [err3, result3] = await sql.pick({
       name: 'kim',
       age: 11
     })
     expect(result3).toEqual([])
+
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
+    expect(err3).toBe(undefined)
 
     close()
   })
@@ -458,7 +567,7 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:pick:range-1', async () => {
     const { sql, close } = await createDocumentDatabase('doc-pick-range-1.db')
 
-    const result1 = await sql.pick({
+    const [err1, result1] = await sql.pick({
       age: {
         gt: 15
       }
@@ -471,11 +580,11 @@ describe('DOCUMENT', () => {
       { name: 'lee', age: 50, sex: 'female' },
       { name: 'john', age: 20, sex: 'male' },
     ]
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
 
-    const result2 = await sql.pick({}, {
+    const [err2, result2] = await sql.pick({}, {
       order: 'sex',
     })
     const expect2 = [
@@ -484,11 +593,11 @@ describe('DOCUMENT', () => {
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 20, sex: 'male' },
     ]
-    result2.forEach((record, i) => {
+    result2!.forEach((record, i) => {
       expect(record).toMatchObject(expect2[i])
     })
 
-    const result3 = await sql.pick({
+    const [err3, result3] = await sql.pick({
       name: {
         like: 'l%'
       }
@@ -496,11 +605,11 @@ describe('DOCUMENT', () => {
     const expect3 = [
       { name: 'lee', age: 50, sex: 'female' },
     ]
-    result3.forEach((record, i) => {
+    result3!.forEach((record, i) => {
       expect(record).toMatchObject(expect3[i])
     })
 
-    const result4 = await sql.pick({
+    const [err4, result4] = await sql.pick({
       name: {
         like: '%o%'
       }
@@ -509,9 +618,14 @@ describe('DOCUMENT', () => {
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 20, sex: 'male' },
     ]
-    result4.forEach((record, i) => {
+    result4!.forEach((record, i) => {
       expect(record).toMatchObject(expect4[i])
     })
+
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
+    expect(err3).toBe(undefined)
+    expect(err4).toBe(undefined)
 
     close()
   })
@@ -523,7 +637,7 @@ describe('DOCUMENT', () => {
       await sql.put({ name: 'unknown', age: i, sex: 'male' })
     }
 
-    const result1 = await sql.pick({
+    const [err1, result1] = await sql.pick({
       name: {
         equal: 'unknown'
       },
@@ -536,9 +650,11 @@ describe('DOCUMENT', () => {
       order: 'age'
     })
     const expect1 = new Array(10).fill(0).map((v, i) => ({ name: 'unknown', age: 31+i }))
-    result1.forEach((record, i) => {
+    result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
     })
+
+    expect(err1).toBe(undefined)
 
     close()
   })
@@ -574,29 +690,37 @@ describe('DOCUMENT', () => {
 
   test('DOCUMENT:count method', async () => {
     const { sql, close } = await createDocumentDatabase('doc-count-2.db')
-    expect(await sql.count({
+    const [err1, count1] = await sql.count({
       age: {
         gt: 10
       }
-    })).toBe(3)
+    })
+    expect(count1).toBe(3)
 
     await sql.delete({ sex: 'male' })
-    expect(await sql.count({
+    const [err2, count2] = await sql.count({
       age: {
         gt: 10
       }
-    })).toBe(1)
+    })
+    expect(count2).toBe(1)
     
     await sql.partialUpdate({
       age: {
         lt: 15
       }
     }, { age: 15 })
-    expect(await sql.count({
+
+    const [err3, count3] = await sql.count({
       age: {
         gt: 10
       }
-    })).toBe(2)
+    })
+    expect(count3).toBe(2)
+
+    expect(err1).toBe(undefined)
+    expect(err2).toBe(undefined)
+    expect(err3).toBe(undefined)
     
     close()
   })
@@ -605,9 +729,14 @@ describe('DOCUMENT', () => {
     const { sql, close } = await createDocumentDatabase('doc-close-lock.db')
 
     await sql.put({ age: 1 })
-    close()
-    await expect(sql.put({ age: 1 })).rejects.toThrow()
-    await expect(sql.pick({})).rejects.toThrow()
-    await expect(sql.delete({ age: 1 })).rejects.toThrow()
+    await close()
+
+    const [putError] = await sql.put({ age: 1 })
+    const [pickError] = await sql.pick({})
+    const [deleteError] = await sql.delete({ age: 1 })
+
+    expect(putError).not.toBe(undefined)
+    expect(pickError).not.toBe(undefined)
+    expect(deleteError).not.toBe(undefined)
   })
 })

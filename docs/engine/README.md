@@ -21,10 +21,9 @@ Currently, **klaf** supports three engines by default.
 import { KlafDocument } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
-const engine = new FileSystemEngine()
 const db = await KlafDocument.Open({
   path: 'your-database-path',
-  engine,
+  engine: new FileSystemEngine(),
   version: 0,
   scheme: {
     ...
@@ -42,10 +41,9 @@ This engine is used when you want to build a typical database. Although it only 
 import { KlafDocument } from 'klaf.js'
 import { InMemoryEngine } from 'klaf.js/engine/InMemory'
 
-const engine = new InMemoryEngine()
 const db = await KlafDocument.Open({
   path: 'your-database-path',
-  engine,
+  engine: new InMemoryEngine(),
   version: 0,
   scheme: {
     ...
@@ -63,10 +61,9 @@ The **WebWorkerEngine** operates in the main thread, dedicated workers, shared w
 import { KlafDocument } from 'klaf.js'
 import { WebWorkerEngine } from 'klaf.js/engine/WebWorker'
 
-const engine = new WebWorkerEngine()
 const db = await KlafDocument.Open({
   path: 'your-database-path',
-  engine,
+  engine: new WebWorkerEngine(),
   version: 0,
   scheme: {
     ...
@@ -107,10 +104,12 @@ class YourCustomEngine extends DataEngine {
   create(file: string, initialData: number[]): Promise<void>
   open(file: string): Promise<void>
   close(): Promise<void>
-  size(): number
-  read(start: number, length: number): number[]
-  write(start: number, data: number[]): number[]
-  append(data: number[]): void
+  unlink(file: string): Promise<void>
+  size(): Promise<number>
+  read(start: number, length: number): Promise<number[]>
+  write(start: number, data: number[]): Promise<number[]>
+  append(data: number[]): Promise<void>
+  truncate(size: number): Promise<void>
 }
 ```
 
@@ -120,9 +119,15 @@ Each method must be implemented by the user, and to implement them correctly, it
 await engine.boot(databasePath)
 
 const databaseExisting = await engine.exists(databasePath)
+const isOverwriting = option.overwrite
 
 if (!databaseExisting) {
   await engine.create(databasePath)
+}
+else {
+  if (isOverwriting) {
+    await engine.unlink(databasePath)
+  }
 }
 
 await engine.open(databasePath)
@@ -152,6 +157,14 @@ This method is called when the database is opened. You can handle tasks such as 
 ### close(): `Promise<void>`
 
 This method is called when the database is closed. You can use it to clean up any resources or data used by the database.
+
+### unlink(file: `string`): `Promise<void>`
+
+Unlinks the database file. This method is automatically called when the database needs to be deleted. After this method is called, the `exists` method must be able to return `false`.
+
+|Parameter|Description|
+|---|---|
+|`file`|The location of the database. This can be a file path or a key used for storage.|
 
 ### size(): `Promise<number>`
 
@@ -186,3 +199,11 @@ For example, if the **start** parameter is 100 and the length of the **data** pa
 ### append(data: `number[]`): `Promise<void>`
 
 The values from the **data** parameter should be added to the end of the database file. This will increase the size of the database file.
+
+### truncate(size: `number`): `Promise<void>`
+
+Truncates the database to the specified size.
+
+|Parameter|Description|
+|---|---|
+|`size`|The size to truncate the database to.|

@@ -50,6 +50,10 @@ self.addEventListener('message', async (event) => {
       console.log(result)
       break;
     }
+    case 'delete': {
+      result.detail = await db.delete(data.detail)
+      break
+    }
     default: {
       result.detail = 'Unknown operation'
     }

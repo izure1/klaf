@@ -50,6 +50,14 @@ export class InMemoryEngine extends DataEngine {
     this.data.push(...data)
   }
 
+  async truncate(size: number): Promise<void> {
+    this.data.length = size
+  }
+
+  async unlink(file: string): Promise<void> {
+    this.clear()
+  }
+
   clear(): void {
     this.data.length = 0
   }

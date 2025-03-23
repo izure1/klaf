@@ -1,8 +1,8 @@
 import type { OpenMode, Stats } from 'node:fs'
 import { Buffer } from 'node:buffer'
 import { dirname } from 'node:path'
-import { fstat, read, write, existsSync, open, close } from 'node:fs'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { fstat, ftruncate, read, write, existsSync, open, close } from 'node:fs'
+import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import { Ryoiki } from 'ryoiki'
 import { DataEngine } from './DataEngine'
 
@@ -48,6 +48,17 @@ export class FileSystemEngine extends DataEngine {
           return reject(err)
         }
         resolve(written)
+      })
+    })
+  }
+
+  protected static Truncate(fd: number, size: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      ftruncate(fd, size, (err) => {
+        if (err) {
+          return reject(err)
+        }
+        resolve()
       })
     })
   }
@@ -129,5 +140,13 @@ export class FileSystemEngine extends DataEngine {
     const pos = await this.size()
 
     await FileSystemEngine.Write(this.fd, buf, 0, buf.length, pos)
+  }
+
+  async truncate(size: number): Promise<void> {
+    await FileSystemEngine.Truncate(this.fd, size)
+  }
+
+  async unlink(file: string): Promise<void> {
+    await unlink(file)
   }
 }

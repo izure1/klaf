@@ -9,13 +9,14 @@ If this is not the database you were looking for, please check the [key-value](.
 ## Usage
 
 ```typescript
-import { KlafDocument } from 'klaf.js'
+import { KlafDocument, DataJournal } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const db = await KlafDocument.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
+  journal: new DataJournal(new FileSystemEngine()),
   version: 0,
   scheme: {
     name: {
@@ -34,7 +35,7 @@ await db.put({ name: 'john' })
 await db.put({ name: 'park', age: 25 })
 await db.put({ name: 'sato', age: 10 })
 
-const result = await db.pick({
+const [err, result] = await db.pick({
   age: { gt: 15 }
 })
 
@@ -182,7 +183,7 @@ If you want to use **more.price** as a query condition, you need to make it a to
 Afterward, you can use the **price** property in the **pick** method to perform queries.
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   price: { gt: 100 }
 })
 ```
@@ -192,7 +193,7 @@ const result = await db.pick({
 When retrieving inserted documents, you can specify queries using the document's properties. Here's an example:
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: { equal: 'pit' },
   price: {
     gt: 100,
@@ -210,7 +211,7 @@ For other types, the behavior depends on the result of the **toString()** method
 If the query conditional is **equal**, you can directly input this value as a property value and use it in a shortened form.
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: { equal: 'pit' },
   price: {
     gt: 100,
@@ -218,7 +219,7 @@ const result = await db.pick({
   }
 })
 // The above code works the same as below.
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: 'pit',
   price: {
     gt: 100,
@@ -232,7 +233,7 @@ const result = await db.pick({
 Starting from version 3.0.0, **like** search is supported. **Like** search retrieves all documents matching the pattern provided. It behaves similar to regular expressions. **'%'** matches zero or more characters, and **'_'** matches exactly one character. For example, you can use it like this:
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: { like: 'p%t' }
 })
 ```
@@ -240,7 +241,7 @@ const result = await db.pick({
 This searches for all documents that start with **'p'** and end with **'t'**. If you want to search for all documents starting with **'p'**, you can use it like this:
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: { like: 'p%' }
 })
 ```
@@ -248,7 +249,7 @@ const result = await db.pick({
 If you want to select only **'pit'** and **'put'** from the values **'pit'**, **'put'**, **'pint'**, and **'post'**, you can use the **'_'** wildcard, which represents a single character, like this:
 
 ```typescript
-const result = await db.pick({
+const [err, result] = await db.pick({
   name: { like: 'p_t' }
 })
 ```
@@ -260,7 +261,7 @@ However, **like** search queries require scanning through all documents in the d
 You can use the option parameter in addition to the query when calling the **pick** method. The usage is as follows.
 
 ```typescript
-const result = await db.pick({}, {
+const [err, result] = await db.pick({}, {
   start: 0,
   end: 30,
   order: 'age',

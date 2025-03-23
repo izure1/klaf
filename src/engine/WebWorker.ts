@@ -94,6 +94,15 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     this.accessHandle.flush()
     await this.update(before, data)
   }
+
+  async truncate(size: number): Promise<void> {
+    this.accessHandle.truncate(size)
+  }
+
+  async unlink(file: string): Promise<void> {
+    await this.close()
+    await this.directoryHandle.removeEntry(file)
+  }
 }
 
 class WritableStreamStrategy extends WebWorkerStrategy {
@@ -174,6 +183,16 @@ class WritableStreamStrategy extends WebWorkerStrategy {
   async append(data: number[]): Promise<void> {
     this.fileData = new Uint8Array([...this.fileData, ...data])
     this._commit()
+  }
+
+  async truncate(size: number): Promise<void> {
+    this.fileData = this.fileData.slice(0, size)
+    this._commit()
+  }
+
+  async unlink(file: string): Promise<void> {
+    await this.close()
+    await this.directoryHandle.removeEntry(file)
   }
 }
 
@@ -268,5 +287,14 @@ export class WebWorkerEngine extends DataEngine {
 
   async append(data: number[]): Promise<void> {
     return this.strategy.append(data)
+  }
+
+  async truncate(size: number): Promise<void> {
+    return this.strategy.truncate(size)
+  }
+
+  async unlink(file: string): Promise<void> {
+    await this.close()
+    await this.strategy.unlink(file)
   }
 }

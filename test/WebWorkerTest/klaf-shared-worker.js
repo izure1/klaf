@@ -57,6 +57,10 @@ self.onconnect = async (e) => {
         result.detail = await db.pick(data.detail)
         break;
       }
+      case 'delete': {
+        result.detail = await db.delete(data.detail)
+        break
+      }
       default: {
         result.detail = 'Unknown operation'
       }

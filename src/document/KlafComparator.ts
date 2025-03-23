@@ -1,5 +1,5 @@
 import { ValueComparator } from 'serializable-bptree'
-import { PrimitiveType } from './KlafDocument'
+import { type PrimitiveType } from './KlafDocumentService'
 
 export class KlafComparator extends ValueComparator<PrimitiveType> {
   private _normalize(v: PrimitiveType): string|number {
