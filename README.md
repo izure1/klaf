@@ -72,7 +72,8 @@ const db = await Klaf.Open({
 })
 
 const [errPut, key] = await db.put('Faker, GOAT.')
-const [errPick, record] = (await db.pick(key)).record.payload // "Faker, GOAT."
+const [errPick, row] = await db.pick(key)
+row.record.payload // "Faker, GOAT."
 ```
 
 ## Install
@@ -130,7 +131,7 @@ When you insert data, the ID you get back includes information about where the d
 ## Performance Test
 
 The test result is the average value from 10 attempts.  
-The latest performance benchmarking was conducted based on version **2.0.6**.
+The latest performance benchmarking was conducted based on version **2.0.6**. This test was conducted using the **FileSystem** engine, and it was tested without the **Journal** feature.
 
 **klaf** supports two databases, and this test tested the core functions of data reading/writing of the two databases. Therefore, it's not a perfect test result, but it's enough to show the time complexity.
 
@@ -168,9 +169,9 @@ Overall, Klaf supports faster writes than JSON. As the size increases, this gap 
 
 *This is the usual case, but the results can be different depending on programming optimizations. Please note that this test takes a square of the sample size to easily show the error with a small number of tests. Therefore, the graph appears to increase exponentially, but in terms of time complexity, JSON has **O(n)**, and klaf has a speed of **O(1)** or **O(log n)**.*
 
-The Journal feature is designed to enhance database stability. However, it may slightly reduce performance, approximately by **25~30%**.
+*The Journal feature is designed to enhance database stability. However, it may slightly reduce performance, approximately by **25~30%**.*
 
-The performance difference is not significant, but it's important to note that there is a difference.
+*The performance difference is not significant, but it's important to note that there is a difference.*
 
 ## Repository
 

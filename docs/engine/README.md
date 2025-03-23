@@ -121,13 +121,14 @@ await engine.boot(databasePath)
 const databaseExisting = await engine.exists(databasePath)
 const isOverwriting = option.overwrite
 
-if (!databaseExisting) {
-  await engine.create(databasePath)
-}
-else {
+if (databaseExisting) {
   if (isOverwriting) {
     await engine.unlink(databasePath)
   }
+  await engine.create(databasePath)
+}
+else {
+  await engine.create(databasePath)
 }
 
 await engine.open(databasePath)
@@ -135,11 +136,19 @@ await engine.open(databasePath)
 
 ### boot(file: `string`): `Promise<void>`
 
-This method is used for engine initialization before the database is opened. Be aware that it may be called multiple times automatically. The parameter passed is the path of the database the user wants to open.
+This method is used for engine initialization before the database is used. Be aware that it may be called multiple times automatically. The parameter passed is the path of the database the user wants to open.
+
+|Parameter|Description|
+|---|---|
+|`file`|The location of the database. This can be a file path or a key used for storage.|
 
 ### exists(file: `string`): `Promise<boolean>`
 
 This method should return whether the database exists at the specified path.
+
+|Parameter|Description|
+|---|---|
+|`file`|The location of the database. This can be a file path or a key used for storage.|
 
 ### create(file: `string`, initialData: `number[]`): `Promise<void>`
 
@@ -147,12 +156,16 @@ If the database does not exist, this method is called. Implement the logic to cr
 
 |Parameter|Description|
 |---|---|
-|`file`|The location where the database should be created.|
+|`file`|The location where the database should be created. This can be a file path or a key used for storage.|
 |`initialData`|An array of 8-bit positive integers. This is the root page data required for the database to function correctly. Insert this value at the very beginning of the database file.|
 
 ### open(file: `string`): `Promise<void>`
 
 This method is called when the database is opened. You can handle tasks such as managing file descriptors (e.g., **fd**) within this method.
+
+|Parameter|Description|
+|---|---|
+|`file`|The location of the database. This can be a file path or a key used for storage.|
 
 ### close(): `Promise<void>`
 
@@ -199,6 +212,10 @@ For example, if the **start** parameter is 100 and the length of the **data** pa
 ### append(data: `number[]`): `Promise<void>`
 
 The values from the **data** parameter should be added to the end of the database file. This will increase the size of the database file.
+
+|Parameter|Description|
+|---|---|
+|`data`|The content to be appended to the end of the database file.|
 
 ### truncate(size: `number`): `Promise<void>`
 
