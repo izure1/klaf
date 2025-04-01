@@ -23,7 +23,7 @@ const db = await Klaf.Open({
 const data = 'Data string you want to store'
 const [errPut, id] = await db.put(data)
 const [errPick, result] = await db.pick(id)
-result.record.payload; // 'Data string you want to store'
+result.record.payload // 'Data string you want to store'
 
 
 // UPDATE
@@ -33,14 +33,18 @@ await db.update(id, modifiedData)
 const [errPickModified, resultModified] = await db.pick(id)
 resultModified.record.payload // 'Modified data string you want to store'
 
-await db.update(id, 'POWER')
+await db.update(id, 'POWER!!!')
 const [errPickModified2, resultModified2] = await db.pick(id)
 resultModified2.record.payload // 'POWER!!!'
 
 
 // DELETE
 await db.delete(id)
-await db.pick(id) // Error! The record was destroyed.
+const [err, result2] = await db.pick(id)
+
+if (err) {
+  throw err // Error! The record was destroyed.
+}
 
 
 db.metadata.autoIncrement // 1

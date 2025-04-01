@@ -39,7 +39,7 @@ const db = await KlafDocument.Open({
   path: 'my-database-path.db',
   version: 0,
   engine: new FileSystemEngine(),
-  journal: new DataJournal(new FileSystemEngine())m
+  journal: new DataJournal(new FileSystemEngine()),
   scheme: {
     id: {
       default: () => crypto.randomUUID()

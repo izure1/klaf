@@ -19,7 +19,7 @@ export interface KlafDocumentConstructorArguments<T extends KlafDocumentable> {
   service: KlafDocumentService<T>
 }
 
-export interface KlafDocumentCreateOption<T extends KlafDocumentScheme> {
+export interface KlafDocumentCreateOption<S extends KlafDocumentable, T extends KlafDocumentScheme<S>> {
   /**
    * This is the path where the database file will be created.
    */
@@ -88,16 +88,17 @@ export class KlafDocument<T extends KlafDocumentable> {
    * @param option The database creation options.
    */
   static async Create<
-    T extends KlafDocumentScheme
-  >(option: KlafDocumentCreateOption<T>): Promise<KlafDocument<KlafDocumentSchemeType<T>>> {
+    S extends KlafDocumentable,
+    T extends KlafDocumentScheme<S> = KlafDocumentScheme<S>
+  >(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocument<KlafDocumentSchemeType<S, T>>> {
     const bootloader = new KlafDocumentService.Bootloader()
     const journal = AuthenticatedDataJournal.From(KlafDocument, option.journal)
 
-    await bootloader.create(option)
-    const serviceParameter = await bootloader.open({ ...option, journal })
+    await bootloader.create(option as any)
+    const serviceParameter = await bootloader.open({ ...option, journal } as any)
     const service = new KlafDocumentService(serviceParameter)
 
-    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<T>>
+    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<S, T>>
     await instance.service.createTrees()
 
     return instance
@@ -108,8 +109,9 @@ export class KlafDocument<T extends KlafDocumentable> {
    * @param option The database creation options.
    */
   static async Open<
-    T extends KlafDocumentScheme
-  >(option: KlafDocumentCreateOption<T>): Promise<KlafDocument<KlafDocumentSchemeType<T>>> {
+    S extends KlafDocumentable,
+    T extends KlafDocumentScheme<S> = KlafDocumentScheme<S>
+  >(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocument<KlafDocumentSchemeType<S, T>>> {
     const bootloader = new KlafDocumentService.Bootloader()
     
     const databaseExisting = await bootloader.existsDatabase(option.path, option.engine)
@@ -123,9 +125,9 @@ export class KlafDocument<T extends KlafDocumentable> {
     }
 
     const journal = AuthenticatedDataJournal.From(KlafDocument, option.journal)
-    const serviceParameter = await bootloader.open({ ...option, journal })
+    const serviceParameter = await bootloader.open({ ...option, journal } as any)
     const service = new KlafDocumentService(serviceParameter)
-    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<T>>
+    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<S, T>>
 
     if (
       journalExisting &&

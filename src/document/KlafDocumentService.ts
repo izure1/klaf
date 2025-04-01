@@ -31,13 +31,13 @@ export interface KlafDocumentMetadata {
   schemeVersion: number
 }
 
-export interface KlafDocumentServiceConstructorArguments {
+export interface KlafDocumentServiceConstructorArguments<S extends KlafDocumentable> {
   metadata: KlafMetadata
   core: KlafService
   root: KlafDocumentRoot
   rootId: string
   order: number
-  scheme: KlafDocumentScheme
+  scheme: KlafDocumentScheme<S>
   schemeVersion: number
 }
 
@@ -123,20 +123,20 @@ export interface KlafDocumentOption<T extends KlafDocumentShape<KlafDocumentable
   desc?: boolean
 }
 
-export interface KlafDocumentField {
-  default: () => SupportedType,
-  validate?: (v: SupportedType) => boolean
+export interface KlafDocumentField<T extends SupportedType> {
+  default: () => T,
+  validate?: (v: T) => boolean
 }
 
-export interface KlafDocumentScheme {
-  [key: string]: KlafDocumentField
+export type KlafDocumentScheme<S extends KlafDocumentable> = {
+  [K in keyof S]: KlafDocumentField<S[K]>
 }
 
-export type KlafDocumentSchemeType<T extends KlafDocumentScheme> = {
+export type KlafDocumentSchemeType<S extends KlafDocumentable, T extends KlafDocumentScheme<S>> = {
   [K in keyof T]: ReturnType<T[K]['default']>
 }
 
-export class KlafDocumentService<T extends KlafDocumentable> implements DataJournalContainer {
+export class KlafDocumentService<S extends KlafDocumentable> implements DataJournalContainer {
   static readonly DB_NAME = 'TissueRollDocument'
 
   static readonly ErrorBuilder = class ErrorBuilder extends KlafService.ErrorBuilder {
@@ -149,7 +149,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
     }
   }
 
-  static readonly Bootloader = class KlafDocumentServiceBootloader<T extends KlafDocumentScheme> {
+  static readonly Bootloader = class KlafDocumentServiceBootloader<S extends KlafDocumentable, T extends KlafDocumentScheme<S>> {
     createOption({
       version,
       core,
@@ -203,7 +203,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
       return journal.engine.exists(journalPath)
     }
 
-    async create(option: KlafDocumentCreateOption<T>): Promise<KlafDocumentServiceConstructorArguments> {
+    async create(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocumentServiceConstructorArguments<S>> {
       const {
         path,
         engine,
@@ -246,7 +246,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
       }
     }
 
-    async open(option: KlafDocumentCreateOption<T>): Promise<KlafDocumentServiceConstructorArguments> {
+    async open(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocumentServiceConstructorArguments<S>> {
       const {
         path,
         engine,
@@ -255,7 +255,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
         payloadSize = 1024
       } = option
       
-      let options: KlafDocumentServiceConstructorArguments|undefined
+      let options: KlafDocumentServiceConstructorArguments<S>|undefined
 
       await engine.boot(path)
       const existing = await engine.exists(path)
@@ -330,14 +330,14 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   readonly order: number
   readonly comparator: KlafComparator
   readonly synchronizer: KlafRepositorySynchronizer<QueueNode>
-  readonly scheme: KlafDocumentScheme
+  readonly scheme: KlafDocumentScheme<S>
   readonly locker: Ryoiki
   readonly debounce: Debounce
   readonly schemeVersion: number
   private _createdTrees: boolean
   private _closing: boolean
-  private readonly _trees: Map<keyof KlafDocumentScheme, BPTreeAsync<string, SupportedType>>
-  private readonly _document: ReturnType<KlafDocumentService<T>['_createDocumentCache']>
+  private readonly _trees: Map<keyof KlafDocumentScheme<S>, BPTreeAsync<string, SupportedType>>
+  private readonly _document: ReturnType<KlafDocumentService<S>['_createDocumentCache']>
   private readonly _treeDeleteQueue: Set<string>
   private readonly _treeUpdateQueue: Map<string, QueueNode>
   private readonly _treeTempNodes: Map<string, QueueNode>
@@ -355,7 +355,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
     order,
     scheme,
     schemeVersion,
-  }: KlafDocumentServiceConstructorArguments) {
+  }: KlafDocumentServiceConstructorArguments<S>) {
     this.core               = core
     this.rootId             = rootId
     this.order              = order
@@ -440,7 +440,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
     return new CacheEntanglementAsync((
       _key,
       _state,
-      document: KlafDocumentShape<T>
+      document: KlafDocumentShape<S>
     ) => document)
   }
 
@@ -454,23 +454,23 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   private _normalizeOption(
-    option: Partial<KlafDocumentOption<KlafDocumentShape<T>>>
-  ): Required<KlafDocumentOption<KlafDocumentShape<T>>> {
-    const def: Required<KlafDocumentOption<KlafDocumentShape<T>>> = {
+    option: Partial<KlafDocumentOption<KlafDocumentShape<S>>>
+  ): Required<KlafDocumentOption<KlafDocumentShape<S>>> {
+    const def: Required<KlafDocumentOption<KlafDocumentShape<S>>> = {
       start: 0,
       end: Number.MAX_SAFE_INTEGER,
       order: 'documentIndex',
       desc: false
     }
     const merged: Required<
-      KlafDocumentOption<KlafDocumentShape<T>>
+      KlafDocumentOption<KlafDocumentShape<S>>
     > = Object.assign({}, def, option)
     return merged
   }
 
   normalizeFlatQuery(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>
-  ): KlafDocumentQuery<KlafDocumentShape<T>> {
+    query: KlafDocumentQuery<KlafDocumentShape<S>>
+  ): KlafDocumentQuery<KlafDocumentShape<S>> {
     query = Object.assign({}, query)
     for (const property in query) {
       const condition = query[property]
@@ -484,17 +484,17 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   normalizeQuery(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    properties: Set<keyof KlafDocumentShape<T>>,
-  ): KlafDocumentQuery<KlafDocumentShape<T>> {
-    const richQuery: KlafDocumentQuery<KlafDocumentShape<T>> = {}
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    properties: Set<keyof KlafDocumentShape<S>>,
+  ): KlafDocumentQuery<KlafDocumentShape<S>> {
+    const richQuery: KlafDocumentQuery<KlafDocumentShape<S>> = {}
     for (const property of properties) {
       richQuery[property] = { gt: undefined }
     }
     return Object.assign(richQuery, this.normalizeFlatQuery(query))
   }
 
-  normalizeRecord(record: Partial<T>): T {
+  normalizeRecord(record: Partial<S>): S {
     const after: any = {}
     for (const field in this.scheme) {
       const { default: defaultValue, validate } = this.scheme[field]
@@ -504,7 +504,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
       }
       after[field] = v
     }
-    return after as T
+    return after as S
   }
 
   get metadata(): KlafDocumentMetadata {
@@ -529,13 +529,13 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   async callInternalPut(
-    document: Partial<T>,
-    ...overwrite: Partial<T>[]
-  ): Promise<KlafDocumentShape<T>> {
+    document: Partial<S>,
+    ...overwrite: Partial<S>[]
+  ): Promise<KlafDocumentShape<S>> {
     const record = Object.assign(
       this.normalizeRecord(document),
       ...overwrite
-    ) as KlafDocumentShape<T>
+    ) as KlafDocumentShape<S>
     const stringify = JSON.stringify(record)
     const documentId = await this.core.put(stringify)
     for (const property in record) {
@@ -553,7 +553,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
     return Object.assign({}, record)
   }
 
-  async put(document: Partial<T>): Promise<KlafDocumentShape<T>> {
+  async put(document: Partial<S>): Promise<KlafDocumentShape<S>> {
     if (this.closing) {
       throw KlafDocumentService.ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -565,12 +565,12 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
         documentIndex: Number(this._metadata.autoIncrement)+1,
         createdAt: now,
         updatedAt: now,
-      } as KlafDocumentShape<T>
+      } as KlafDocumentShape<S>
       return this.callInternalPut(document, overwrite)
     }).finally(() => this.locker.writeUnlock(lockId))
   }
 
-  async delete(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<number> {
+  async delete(query: KlafDocumentQuery<KlafDocumentShape<S>>): Promise<number> {
     if (this.closing) {
       throw KlafDocumentService.ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -601,13 +601,13 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   async callInternalUpdate(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    update: Partial<T|KlafDocumentShape<T>>|(
-      (record: KlafDocumentShape<T>) => Partial<T>
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    update: Partial<S|KlafDocumentShape<S>>|(
+      (record: KlafDocumentShape<S>) => Partial<S>
     ),
     createOverwrite: (
-      before: KlafDocumentShape<T>
-    ) => Partial<KlafDocumentShape<T>>
+      before: KlafDocumentShape<S>
+    ) => Partial<KlafDocumentShape<S>>
   ): Promise<number> {
     const ids = await this.findRecordIds(query)
     for (let i = 0, len = ids.length; i < len; i++) {
@@ -625,14 +625,14 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
           createdAt: before.createdAt,
           updatedAt: before.updatedAt,
         }
-      ) as KlafDocumentShape<T>
+      ) as KlafDocumentShape<S>
       const partial = typeof update === 'function' ? update(before) : update
       const overwrite = createOverwrite(before)
       const after = Object.assign(
         normalizedBefore,
         partial,
         overwrite
-      ) as unknown as KlafDocumentShape<T>
+      ) as unknown as KlafDocumentShape<S>
       for (const property in before) {
         const tree = this.getTree(property)
         if (!tree) {
@@ -658,8 +658,8 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   async partialUpdate(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    update: Partial<T>|((record: KlafDocumentShape<T>) => Partial<T>)
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    update: Partial<S>|((record: KlafDocumentShape<S>) => Partial<S>)
   ): Promise<number> {
     let lockId: string
     return this.locker.writeLock(async (_lockId) => {
@@ -671,8 +671,8 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   async fullUpdate(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    update: T|((record: KlafDocumentShape<T>) => T)
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    update: S|((record: KlafDocumentShape<S>) => S)
   ): Promise<number> {
     let lockId: string
     return this.locker.writeLock(async (_lockId) => {
@@ -684,12 +684,12 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
   
   protected async findRecordIds(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    order: keyof KlafDocumentShape<T>&string = 'documentIndex',
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    order: keyof KlafDocumentShape<S>&string = 'documentIndex',
     desc = false
   ): Promise<string[]> {
-    const mustHave: keyof KlafDocumentShape<T> = 'documentIndex'
-    const properties = new Set<keyof KlafDocumentShape<T>>([order, mustHave])
+    const mustHave: keyof KlafDocumentShape<S> = 'documentIndex'
+    const properties = new Set<keyof KlafDocumentShape<S>>([order, mustHave])
     const normalizedQuery = this.normalizeQuery(query, properties)
     let filterKeys: Set<string>|undefined = undefined
     for (const property in normalizedQuery) {
@@ -697,7 +697,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
       if (!tree) {
         continue
       }
-      const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<T>
+      const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<S>
       filterKeys = await tree.keys(condition, filterKeys)
     }
     const result = Array.from(filterKeys ?? [])
@@ -708,9 +708,9 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
   }
 
   async pick(
-    query: KlafDocumentQuery<KlafDocumentShape<T>>,
-    option: KlafDocumentOption<KlafDocumentShape<T>> = {}
-  ): Promise<KlafDocumentShape<T>[]> {
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    option: KlafDocumentOption<KlafDocumentShape<S>> = {}
+  ): Promise<KlafDocumentShape<S>[]> {
     if (this.closing) {
       throw KlafDocumentService.ErrorBuilder.ERR_DATABASE_CLOSING()
     }
@@ -733,7 +733,7 @@ export class KlafDocumentService<T extends KlafDocumentable> implements DataJour
     }).finally(() => this.locker.readUnlock(lockId))
   }
 
-  async count(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<number> {
+  async count(query: KlafDocumentQuery<KlafDocumentShape<S>>): Promise<number> {
     if (this.closing) {
       throw KlafDocumentService.ErrorBuilder.ERR_DATABASE_CLOSING()
     }

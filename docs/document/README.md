@@ -26,7 +26,7 @@ const db = await KlafDocument.Open({
     age: {
       default: () => 0,
       validate: (v) => typeof v === 'number',
-    }
+    },
   },
   payloadSize: 1024,
 })
@@ -91,6 +91,18 @@ const db = await KlafDocument.Open({
   },
   payloadSize: 1024,
 })
+```
+
+You can use types more explicitly:
+
+```typescript
+type MyDocument = {
+  name: string
+  age: number
+  sex: 'male'|'female'
+}
+
+const db = await KlafDocument.Open<MyDocument>({ ... })
 ```
 
 #### default (required)
