@@ -96,7 +96,9 @@ const db = await KlafDocument.Open({
 You can use types more explicitly:
 
 ```typescript
-type MyDocument = {
+import { KlafDocument, type KlafDocumentable } from 'klaf.js'
+
+interface MyDocument extends KlafDocumentable {
   name: string
   age: number
   sex: 'male'|'female'

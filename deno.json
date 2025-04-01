@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",

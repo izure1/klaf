@@ -1,7 +1,6 @@
 import type { BPTreeNode, SerializeStrategyHead } from 'serializable-bptree'
 import type { SupportedType, KlafDocumentRoot } from './KlafDocumentService'
 import { SerializeStrategyAsync } from 'serializable-bptree'
-import { Debounce } from '../utils/Debounce'
 import { KlafService } from '../core/KlafService'
 import { KlafRepositorySynchronizer } from './KlafRepositorySynchronizer'
 

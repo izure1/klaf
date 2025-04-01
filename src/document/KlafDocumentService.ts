@@ -125,7 +125,7 @@ export interface KlafDocumentOption<T extends KlafDocumentShape<KlafDocumentable
 
 export interface KlafDocumentField<T extends SupportedType> {
   default: () => T,
-  validate?: (v: T) => boolean
+  validate?: (v: SupportedType) => boolean
 }
 
 export type KlafDocumentScheme<S extends KlafDocumentable> = {

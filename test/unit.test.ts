@@ -1,5 +1,5 @@
 import { unlinkSync } from 'node:fs'
-import { Klaf, KlafDocument, DataJournal } from 'klaf.js'
+import { Klaf, KlafDocument, DataJournal, KlafDocumentable } from 'klaf.js'
 import { DataEngine } from 'klaf.js/engine/DataEngine'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 import { InMemoryEngine } from 'klaf.js/engine/InMemory'
@@ -73,7 +73,11 @@ const createDocumentDatabase = async (name: string) => {
     journal = new DataJournal(new InMemoryEngine())
   }
 
-  const sql = await KlafDocument.Create({
+  const sql = await KlafDocument.Create<{
+    name: string
+    age: number
+    sex: 'male'|'female'
+  }>({
     path: name,
     engine,
     journal,
@@ -90,7 +94,7 @@ const createDocumentDatabase = async (name: string) => {
         validate: (v) => typeof v === 'number'
       },
       sex: {
-        default: (): 'male'|'female' => 'male',
+        default: () => 'male',
         validate: (v) => v === 'male' || v === 'female'
       }
     }

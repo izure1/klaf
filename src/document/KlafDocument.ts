@@ -53,7 +53,7 @@ export interface KlafDocumentCreateOption<S extends KlafDocumentable, T extends 
    * The property names become field names, and their values perform validation when inserting or updating values.
    * Please refer to the example below.
    * ```
-   * const db = KlafDocument.Open({
+   * const db = await KlafDocument.Open({
    *   path: 'my-db-path/database.db',
    *   scheme: {
    *     id: {
