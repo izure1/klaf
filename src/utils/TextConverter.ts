@@ -2,11 +2,11 @@ export class TextConverter {
   protected static readonly Encoder = new TextEncoder()
   protected static readonly Decoder = new TextDecoder()
 
-  static FromArray(array: number[]): string {
-    return TextConverter.Decoder.decode(Uint8Array.from(array))
+  static FromArray(array: Uint8Array): string {
+    return TextConverter.Decoder.decode(array)
   }
 
-  static ToArray(str: string): number[] {
-    return Array.from(TextConverter.Encoder.encode(str))
+  static ToArray(str: string): Uint8Array {
+    return TextConverter.Encoder.encode(str)
   }
 }

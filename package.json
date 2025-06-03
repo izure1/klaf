@@ -1,7 +1,7 @@
 {
   "name": "klaf.js",
-  "version": "3.0.2",
-  "description": "klaf.js is a lightweight JavaScript library offering both a key-value store and document-oriented database with asynchronous operations. Optimized for performance and flexibility, it is ideal for modern applications requiring fast, schema-defined data storage.",
+  "version": "4.0.0-beta.0",
+  "description": "Lightning-fast async JavaScript database with key-value and document storage for modern applications.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
   "types": "./dist/types/index.d.ts",
@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "test": "jest",
-    "test:unit": "jest unit.test.ts --verbose -t ",
+    "test:unit": "jest unit.test.ts --verbose --runInBand -t ",
     "test:perf": "jest perf.test.ts --verbose --runInBand -t ",
     "build": "node build/index.js && tsc"
   },
@@ -63,19 +63,19 @@
   "devDependencies": {
     "@types/chance": "^1.1.6",
     "@types/jest": "^29.5.14",
-    "@types/node": "^22.13.14",
+    "@types/node": "^22.15.3",
     "@types/path-browserify": "^1.0.3",
     "chance": "^1.1.12",
-    "esbuild": "^0.25.2",
+    "esbuild": "^0.25.3",
     "jest": "^29.7.0",
     "path-browserify": "^1.0.1",
-    "ts-jest": "^29.3.1",
-    "typescript": "^5.8.2"
+    "ts-jest": "^29.3.2",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
     "@noble/ciphers": "1.0.0",
-    "cache-entanglement": "^1.2.2",
+    "cache-entanglement": "^1.5.2",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^5.0.5"
+    "serializable-bptree": "^5.1.1"
   }
 }

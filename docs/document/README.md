@@ -9,14 +9,13 @@ If this is not the database you were looking for, please check the [key-value](.
 ## Usage
 
 ```typescript
-import { KlafDocument, DataJournal } from 'klaf.js'
+import { KlafDocument } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const db = await KlafDocument.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
-  journal: new DataJournal(new FileSystemEngine()),
   version: 0,
   scheme: {
     name: {

@@ -1,5 +1,4 @@
-import { type DataEngine } from '../engine/DataEngine'
-import { type DataJournal, AuthenticatedDataJournal } from '../engine/DataJournal'
+import { KlafCreateOption } from '../core/Klaf'
 import {
   type CatchResult,
   Catcher
@@ -7,43 +6,22 @@ import {
 import {
   type KlafDocumentable,
   type KlafDocumentScheme,
-  KlafDocumentMetadata,
-  KlafDocumentOption,
-  KlafDocumentQuery,
-  KlafDocumentSchemeType,
+  type KlafDocumentMetadata,
+  type KlafDocumentOption,
+  type KlafDocumentQuery,
+  type KlafDocumentSchemeType,
+  type KlafDocumentShape,
   KlafDocumentService,
-  KlafDocumentShape,
 } from './KlafDocumentService'
 
 export interface KlafDocumentConstructorArguments<T extends KlafDocumentable> {
   service: KlafDocumentService<T>
 }
 
-export interface KlafDocumentCreateOption<S extends KlafDocumentable, T extends KlafDocumentScheme<S>> {
-  /**
-   * This is the path where the database file will be created.
-   */
-  path: string
-  /**
-   * The engine that determines how the database will function.
-   * By default, it supports `FileSystem`, `InMemory`, and `WebWorker`. You can import engine modules from `klaf/engine/~` to use them.
-   * If desired, you can extend the DataEngine class to implement your own custom engine.
-   */
-  engine: DataEngine
-  /**
-   * This is a feature that prevents data loss that may occur during write operations to the database.
-   * If you enable this feature, it will back up the logical pages involved in write operations to a separate file.
-   * If the database terminates abnormally and data is lost, it will be automatically recovered using this file.
-   * If this option is not set, the journal feature will not be used.
-   * 
-   * ***IMPORTANT!** The journal instance must use the same class as the engine instance.*
-   * @example
-   * {
-   *  engine: new FileSystemEngine(),
-   *  journal: new DataJournal(new FileSystemEngine())
-   * }
-   */
-  journal?: DataJournal
+export interface KlafDocumentCreateOption<
+  S extends KlafDocumentable,
+  T extends KlafDocumentScheme<S>
+> extends KlafCreateOption {
   /**
    * Scheme version.
    */
@@ -72,14 +50,6 @@ export interface KlafDocumentCreateOption<S extends KlafDocumentable, T extends 
    * Please refer to it for assistance.
    */
   scheme: T
-  /**
-   * This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
-   */
-  payloadSize?: number
-  /**
-   * This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
-   */
-  overwrite?: boolean
 }
 
 export class KlafDocument<T extends KlafDocumentable> {
@@ -92,14 +62,12 @@ export class KlafDocument<T extends KlafDocumentable> {
     T extends KlafDocumentScheme<S> = KlafDocumentScheme<S>
   >(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocument<KlafDocumentSchemeType<S, T>>> {
     const bootloader = new KlafDocumentService.Bootloader()
-    const journal = AuthenticatedDataJournal.From(KlafDocument, option.journal)
-
-    await bootloader.create(option as any)
-    const serviceParameter = await bootloader.open({ ...option, journal } as any)
+    const loaderOpenParameter = await bootloader.create(option)
+    const serviceParameter = await bootloader.open(loaderOpenParameter)
     const service = new KlafDocumentService(serviceParameter)
 
     const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<S, T>>
-    await instance.service.createTrees()
+    await instance.service.createBTrees()
 
     return instance
   }
@@ -113,41 +81,34 @@ export class KlafDocument<T extends KlafDocumentable> {
     T extends KlafDocumentScheme<S> = KlafDocumentScheme<S>
   >(option: KlafDocumentCreateOption<S, T>): Promise<KlafDocument<KlafDocumentSchemeType<S, T>>> {
     const bootloader = new KlafDocumentService.Bootloader()
-    
     const databaseExisting = await bootloader.existsDatabase(option.path, option.engine)
     if (!databaseExisting) {
       return KlafDocument.Create(option)
     }
 
-    let journalExisting = false
-    if (option.journal) {
-      journalExisting = await bootloader.existsJournal(option.path, option.journal)
-    }
-
-    const journal = AuthenticatedDataJournal.From(KlafDocument, option.journal)
-    const serviceParameter = await bootloader.open({ ...option, journal } as any)
+    const serviceParameter = await bootloader.open(option)
     const service = new KlafDocumentService(serviceParameter)
-    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<S, T>>
-
-    if (
-      journalExisting &&
-      service.core.journal?.isAccessible(KlafDocument)
-    ) {
-      await service.core.restoreJournal(KlafDocument)
-      await instance.close()
+    
+    const restored = await service.core.restoreJournal()
+    if (restored) {
+      await service.close()
       return await KlafDocument.Open(option)
     }
-    await instance.service.createTrees()
-    await instance.service.alterScheme(serviceParameter.schemeVersion)
+    
+    const instance = new KlafDocument({ service }) as unknown as KlafDocument<KlafDocumentSchemeType<S, T>>
+    await instance.service.createBTrees()
+    const altered = await instance.service.alterScheme(serviceParameter.schemeVersion)
+    if (altered) {
+      instance.service.clearBTrees()
+      await instance.service.createBTrees()
+    }
 
     return instance
   }
 
   protected readonly service: KlafDocumentService<T>
   
-  protected constructor({
-    service
-  }: KlafDocumentConstructorArguments<T>) {
+  protected constructor({ service }: KlafDocumentConstructorArguments<T>) {
     this.service = service
   }
 
@@ -162,8 +123,8 @@ export class KlafDocument<T extends KlafDocumentable> {
     return this.service.metadata
   }
 
-  get engine(): DataEngine {
-    return this.service.engine
+  protected async transaction<T>(work: () => Promise<T>, lockType: 'read'|'write' = 'write'): Promise<CatchResult<T>> {
+    return Catcher.CatchError(this.service.transaction(work, lockType))
   }
 
   /**
@@ -176,15 +137,20 @@ export class KlafDocument<T extends KlafDocumentable> {
    * @param document The document to be inserted.
    */
   async put(document: Partial<T>): Promise<CatchResult<KlafDocumentShape<T>>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.core.startBackup(KlafDocument))
-      const putRes    = await Catcher.CatchError(this.service.put(document))
-      const endRes    = await Catcher.CatchError(this.service.core.endBackup(KlafDocument))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return putRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.put(document), 'write')
+  }
+
+  /**
+   * Insert values into the database. These values must follow the JSON format and are referred to as documents.
+   * 
+   * A document consists of key-value pairs, for example, `{ name: 'john' }`. While documents can be nested, nested structures are not searchable.
+   * For instance, you can insert a document like `{ information: { name: 'john' } }`, but you cannot search based on `information.name`.
+   * 
+   * If search functionality is required, store the relevant property separately as a top-level property.
+   * @param documents The documents to be inserted.
+   */
+  async batch(documents: Partial<T>[]): Promise<CatchResult<KlafDocumentShape<T>[]>> {
+    return this.transaction(() => this.service.batch(documents), 'write')
   }
 
   /**
@@ -193,15 +159,7 @@ export class KlafDocument<T extends KlafDocumentable> {
    * @returns The number of documents deleted.
    */
   async delete(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<CatchResult<number>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.core.startBackup(KlafDocument))
-      const deleteRes = await Catcher.CatchError(this.service.delete(query))
-      const endRes    = await Catcher.CatchError(this.service.core.endBackup(KlafDocument))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return deleteRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.delete(query), 'write')
   }
 
   /**
@@ -220,15 +178,7 @@ export class KlafDocument<T extends KlafDocumentable> {
     query: KlafDocumentQuery<KlafDocumentShape<T>>,
     update: Partial<T>|((record: KlafDocumentShape<T>) => Partial<T>)
   ): Promise<CatchResult<number>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.core.startBackup(KlafDocument))
-      const updateRes = await Catcher.CatchError(this.service.partialUpdate(query, update))
-      const endRes    = await Catcher.CatchError(this.service.core.endBackup(KlafDocument))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return updateRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.partialUpdate(query, update), 'write')
   }
 
   /**
@@ -244,15 +194,7 @@ export class KlafDocument<T extends KlafDocumentable> {
     query: KlafDocumentQuery<KlafDocumentShape<T>>,
     update: T|((record: KlafDocumentShape<T>) => T)
   ): Promise<CatchResult<number>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.core.startBackup(KlafDocument))
-      const updateRes = await Catcher.CatchError(this.service.fullUpdate(query, update))
-      const endRes    = await Catcher.CatchError(this.service.core.endBackup(KlafDocument))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return updateRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.fullUpdate(query, update), 'write')
   }
 
   /**
@@ -265,7 +207,7 @@ export class KlafDocument<T extends KlafDocumentable> {
     query: KlafDocumentQuery<KlafDocumentShape<T>>,
     option: KlafDocumentOption<KlafDocumentShape<T>> = {}
   ): Promise<CatchResult<KlafDocumentShape<T>[]>> {
-    return Catcher.CatchError(this.service.pick(query, option))
+    return this.transaction(() => this.service.pick(query, option), 'read')
   }
 
   /**
@@ -275,7 +217,7 @@ export class KlafDocument<T extends KlafDocumentable> {
    * @returns The number of documents matched.
    */
   async count(query: KlafDocumentQuery<KlafDocumentShape<T>>): Promise<CatchResult<number>> {
-    return Catcher.CatchError(this.service.count(query))
+    return this.transaction(() => this.service.count(query), 'read')
   }
 
   /**
@@ -286,6 +228,6 @@ export class KlafDocument<T extends KlafDocumentable> {
    * While the database is closing, you cannot perform read/write operations on the database.
    */
   async close(): Promise<CatchResult<void>> {
-    return Catcher.CatchError(this.service.close())
+    return this.transaction(() => this.service.close(), 'read')
   }
 }

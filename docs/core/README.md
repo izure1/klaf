@@ -9,14 +9,13 @@ This database is suitable for a website that simply stores values in the databas
 ## Usage
 
 ```typescript
-import { Klaf, DataJournal } from 'klaf.js'
+import { Klaf } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 // OPEN DB
 const db = await Klaf.Open({
   path: 'my_file_path.db',
   engine: new FileSystemEngine(),
-  journal: new DataJournal(new FileSystemEngine()),
 })
 
 // INPUT

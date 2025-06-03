@@ -9,6 +9,23 @@ This database works seamlessly with [Node.js](https://nodejs.org/), [Bun](https:
 
 Choose the [database](#database) and [engine](#engine) that best fit your needs to handle your data efficiently!
 
+## :warning: Caution
+
+`klaf.js` is currently under active development. Therefore, **its use in production environments is not yet recommended.**
+
+You might consider using it in the following scenarios:
+
+* **Toy Projects:** Small-scale projects for personal learning or experimental purposes.
+* **Environments with Low Data Criticality:** Situations where the risk of data loss or alteration is acceptable.
+* **Small-Scale Data:** When dealing with tens of thousands of records or fewer.
+
+Please be aware that the following changes may occur during development:
+
+* **API Changes:** Functions, classes, and interfaces within the library may change without notice.
+* **Database File Structure Changes:** The internal structure of database files may be altered, potentially leading to incompatibility with previous versions. In such cases, existing database files might become unusable.
+
+Until a stable version is released, please use `klaf.js` only in the recommended scenarios above or for testing and development purposes. For production environments involving critical or large-scale data, it is advisable to wait for the library to reach a sufficient level of stability.
+
 ## Database
 
 **klaf** comes in two flavors: **key-value** database and **document-oriented** database.  
@@ -32,14 +49,13 @@ If you're unsure what to choose, select the **FileSystem** engine.
 This example shows how to build a database using the document-oriented database **KlafDocument** and the **FileSystem** engine.
 
 ```typescript
-import { KlafDocument, DataJournal } from 'klaf.js'
+import { KlafDocument } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 const db = await KlafDocument.Open({
   path: 'my-database-path.db',
   version: 0,
   engine: new FileSystemEngine(),
-  journal: new DataJournal(new FileSystemEngine()),
   scheme: {
     id: {
       default: () => crypto.randomUUID()
@@ -62,13 +78,12 @@ const [err, documents] = await db.pick({ gender: 'male' })
 The following example demonstrates how to build a database using the key-value database **Klaf** and the **WebWorker** engine.
 
 ```typescript
-import { Klaf, DataJournal } from 'klaf.js'
+import { Klaf } from 'klaf.js'
 import { WebWorkerEngine } from 'klaf.js/engine/WebWorker'
 
 const db = await Klaf.Open({
   path: 'my-database-path.db',
   engine: new WebWorkerEngine(),
-  journal: new DataJournal(new WebWorkerEngine())
 })
 
 const [errPut, key] = await db.put('Faker, GOAT.')
@@ -184,6 +199,7 @@ The Klaf library is the new name for the TissueRoll library.
 
 |     Version                         |     Link      |
 |-------------------------------------|---------------|
+| From Klaf 3.x to Klaf 4.x           |[Link](./docs/migration/9.md)|
 | From Klaf 2.x to Klaf 3.x           |[Link](./docs/migration/8.md)|
 | From Klaf 1.x to Klaf 2.x           |[Link](./docs/migration/7.md)|
 | From TissueRoll 5.x.x to Klaf 1.x   |[Link](./docs/migration/6.md)|

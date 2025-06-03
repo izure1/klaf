@@ -13,7 +13,7 @@ export class IntegerConverter {
   protected static View256    = new DataView(IntegerConverter.Buffer256)
 
 
-  static FromArray8(array: number[]|Uint8Array): number {
+  static FromArray8(array: Uint8Array): number {
     const view = IntegerConverter.View8
     for (let i = 0; i < 1; i++) {
       view.setUint8(i, array[i])
@@ -21,7 +21,7 @@ export class IntegerConverter {
     return view.getUint8(0)
   }
 
-  static FromArray16(array: number[]|Uint8Array): number {
+  static FromArray16(array: Uint8Array): number {
     const view = IntegerConverter.View16
     for (let i = 0; i < 2; i++) {
       view.setUint8(i, array[i])
@@ -29,7 +29,7 @@ export class IntegerConverter {
     return view.getUint16(0)
   }
 
-  static FromArray32(array: number[]|Uint8Array): number {
+  static FromArray32(array: Uint8Array): number {
     const view = IntegerConverter.View32
     for (let i = 0; i < 4; i++) {
       view.setUint8(i, array[i])
@@ -37,7 +37,7 @@ export class IntegerConverter {
     return view.getUint32(0)
   }
 
-  static FromArray64(array: number[]|Uint8Array): bigint {
+  static FromArray64(array: Uint8Array): bigint {
     const view = IntegerConverter.View64
     for (let i = 0; i < 8; i++) {
       view.setUint8(i, array[i])
@@ -45,7 +45,7 @@ export class IntegerConverter {
     return view.getBigUint64(0)
   }
 
-  static FromArray128(array: number[]|Uint8Array): bigint {
+  static FromArray128(array: Uint8Array): bigint {
     let hex = ''
     for(let i = 0; i < 16; i++) {
       hex += array[i].toString(16).padStart(2, '0')
@@ -53,7 +53,7 @@ export class IntegerConverter {
     return BigInt('0x' + hex)
   }
 
-  static FromArray256(array: number[]|Uint8Array): bigint {
+  static FromArray256(array: Uint8Array): bigint {
     let hex = ''
     for(let i = 0; i < 32; i++) {
       hex += array[i].toString(16).padStart(2, '0')
@@ -61,7 +61,7 @@ export class IntegerConverter {
     return BigInt('0x' + hex)
   }
 
-  static FromAuto(array: number[]|Uint8Array, size: number): number|bigint {
+  static FromAuto(array: Uint8Array, size: number): number|bigint {
     switch (size) {
       case 1:   return IntegerConverter.FromArray8(array)
       case 2:   return IntegerConverter.FromArray16(array)
@@ -73,50 +73,50 @@ export class IntegerConverter {
     }
   }
 
-  static ToArray8(num: number): number[] {
+  static ToArray8(num: number): Uint8Array {
     const view = IntegerConverter.View8
     view.setUint8(0, num)
-    const array = new Array(1)
+    const array = new Uint8Array(1)
     for (let i = 0; i < 1; i++) {
       array[i] = view.getUint8(i)
     }
     return array
   }
 
-  static ToArray16(num: number): number[] {
+  static ToArray16(num: number): Uint8Array {
     const view = IntegerConverter.View16
     view.setUint16(0, num)
-    const array = new Array(2)
+    const array = new Uint8Array(2)
     for (let i = 0; i < 2; i++) {
       array[i] = view.getUint8(i)
     }
     return array
   }
 
-  static ToArray32(num: number): number[] {
+  static ToArray32(num: number): Uint8Array {
     const view = IntegerConverter.View32
     view.setUint32(0, num)
-    const array = new Array(4)
+    const array = new Uint8Array(4)
     for (let i = 0; i < 4; i++) {
       array[i] = view.getUint8(i)
     }
     return array
   }
 
-  static ToArray64(num: bigint): number[] {
+  static ToArray64(num: bigint): Uint8Array {
     const view = IntegerConverter.View64
     view.setBigUint64(0, num)
-    const array = new Array(8)
+    const array = new Uint8Array(8)
     for (let i = 0; i < 8; i++) {
       array[i] = view.getUint8(i)
     }
     return array
   }
 
-  static ToArray128(num: bigint): number[] {
+  static ToArray128(num: bigint): Uint8Array {
     const len = 16
     const hex = num.toString(16).padStart(len, '0')
-    const array = new Array(len)
+    const array = new Uint8Array(len)
     for (let i = 0; i < len; i++) {
       const j = i*2
       array[i] = parseInt(hex.substring(j, j+2), 16)
@@ -124,10 +124,10 @@ export class IntegerConverter {
     return array
   }
 
-  static ToArray256(num: bigint): number[] {
+  static ToArray256(num: bigint): Uint8Array {
     const len = 32
     const hex = num.toString(16).padStart(len, '0')
-    const array = new Array(len)
+    const array = new Uint8Array(len)
     for (let i = 0; i < len; i++) {
       const j = i*2
       array[i] = parseInt(hex.substring(j, j+2), 16)
@@ -135,7 +135,7 @@ export class IntegerConverter {
     return array
   }
 
-  static ToAuto(num: number|bigint, size: number): number[] {
+  static ToAuto(num: number|bigint, size: number): Uint8Array {
     if (typeof num === 'number') {
       switch (size) {
         case 1:   return IntegerConverter.ToArray8(num)

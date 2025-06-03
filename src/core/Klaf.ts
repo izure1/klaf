@@ -1,3 +1,4 @@
+import { type StringValue } from 'cache-entanglement'
 import {
   type KlafMetadata,
   type KlafPickResult,
@@ -5,17 +6,11 @@ import {
   KlafPageType,
   KlafService,
 } from './KlafService'
-import {
-  type DataJournalContainer,
-  AuthenticatedDataJournal,
-  DataJournal,
-} from '../engine/DataJournal'
 import { type CatchResult, Catcher } from '../utils/Catcher'
-import { DataEngine } from '../engine/DataEngine'
+import { type DataEngine } from '../engine/DataEngine'
 
 export interface KlafConstructorArguments {
   service: KlafService
-  journal?: DataJournal
 }
 
 export interface KlafCreateOption {
@@ -33,27 +28,41 @@ export interface KlafCreateOption {
    * This is a feature that prevents data loss that may occur during write operations to the database.
    * If you enable this feature, it will back up the logical pages involved in write operations to a separate file.
    * If the database terminates abnormally and data is lost, it will be automatically recovered using this file.
-   * If this option is not set, the journal feature will not be used.
-   * 
-   * ***IMPORTANT!** The journal instance must use the same class as the engine instance.*
-   * @example
-   * {
-   *  engine: new FileSystemEngine(),
-   *  journal: new DataJournal(new FileSystemEngine())
-   * }
+   * If this option is not set, the journal feature will be used.
    */
-  journal?: DataJournal
+  journal?: boolean
   /**
-   * This is the maximum data size a single page in the database can hold. The default is `1024`. If this value is too large or too small, it can affect performance.
+   * This is the maximum data size a single page in the database can hold. The default is `4096`. If this value is too large or too small, it can affect performance.
    */
   payloadSize?: number
   /**
    * This decides whether to replace an existing database file at the path or create a new one. The default is `false`.
    */
   overwrite?: boolean
+  /**
+   * The time to wait before committing changes to the database. The default is `0`.
+   * If you set this value to a positive number, the database will wait for the specified time before committing changes.
+   * This can improve performance by reducing the number of write operations to the database.
+   * However, it can also increase the risk of data loss if the application crashes before the changes are committed.
+   */
+  commitDebounce?: number
+  /**
+   * The maximum number of commit skips allowed before forcing a commit, even if `commitDebounce` time has not elapsed. The default is `10`.
+   * If `commitDebounce` is set to a positive number, the database waits for the specified duration before committing changes.
+   * If the application crashes before changes are committed, those changes are lost.
+   * To mitigate this, the database will force a commit after `commitDebounceMaximumSkip` number of pending commits, regardless of the `commitDebounce` timer.
+   * This helps reduce the risk of data loss in case of an application crash.
+   */
+  commitDebounceMaximumSkip?: number
+  /**
+   * If you set this value to a positive number, the database will keep the internal cache for this duration. This can improve performance.
+   * However, it can also interfere with the garbage collector, leading to increased memory usage or preventing memory from being collected.
+   * The default is `'3m'`.
+   */
+  cacheLifespan?: StringValue|number
 }
 
-export class Klaf implements DataJournalContainer {
+export class Klaf {
   protected static GetService(instance: Klaf): KlafService {
     return instance.service
   }
@@ -64,21 +73,21 @@ export class Klaf implements DataJournalContainer {
    */
   static async Create(option: KlafCreateOption): Promise<Klaf> {
     const bootloader = new KlafService.Bootloader()
-    const journal = AuthenticatedDataJournal.From(Klaf, option.journal)
-
-    await bootloader.create({ ...option, journal })
-    const serviceParameter = await bootloader.open({ ...option, journal })
+    const loaderOpenParameter = await bootloader.create(option)
+    const serviceParameter = await bootloader.open(loaderOpenParameter)
     const service = new KlafService(serviceParameter)
     
     await service.addEmptyPage({ type: KlafPageType.InternalType }, true)
-    const instance = new Klaf({ service, journal })
+    await service.engine.commit()
+
+    const instance = new Klaf({ service })
     
     return instance
   }
 
   /**
    * It opens or creates a database file at the specified path. 
-   * If `option.payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `1024`.
+   * If `option.payloadSize` parameter value is specified as a positive number and there's no database file at the path, it will create a new one. The default is `4096`.
    * @param option The database creation options.
    */
   static async Open(option: KlafCreateOption): Promise<Klaf> {
@@ -88,50 +97,32 @@ export class Klaf implements DataJournalContainer {
     if (!databaseExisting) {
       return Klaf.Create(option)
     }
-
-    let journalExisting = false
-    if (option.journal) {
-      journalExisting = await bootloader.existsJournal(option.path, option.journal)
-    }
-    
-    const journal = AuthenticatedDataJournal.From(Klaf, option.journal)
-    const serviceParameter = await bootloader.open({ ...option, journal })
+    const serviceParameter = await bootloader.open(option)
     const service = new KlafService(serviceParameter)
-
-    const instance = new Klaf({ service, journal })
-
-    if (
-      journalExisting &&
-      service.journal?.isAccessible(Klaf)
-    ) {
-      await service.restoreJournal(Klaf)
-      await instance.close()
+    
+    const restored = await service.restoreJournal()
+    if (restored) {
+      await service.close()
+      await service.engine._reset(option.path)
       return await Klaf.Open(option)
     }
     
+    const instance = new Klaf({ service })
     return instance
   }
 
   protected readonly service: KlafService
-  readonly journal?: DataJournal
 
-  protected constructor({ service, journal }: KlafConstructorArguments) {
+  protected constructor({ service }: KlafConstructorArguments) {
     this.service = service
-    this.journal = journal
   }
 
   get metadata(): KlafMetadata {
     return this.service.metadata
   }
 
-  /**
-   * Get record from database with a id.  
-   * Don't pass an incorrect record ID. This does not ensure the validity of the record.
-   * Use the `exists` method to validate the record id.
-   * @param recordId The record id what you want pick.
-   */
-  async pick(recordId: string): Promise<CatchResult<KlafPickResult>> {
-    return await Catcher.CatchError(this.service.pick(recordId))
+  protected async transaction<T>(work: () => Promise<T>, lockType: 'read'|'write' = 'write'): Promise<CatchResult<T>> {
+    return Catcher.CatchError(this.service.transaction(work, lockType))
   }
 
   /**
@@ -141,15 +132,17 @@ export class Klaf implements DataJournalContainer {
    * @returns The record id.
    */
   async put(text: string): Promise<CatchResult<string>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.startBackup(Klaf))
-      const putRes    = await Catcher.CatchError(this.service.put(text))
-      const endRes    = await Catcher.CatchError(this.service.endBackup(Klaf))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return putRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.put(text), 'write')
+  }
+
+  /**
+   * You store data in the database and receive a record ID for the saved data.
+   * This ID should be stored separately because it will be used in subsequent update, delete, and pick methods.
+   * @param texts The data strings what you want store.
+   * @returns The record ids.
+   */
+  async batch(texts: string[]): Promise<CatchResult<string[]>> {
+    return this.transaction(() => this.service.batch(texts), 'write')
   }
 
   /**
@@ -165,15 +158,7 @@ export class Klaf implements DataJournalContainer {
    * @returns The record id.
    */
   async update(recordId: string, text: string): Promise<CatchResult<string>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.startBackup(Klaf))
-      const updateRes = await Catcher.CatchError(this.service.update(recordId, text))
-      const endRes    = await Catcher.CatchError(this.service.endBackup(Klaf))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return updateRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.update(recordId, text), 'write')
   }
 
   /**
@@ -181,15 +166,17 @@ export class Klaf implements DataJournalContainer {
    * @param recordId The record id what you want delete.
    */
   async delete(recordId: string): Promise<CatchResult<void>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.startBackup(Klaf))
-      const deleteRes = await Catcher.CatchError(this.service.delete(recordId))
-      const endRes    = await Catcher.CatchError(this.service.endBackup(Klaf))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return deleteRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.delete(recordId), 'write')
+  }
+
+  /**
+   * Get record from database with a id.  
+   * Don't pass an incorrect record ID. This does not ensure the validity of the record.
+   * Use the `exists` method to validate the record id.
+   * @param recordId The record id what you want pick.
+   */
+  async pick(recordId: string): Promise<CatchResult<KlafPickResult>> {
+    return this.transaction(() => this.service.pick(recordId), 'read')
   }
 
   /**
@@ -198,15 +185,7 @@ export class Klaf implements DataJournalContainer {
    * @param index The page index.
    */
   async getRecords(index: number): Promise<CatchResult<KlafRecord[]>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.startBackup(Klaf))
-      const getRes    = await Catcher.CatchError(this.service.getRecords(index))
-      const endRes    = await Catcher.CatchError(this.service.endBackup(Klaf))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return getRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.getRecords(index), 'read')
   }
 
   /**
@@ -215,15 +194,7 @@ export class Klaf implements DataJournalContainer {
    * @param recordId The record id what you want verify.
    */
   async exists(recordId: string): Promise<CatchResult<boolean>> {
-    const transaction = async () => {
-      const startRes  = await Catcher.CatchError(this.service.startBackup(Klaf))
-      const existsRes = await Catcher.CatchError(this.service.exists(recordId))
-      const endRes    = await Catcher.CatchError(this.service.endBackup(Klaf))
-      if (startRes[0])  return startRes
-      if (endRes[0])    return endRes
-      return existsRes
-    }
-    return transaction()
+    return this.transaction(() => this.service.exists(recordId), 'read')
   }
 
   /**
@@ -234,6 +205,6 @@ export class Klaf implements DataJournalContainer {
    * While the database is closing, you cannot perform read/write operations on the database.
    */
   async close(): Promise<CatchResult<void>> {
-    return Catcher.CatchError(this.service.close(Klaf))
+    return this.transaction(() => this.service.close(), 'read')
   }
 }

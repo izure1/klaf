@@ -1,89 +1,83 @@
-import { unlinkSync } from 'node:fs'
-import { Klaf, KlafDocument, DataJournal, KlafDocumentable } from 'klaf.js'
+import {
+  type KlafDocumentable,
+  Klaf,
+  KlafDocument
+} from 'klaf.js'
 import { DataEngine } from 'klaf.js/engine/DataEngine'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 import { InMemoryEngine } from 'klaf.js/engine/InMemory'
 
 const IN_MEMORY = process.env.npm_config_in_memory === 'true'
 
+interface DocumentDatabaseScheme extends KlafDocumentable {
+  name: string
+  age: number
+  sex: 'male'|'female'
+}
+
 const createDatabase = async (name: string) => {
   name = `_${name}`
   let engine: DataEngine = new FileSystemEngine()
-  let journal: DataJournal = new DataJournal(new FileSystemEngine())
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
-    journal = new DataJournal(new InMemoryEngine())
   }
   const db = await Klaf.Create({
     path: name,
     engine,
-    journal,
     payloadSize: 1024,
-    overwrite: true
+    overwrite: true,
   })
   
   const close = async () => {
     await db.close()
-    if (engine instanceof FileSystemEngine) {
-      unlinkSync(name)
-    }
+    engine._unlink(name)
   }
 
   return {
     db,
-    close
+    close,
   }
 }
 
 const openDatabase = async (name: string) => {
   name = `_${name}`
   let engine: DataEngine = new FileSystemEngine()
-  let journal: DataJournal = new DataJournal(new FileSystemEngine())
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
-    journal = new DataJournal(new InMemoryEngine())
   }
   const db = await Klaf.Open({
     path: name,
     engine,
-    journal,
     payloadSize: 1024,
     overwrite: true
   })
   
   const close = async () => {
     await db.close()
-    if (engine instanceof FileSystemEngine) {
-      unlinkSync(name)
-    }
+    engine._unlink(name)
   }
 
   return {
     db,
-    close
+    close,
   }
 }
 
 const createDocumentDatabase = async (name: string) => {
   name = `_${name}`
   let engine: DataEngine = new FileSystemEngine()
-  let journal: DataJournal = new DataJournal(new FileSystemEngine())
   if (IN_MEMORY) {
     engine = new InMemoryEngine()
-    journal = new DataJournal(new InMemoryEngine())
   }
 
-  const sql = await KlafDocument.Create<{
-    name: string
-    age: number
-    sex: 'male'|'female'
-  }>({
+  const sql = await KlafDocument.Create<DocumentDatabaseScheme>({
     path: name,
     engine,
-    journal,
+    journal: false,
     version: 0,
-    payloadSize: 1024,
+    payloadSize: 4096,
     overwrite: true,
+    commitDebounce: 1000,
     scheme: {
       name: {
         default: () => '',
@@ -99,22 +93,22 @@ const createDocumentDatabase = async (name: string) => {
       }
     }
   })
-  
-  await sql.put({ name: 'kim', age: 10, sex: 'female' })
-  await sql.put({ name: 'tomas', age: 80, sex: 'male' })
-  await sql.put({ name: 'john', age: 20, sex: 'male' })
-  await sql.put({ name: 'lee', age: 50, sex: 'female' })
+
+  await sql.batch([
+    { name: 'kim', age: 10, sex: 'female' },
+    { name: 'tomas', age: 80, sex: 'male' },
+    { name: 'john', age: 20, sex: 'male' },
+    { name: 'lee', age: 50, sex: 'female' }
+  ])
   
   const close = async () => {
     await sql.close()
-    if (engine instanceof FileSystemEngine) {
-      unlinkSync(name)
-    }
+    engine._unlink(name)
   }
 
   return {
     sql,
-    close
+    close,
   }
 }
 
@@ -149,11 +143,10 @@ describe('DB', () => {
   test('DB:put record that shorter than page size', async () => {
     const { db, close } = await createDatabase('db-shorter.db')
     const max = 10
-    const ids: string[] = []
-    for (let i = 0; i < max; i++) {
-      const content = `:db-put-test-${i}:`
-      const [_err, id] = await db.put(content)
-      ids.push(id!)
+    const texts = new Array(max).fill(0).map((t, i) => `:db-put-test-${i}:`)
+    const [errBatch, ids] = await db.batch(texts)
+    if (errBatch) {
+      throw errBatch
     }
 
     const rand = Math.floor(Math.random()*max)
@@ -169,15 +162,7 @@ describe('DB', () => {
   test('DB:put record that longer than page size', async () => {
     const { db, close } = await createDatabase('db-longer.db')
 
-    const content = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer eros augue, commodo sed laoreet id, euismod id turpis. Vivamus id euismod sapien, vel venenatis turpis. Aliquam at ante odio. Curabitur quis nunc orci. Morbi nibh turpis, placerat quis gravida vestibulum, sollicitudin vel nunc. Curabitur in augue sit amet nibh consectetur posuere. Aliquam erat volutpat. Phasellus nec turpis augue. Cras ut eros nibh. Aenean elementum scelerisque maximus. Cras id nulla at felis molestie suscipit eu ac erat. Nulla tincidunt ornare nulla. Etiam vitae est sed arcu congue dignissim. Nam at odio eget velit hendrerit tincidunt. Sed posuere porttitor volutpat.
-
-    Praesent molestie feugiat lectus, sed molestie odio pulvinar a. Sed vitae ullamcorper dui, sit amet lobortis ipsum. Curabitur orci risus, mattis eget elit a, ornare egestas justo. Morbi vitae convallis ex. Nulla id nisi ultricies, rutrum nulla nec, consequat velit. Maecenas eleifend quis felis in fringilla. In nec risus dapibus, bibendum nunc quis, commodo ex. Donec urna quam, pharetra eu nisl vel, vestibulum feugiat sem. Fusce sodales, odio a aliquet vestibulum, nisi nulla interdum nisi, nec aliquam est tortor quis metus. Sed eu metus venenatis, fringilla lacus a, pharetra lectus.
-    
-    Phasellus dolor massa, lacinia in massa id, vestibulum bibendum sem. Vestibulum a tortor pulvinar, bibendum nibh sed, interdum lacus. Etiam ut urna et sapien egestas eleifend id quis turpis. Ut condimentum sollicitudin augue, sit amet imperdiet lectus pulvinar ut. Proin sagittis vel orci eu porttitor. Nam luctus non ante non volutpat. Sed nec sem at erat consectetur placerat. Curabitur lacinia maximus commodo. Vivamus nec condimentum mauris, eu commodo arcu. Suspendisse potenti. Aliquam quis tristique nibh. Quisque vulputate ex id urna laoreet gravida.
-    
-    Fusce interdum magna et euismod luctus. Proin ullamcorper dictum imperdiet. Cras sodales congue tempus. Donec eu sapien quis velit elementum lacinia. Donec scelerisque blandit tortor vel hendrerit. Nulla quis turpis vitae sem vehicula pretium. Sed lacinia, nulla vitae mollis luctus, odio felis volutpat enim, sed dictum dolor neque sit amet mauris. Praesent et sem ullamcorper, dictum leo sit amet, ullamcorper dolor. Nullam auctor arcu ipsum, sit amet consectetur massa finibus vitae. Aenean vehicula, dui in blandit semper, dui lorem tincidunt ex, nec semper est ante vel nulla. Ut condimentum lobortis convallis. Nullam a rutrum velit, eget suscipit elit.
-    
-    Etiam molestie purus imperdiet nisi dignissim, id fermentum turpis laoreet. Sed ut nibh lacinia, maximus massa non, convallis mi. In id diam blandit, pulvinar nisl a, maximus diam. Etiam dignissim euismod libero eget congue. Vivamus iaculis pulvinar odio ac maximus. Pellentesque ac placerat nulla. Aliquam erat volutpat. Nam eget enim eget est varius commodo. Suspendisse efficitur ante vel rutrum suscipit. Morbi pulvinar lobortis elit, quis efficitur lectus dapibus ac. Mauris leo tellus, mattis et ornare pharetra, facilisis nec lectus. Aenean sed ornare felis. Aenean vestibulum accumsan tortor vel ullamcorper. Maecenas eleifend enim libero, at convallis sem ullamcorper eget.`
+    const content = new Array(Math.floor(db.metadata.payloadSize * 1.5)).fill(0).map((t, i) => i).join(',')
 
     const [err1, id] = await db.put(content)
     await db.put('meaningless dummy data')
@@ -201,29 +186,47 @@ describe('DB', () => {
 
     const [err, id] = await db.put(content)
     expect(err).toBe(undefined)
+    if (err) {
+      throw err
+    }
     
-    await db.update(id!, longerContent)
+    const [errUp1] = await db.update(id!, longerContent)
+    if (errUp1) {
+      throw errUp1
+    }
     const [err1, res1] = await db.pick(id!)
     expect(err1).toBe(undefined)
     expect(res1!.record.payload).toBe(longerContent)
     expect(res1!.record.header.maxLength).toBe(longerContent.length)
 
-    await db.update(id!, longerContent2)
+    const [errUp2] = await db.update(id!, longerContent2)
+    if (errUp2) {
+      throw errUp2
+    }
     const [err2, res2] = await db.pick(id!)
     expect(err2).toBe(undefined)
     expect(res2!.record.payload).toBe(longerContent2)
     
-    await db.update(id!, shorterContent)
+    const [errUp3] = await db.update(id!, shorterContent)
+    if (errUp3) {
+      throw errUp3
+    }
     const [err3, res3] = await db.pick(id!)
     expect(err3).toBe(undefined)
     expect(res3!.record.payload).toBe(shorterContent)
     
-    await db.update(id!, longerContent3)
+    const [errUp4] = await db.update(id!, longerContent3)
+    if (errUp4) {
+      throw errUp4
+    }
     const [err4, res4] = await db.pick(id!)
     expect(err4).toBe(undefined)
     expect(res4!.record.payload).toBe(longerContent3)
 
-    await db.update(id!, longestContent)
+    const [errUp5] = await db.update(id!, longestContent)
+    if (errUp5) {
+      throw errUp5
+    }
     const [err5, res5] = await db.pick(id!)
     expect(err5).toBe(undefined)
     expect(res5!.record.payload).toBe(longestContent)
@@ -245,7 +248,7 @@ describe('DB', () => {
     expect(updateError).toBeInstanceOf(Error)
 
     const [err2, id2] = await db.put('test content')
-    const [deleteError] = await db.delete('incorrected id')
+    const [deleteError] = await db.delete('incorrect id')
     expect(err2).toBe(undefined)
     expect(deleteError).toBeInstanceOf(Error)
     await db.delete(id2!)
@@ -377,6 +380,7 @@ describe('DOCUMENT', () => {
         gt: 15
       }
     })
+    if (err1) throw err1
     const expect1 = [
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 20, sex: 'male' },
@@ -395,6 +399,7 @@ describe('DOCUMENT', () => {
         lt: 75
       }
     })
+    if (err2) throw err2
     const expect2 = [
       { name: 'john', age: 20, sex: 'male' },
     ]
@@ -415,8 +420,12 @@ describe('DOCUMENT', () => {
         equal: 'tomas'
       }
     })
+    if (err1) throw err1
+
     expect(delCount).toBe(1)
+
     const [err2, result1] = await sql.pick({})
+    if (err2) throw err2
 
     const expect1 = [
       { name: 'kim', age: 10 },
@@ -430,6 +439,7 @@ describe('DOCUMENT', () => {
     await sql.delete({})
 
     const [err3, result2] = await sql.pick({})
+    if (err3) throw err3
     expect(result2).toEqual([])
 
     expect(err1).toBe(undefined)
@@ -450,12 +460,14 @@ describe('DOCUMENT', () => {
       age: 22,
       sex: 'female'
     })
+    if (err) throw err
 
     const [err1, result1] = await sql.pick({
       name: {
         equal: 'kim'
       }
     })
+    if (err1) throw err1
 
     const expect1 = [
       { name: 'kim', age: 22, sex: 'female' }
@@ -480,8 +492,10 @@ describe('DOCUMENT', () => {
         lt: 75
       }
     }, { name: 'unknown', age: 0, sex: 'male' })
+    if (err) throw err
 
     const [err1, result1] = await sql.pick({})
+    if (err1) throw err1
     const expect1 = [
       { name: 'kim', age: 10 },
       { name: 'tomas', age: 80, sex: 'male' },
@@ -512,8 +526,10 @@ describe('DOCUMENT', () => {
       age: 0,
       sex: record.sex
     }))
+    if (err) throw err
 
     const [err1, result1] = await sql.pick({})
+    if (err1) throw err1
     const expect1 = [
       { name: 'kim', age: 10 },
       { name: 'tomas', age: 80, sex: 'male' },
@@ -537,6 +553,7 @@ describe('DOCUMENT', () => {
     const [err1, result1] = await sql.pick({
       name: 'kim'
     })
+    if (err1) throw err1
     const expect1 = [
       { name: 'kim', age: 10 }
     ]
@@ -548,6 +565,7 @@ describe('DOCUMENT', () => {
       name: 'kim',
       age: 10
     })
+    if (err2) throw err2
     const expect2 = [
       { name: 'kim', age: 10 }
     ]
@@ -559,6 +577,7 @@ describe('DOCUMENT', () => {
       name: 'kim',
       age: 11
     })
+    if (err3) throw err3
     expect(result3).toEqual([])
 
     expect(err1).toBe(undefined)
@@ -579,6 +598,7 @@ describe('DOCUMENT', () => {
       order: 'age',
       desc: true
     })
+    if (err1) throw err1
     const expect1 = [
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'lee', age: 50, sex: 'female' },
@@ -591,6 +611,7 @@ describe('DOCUMENT', () => {
     const [err2, result2] = await sql.pick({}, {
       order: 'sex',
     })
+    if (err2) throw err2
     const expect2 = [
       { name: 'kim', age: 10, sex: 'female' },
       { name: 'lee', age: 50, sex: 'female' },
@@ -606,6 +627,7 @@ describe('DOCUMENT', () => {
         like: 'l%'
       }
     })
+    if (err3) throw err3
     const expect3 = [
       { name: 'lee', age: 50, sex: 'female' },
     ]
@@ -618,6 +640,7 @@ describe('DOCUMENT', () => {
         like: '%o%'
       }
     })
+    if (err4) throw err4
     const expect4 = [
       { name: 'tomas', age: 80, sex: 'male' },
       { name: 'john', age: 20, sex: 'male' },
@@ -626,10 +649,25 @@ describe('DOCUMENT', () => {
       expect(record).toMatchObject(expect4[i])
     })
 
+    const [err5, result5] = await sql.pick({
+      name: {
+        or: ['john', 'kim']
+      }
+    })
+    if (err5) throw err5
+    const expect5 = [
+      { name: 'kim', age: 10, sex: 'female' },
+      { name: 'john', age: 20, sex: 'male' },
+    ]
+    result5!.forEach((record, i) => {
+      expect(record).toMatchObject(expect5[i])
+    })
+
     expect(err1).toBe(undefined)
     expect(err2).toBe(undefined)
     expect(err3).toBe(undefined)
     expect(err4).toBe(undefined)
+    expect(err5).toBe(undefined)
 
     close()
   })
@@ -637,9 +675,11 @@ describe('DOCUMENT', () => {
   test('DOCUMENT:pick:range-2', async () => {
     const { sql, close } = await createDocumentDatabase('doc-pick-range-2.db')
 
+    const batches: DocumentDatabaseScheme[] = []
     for (let i = 0; i < 100; i++) {
-      await sql.put({ name: 'unknown', age: i, sex: 'male' })
+      batches.push({ name: 'unknown', age: i, sex: 'male' })
     }
+    await sql.batch(batches)
 
     const [err1, result1] = await sql.pick({
       name: {
@@ -653,6 +693,7 @@ describe('DOCUMENT', () => {
       end: 10,
       order: 'age'
     })
+    if (err1) throw err1
     const expect1 = new Array(10).fill(0).map((v, i) => ({ name: 'unknown', age: 31+i }))
     result1!.forEach((record, i) => {
       expect(record).toMatchObject(expect1[i])
@@ -699,6 +740,7 @@ describe('DOCUMENT', () => {
         gt: 10
       }
     })
+    if (err1) throw err1
     expect(count1).toBe(3)
 
     await sql.delete({ sex: 'male' })
@@ -707,6 +749,7 @@ describe('DOCUMENT', () => {
         gt: 10
       }
     })
+    if (err2) throw err2
     expect(count2).toBe(1)
     
     await sql.partialUpdate({
@@ -720,6 +763,7 @@ describe('DOCUMENT', () => {
         gt: 10
       }
     })
+    if (err3) throw err3
     expect(count3).toBe(2)
 
     expect(err1).toBe(undefined)

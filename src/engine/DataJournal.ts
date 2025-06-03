@@ -1,5 +1,6 @@
 import { parse, format } from 'path-browserify'
 import { type DataEngine } from './DataEngine'
+import { IterableView } from '../utils/IterableView'
 import { IntegerConverter } from '../utils/IntegerConverter'
 
 /**
@@ -14,27 +15,52 @@ export interface DataJournalContainer {
   journal?: DataJournal
 }
 
+export enum DataJournalPageFormat {
+  HeaderOffset        = 0,
+  HeaderSize          = 100,
+
+  HeaderIndexOffset   = 0,
+  HeaderIndexSize     = 4,
+
+  payloadOffset       = DataJournalPageFormat.HeaderOffset + DataJournalPageFormat.HeaderSize,
+}
+
+export interface DataJournalPage {
+  header: {
+    index: number
+  }
+  payload: Uint8Array
+}
+
 export enum DataJournalFormat {
   /**
    * The size of the root header in the journal file.
    */
-  RootHeaderSize          = 100,
+  RootHeaderSize            = 100,
   /**
    * The offset for the working flag in the root header.
    */
-  RootWorkingOffset       = 0,
+  RootWorkingOffset         = 0,
   /**
    * The size of the working flag.
    */
-  RootWorkingSize         = 1,
+  RootWorkingSize           = 1,
   /**
    * The offset for the maximum page index in the root header.
    */
-  RootMaxPageIndexOffset  = DataJournalFormat.RootWorkingOffset + DataJournalFormat.RootWorkingSize,
+  RootMaxPageIndexOffset    = DataJournalFormat.RootWorkingOffset + DataJournalFormat.RootWorkingSize,
   /**
    * The size of the maximum page index.
    */
-  RootMaxPageIndexSize    = 4,
+  RootMaxPageIndexSize      = 4,
+  /**
+   * The offset for the journal version in the root header.
+   */
+  RootJournalVersionOffset  = DataJournalFormat.RootMaxPageIndexOffset + DataJournalFormat.RootMaxPageIndexSize,
+  /**
+   * The size of the journal version.
+   */
+  RootJournalVersionSize    = 2,
   /**
    * The offset for the database metadata in the journal file.
    */
@@ -56,6 +82,7 @@ export enum DataJournalFormat {
 export interface DataJournalInitialOption {
   working: number
   maximumPageIndex: number
+  journalVersion: number
 }
 
 type DataJournalMetadataFormatKey = keyof DataJournalInitialOption
@@ -64,7 +91,7 @@ type DataJournalMetadataFormatMap = Record<DataJournalMetadataFormatKey, DataJou
 interface DataJournalMetadataFormData {
   dirty: boolean
   numeric: number|bigint
-  array: number[]
+  array: Uint8Array
 }
 type DataJournalMetadataFormatState = Record<DataJournalMetadataFormatKey, DataJournalMetadataFormData>
 
@@ -80,16 +107,16 @@ class DataJournalInitialOptionManager {
   }
 
   private _read(data: DataJournalMetadataFormData, to: 'numeric'): number|bigint
-  private _read(data: DataJournalMetadataFormData, to: 'array'): number[]
-  private _read(data: DataJournalMetadataFormData, to: 'numeric'|'array'): number|bigint|number[] {
+  private _read(data: DataJournalMetadataFormData, to: 'array'): Uint8Array
+  private _read(data: DataJournalMetadataFormData, to: 'numeric'|'array'): number|bigint|Uint8Array {
     if (to === 'numeric') return data.numeric
     if (to === 'array')   return data.array
     throw new Error(`Invalid 'to' parameter. Expected 'numeric' or 'array', but got '${to}'.`)
   }
   
   async read(key: DataJournalMetadataFormatKey, to: 'numeric'): Promise<number|bigint>
-  async read(key: DataJournalMetadataFormatKey, to: 'array'): Promise<number[]>
-  async read(key: DataJournalMetadataFormatKey, to: 'numeric'|'array'): Promise<number[]|number|bigint> {
+  async read(key: DataJournalMetadataFormatKey, to: 'array'): Promise<Uint8Array>
+  async read(key: DataJournalMetadataFormatKey, to: 'numeric'|'array'): Promise<Uint8Array|number|bigint> {
     const k = key as DataJournalMetadataFormatKey
     if (k in this.state) {
       return this._read(this.state[k]!, to as any)
@@ -105,11 +132,11 @@ class DataJournalInitialOptionManager {
   }
 
   write(key: DataJournalMetadataFormatKey, value: number): void
-  write(key: DataJournalMetadataFormatKey, value: number[]): void
-  write(key: DataJournalMetadataFormatKey, value: number|number[]): void {
+  write(key: DataJournalMetadataFormatKey, value: Uint8Array): void
+  write(key: DataJournalMetadataFormatKey, value: number|Uint8Array): void {
     const [_start, size] = this.formatMap[key]
     let numeric: number|bigint
-    let array: number[]
+    let array: Uint8Array
     if (typeof value === 'number') {
       numeric = value
       array = IntegerConverter.ToAuto(value, size)
@@ -157,13 +184,24 @@ class DataJournalInitialOptionManager {
  * in case of errors or data corruption.
  */
 export class DataJournal {
+  protected static readonly JournalVersion = 1
   /**
    * The initial data used when creating a new journal file.
    */
-  protected static readonly InitialData = DataJournal.CreateIterable(
-    DataJournalFormat.RootHeaderSize,
-    0,
-  )
+  protected static readonly InitialData = (() => {
+    const data = DataJournal.CreateIterable(
+      DataJournalFormat.RootHeaderSize,
+      0,
+    )
+
+    IterableView.Update(
+      data,
+      DataJournalFormat.RootJournalVersionOffset,
+      IntegerConverter.ToArray16(DataJournal.JournalVersion)
+    )
+
+    return data
+  })()
 
   /**
    * Decorator class for `DataJournal` methods.
@@ -171,60 +209,7 @@ export class DataJournal {
    */
   static readonly Decorator = class DataJournalDecorator {
     /**
-     * Verifies that the journal has been initialized.
-     * @param target The target object.
-     * @param property The property key.
-     * @param descriptor The property descriptor.
-     * @returns The modified property descriptor.
-     * @throws {Error} If the journal is not initialized.
-     */
-    static VerifyInitialized(
-      target: DataJournalContainer,
-      property: PropertyKey,
-      descriptor: PropertyDescriptor
-    ): PropertyDescriptor {
-      const originalMethod = descriptor.value
-      descriptor.value = function<T extends DataJournalContainer>(this: T, ...args: any[]) {
-        if (!DataJournal.IsInstance(this.journal)) {
-          throw DataJournal.ERR_REQUIRE_TOKEN()
-        }
-        if (!this.journal.isInitialized) {
-          throw DataJournal.ERR_REQUIRE_INIT()
-        }
-        return originalMethod.apply(this, args)
-      }
-      return descriptor
-    }
-
-    /**
-     * Requires the journal to be initialized before allowing the decorated method to execute.
-     * If the journal is not initialized, the method will not be executed.
-     * @param target The target object.
-     * @param property The property key.
-     * @param descriptor The property descriptor.
-     * @returns The modified property descriptor.
-     */
-    static RequireInitialized(
-      target: DataJournalContainer,
-      property: PropertyKey,
-      descriptor: PropertyDescriptor
-    ): PropertyDescriptor {
-      const originalMethod = descriptor.value
-      descriptor.value = function<T extends DataJournalContainer>(this: T, ...args: any[]) {
-        if (!DataJournal.IsInstance(this.journal)) {
-          return
-        }
-        if (!this.journal.isInitialized) {
-          return
-        }
-        return originalMethod.apply(this, args)
-      }
-      return descriptor
-    }
-
-    /**
      * Requires the `DataJournalContainer` to have `DataJournal` instance before allowing the decorated method to execute.
-     * If there is no `DataJournalToken` instance, the method will not be executed.
      * @param target The target object.
      * @param property The property key.
      * @param descriptor The property descriptor.
@@ -238,46 +223,12 @@ export class DataJournal {
       const originalMethod = descriptor.value
       descriptor.value = function<T extends DataJournalContainer>(this: T, ...args: any[]) {
         if (!DataJournal.IsInstance(this.journal)) {
-          return
-        }
-        if (!this.journal.isInitialized) {
-          return
+          return Promise.resolve()
         }
         return originalMethod.apply(this, args)
       }
       return descriptor
     }
-
-    /**
-     * Requires the `DataJournalContainer` to have `DataJournal` instance and handler before allowing the decorated method to execute.
-     * If there is no `DataJournalToken` instance or handler, the method will not be executed.
-     * @param target The target object.
-     * @param property The property key.
-     * @param descriptor The property descriptor.
-     * @returns The modified property descriptor.
-     */
-    static RequireAccessibleHandler(
-      target: DataJournalContainer,
-      property: PropertyKey,
-      descriptor: PropertyDescriptor
-    ): PropertyDescriptor {
-      const originalMethod = descriptor.value
-      descriptor.value = function(this: DataJournalContainer, handler: any, ...args: any[]) {
-        if (this.journal?.handler !== handler) {
-          return
-        }
-        return originalMethod.apply(this, args)
-      }
-      return descriptor
-    }
-  }
-
-  /**
-   * Creates an error for when the journal needs to be initialized.
-   * @returns An error object.
-   */
-  protected static ERR_REQUIRE_INIT(): Error {
-    return new Error('You have to initiate first.')
   }
 
   /**
@@ -289,38 +240,13 @@ export class DataJournal {
   }
 
   /**
-   * Creates an error for when the journal is already initialized.
-   * @returns An error object.
-   */
-  protected static ERR_ALREADY_INIT(): Error {
-    return new Error('This instance already initialed.')
-  }
-
-  /**
-   * Creates an error for when the journal requires proper permissions.
-   * @param handler The handler trying to access.
-   * @param accessibleHandler The handler that has access.
-   * @returns An error object.
-   */
-  protected static ERR_REQUIRE_PERM(
-    handler: any,
-    accessibleHandler: any
-  ): Error {
-    return new Error(
-      'You do not have transfer permissions. ' + 
-      'To transfer, you must be a handler. ' + 
-      `Expected handler: '${accessibleHandler.name}', but received: '${handler.name}'.`
-    )
-  }
-
-  /**
    * Creates an iterable of a specific length and filled with a specific value.
    * @param length The length of the iterable.
    * @param fill The value to fill the iterable with.
    * @returns A number array.
    */
-  protected static CreateIterable(length: number, fill: number): number[] {
-    return new Array(length).fill(fill)
+  protected static CreateIterable(length: number, fill: number): Uint8Array {
+    return new Uint8Array(length).fill(fill)
   }
 
   /**
@@ -333,9 +259,8 @@ export class DataJournal {
   }
 
   private readonly _indexes: Set<number>
-  protected initialized: boolean
+  private readonly _view: IterableView
   protected transacting: boolean
-  protected handler: any
   protected readonly initialOption: DataJournalInitialOptionManager
   readonly engine: DataEngine
 
@@ -345,11 +270,10 @@ export class DataJournal {
    */
   constructor(engine: DataEngine) {
     this._indexes = new Set()
-    this.initialized = false
+    this._view = new IterableView()
     this.transacting = false
-    this.handler = null
     this.engine = engine
-    this.initialOption = new DataJournalInitialOptionManager(this.engine, {
+    this.initialOption = new DataJournalInitialOptionManager(engine, {
       working: [
         DataJournalFormat.RootWorkingOffset as number,
         DataJournalFormat.RootWorkingSize as number,
@@ -358,15 +282,11 @@ export class DataJournal {
         DataJournalFormat.RootMaxPageIndexOffset as number,
         DataJournalFormat.RootMaxPageIndexSize as number,
       ],
+      journalVersion: [
+        DataJournalFormat.RootJournalVersionOffset as number,
+        DataJournalFormat.RootJournalVersionSize as number
+      ],
     })
-  }
-
-  /**
-   * Gets whether the journal is initialized.
-   * @returns True if initialized, false otherwise.
-   */
-  get isInitialized(): boolean {
-    return this.initialized
   }
 
   /**
@@ -392,17 +312,12 @@ export class DataJournal {
     })
   }
 
-  /**
-   * Checks if the given handler has access to the journal.
-   * @param handler The handler to check.
-   * @returns True if the handler has access, false otherwise.
-   */
-  isAccessible(handler: any): boolean {
-    return this.handler === handler
-  }
-
   isAlreadyBackup(pageIndex: number): boolean {
     return this._indexes.has(pageIndex)
+  }
+
+  getJournalPageSize(dataSize: number): number {
+    return dataSize + DataJournalPageFormat.HeaderSize
   }
 
   /**
@@ -412,7 +327,7 @@ export class DataJournal {
    */
   async exists(databasePath: string): Promise<boolean> {
     const journalPath = this.getJournalPath(databasePath)
-    await this.engine.boot(journalPath)
+    await this.engine._boot(journalPath)
     return this.engine.exists(journalPath)
   }
 
@@ -421,28 +336,20 @@ export class DataJournal {
    * @param databasePath The path to the database file.
    * @param headerData The header data to write to the journal file.
    */
-  async make(databasePath: string, headerData: number[]): Promise<void> {
+  async make(databasePath: string, headerData: Uint8Array): Promise<void> {
     const journalPath = this.getJournalPath(databasePath)
-    await this.engine.boot(journalPath)
-    await this.engine.create(journalPath, [
+    await this.engine._boot(journalPath)
+    await this.engine._create(journalPath, new Uint8Array([
       ...DataJournal.InitialData,
       ...headerData,
-    ])
+    ]))
   }
 
   /**
    * Resets the journal with the given header data.
-   * @param handler The handler performing the reset.
    * @param metadata The header data to use for the reset.
-   * @throws {Error} If the journal is not initialized or the handler does not have permission.
    */
-  async reset(handler: any, metadata: number[]): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
-    if (!this.isAccessible(handler)) {
-      throw DataJournal.ERR_REQUIRE_PERM(handler, this.handler!)
-    }
+  async reset(metadata: Uint8Array): Promise<void> {
     if (metadata.length !== DataJournalFormat.DBMetadataSize) {
       throw new Error(
         `The journal backup metadata size must be ${DataJournalFormat.DBMetadataSize}. ` +
@@ -451,10 +358,10 @@ export class DataJournal {
     }
 
     await this.engine.truncate(0)
-    await this.engine.append([
+    await this.engine.append(new Uint8Array([
       ...DataJournal.InitialData,
       ...metadata,
-    ])
+    ]))
     this.initialOption.write('working', 0)
     await this.initialOption.commit()
 
@@ -463,16 +370,9 @@ export class DataJournal {
   
   /**
    * Starts a transaction in the journal.
-   * @param handler The handler starting the transaction.
-   * @throws {Error} If the journal is not initialized, the handler does not have permission, or a transaction is already in progress.
+   * @throws {Error} If transaction is already in progress.
    */
-  async startTransaction(handler: any, initialOption: Partial<DataJournalInitialOption>): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
-    if (!this.isAccessible(handler)) {
-      throw DataJournal.ERR_REQUIRE_PERM(handler, this.handler!)
-    }
+  async startTransaction(initialOption: Partial<DataJournalInitialOption>): Promise<void> {
     if (this.transacting) {
       throw new Error('The journal is already started.')
     }
@@ -487,16 +387,9 @@ export class DataJournal {
 
   /**
    * Ends a transaction in the journal.
-   * @param handler The handler ending the transaction.
-   * @throws {Error} If the journal is not initialized, the handler does not have permission, or no transaction is in progress.
+   * @throws {Error} If no transaction is in progress.
    */
-  async endTransaction(handler: any, initialOption: Partial<DataJournalInitialOption>): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
-    if (!this.isAccessible(handler)) {
-      throw DataJournal.ERR_REQUIRE_PERM(handler, this.handler!)
-    }
+  async endTransaction(initialOption: Partial<DataJournalInitialOption>): Promise<void> {
     if (!this.transacting) {
       throw new Error('The journal has not started yet.')
     }
@@ -509,13 +402,7 @@ export class DataJournal {
     this.transacting = false
   }
 
-  async close(handler: any, databasePath: string): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
-    if (!this.isAccessible(handler)) {
-      throw DataJournal.ERR_REQUIRE_PERM(handler, this.handler!)
-    }
+  async close(databasePath: string): Promise<void> {
     if (this.transacting) {
       throw new Error(
         'The journal is currently in a transaction. ' +
@@ -523,47 +410,76 @@ export class DataJournal {
       )
     }
     const journalPath = this.getJournalPath(databasePath)
-    await this.engine.close()
-    await this.engine.unlink(journalPath)
+    await this.engine._unlink(journalPath)
     this.transacting = false
     this._indexes.clear()
   }
 
+  protected parsePage(page: Uint8Array): DataJournalPage {
+    const {
+      HeaderOffset,
+      HeaderSize,
+      HeaderIndexOffset,
+      HeaderIndexSize,
+      payloadOffset,
+    } = DataJournalPageFormat
+    const rawHeader = this._view.read(page, HeaderOffset, HeaderSize)
+    const rawPayload = this._view.read(page, payloadOffset)
+    const rawHeaderIndex = this._view.read(rawHeader, HeaderIndexOffset, HeaderIndexSize)
+    const headerIndex = IntegerConverter.FromArray32(rawHeaderIndex)
+    return {
+      header: {
+        index: headerIndex,
+      },
+      payload: rawPayload,
+    }
+  }
+
+  /**
+   * Logs the restoration of the database from the journal.
+   * @param maximumPageIndex The maximum page index in the database.
+   * @param pageSize The size of each page in the database.
+   */
+  logJournalRestore(data: any): void {
+    const restoredDate = new Date()
+    console.log(`Klaf.js: The database restored from journal file at ${restoredDate.toLocaleString()}`)
+    console.table(data)
+  }
+
   /**
    * Restores the database state from the journal.
-   * @param handler The handler performing the restoration.
    * @param option.pageSize The size of each page in the database.
    * @param option.getPageIndex A function to extract the page index from page data.
    * @param option.restoreMetadata A function to restore the database metadata.
    * @param option.restorePage A function to restore a specific page of the database.
    * @param option.truncate A function to truncate the database to a specific size.
    * @returns A promise that resolves when the restoration is complete.
-   * @throws {Error} If the journal is not initialized or the handler does not have permission.
    */
-  async restore(handler: any, {
+  async restore({
     pageSize,
-    getPageIndex,
     restoreMetadata,
-    restorePage,
+    restoreData,
     truncate,
+    done,
   }: {
     pageSize: number
-    getPageIndex:     (pageData: number[]) => number
-    restoreMetadata:  (metadata: number[]) => Promise<void>
-    restorePage:      (pageIndex: number, pageData: number[]) => Promise<void>
+    restoreMetadata:  (metadata: Uint8Array) => Promise<void>
+    restoreData:      (journalPageIndex: number, data: Uint8Array) => Promise<void>
     truncate:         (maximumPageIndex: number) => Promise<void>
-  }): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
-    if (!this.isAccessible(handler)) {
-      throw DataJournal.ERR_REQUIRE_PERM(handler, this.handler!)
-    }
+    done:             (metadata: Uint8Array) => Promise<void>
+  }): Promise<boolean> {
+    const journalPageSize = this.getJournalPageSize(pageSize)
     const metadata = await this.getMetadataBackup()
     const working = await this.initialOption.read('working', 'numeric') as number
+    const journalVersion = await this.initialOption.read('journalVersion', 'numeric') as number
     if (!working) {
-      await this.reset(handler, metadata)
-      return
+      await this.reset(metadata)
+      return false
+    }
+    if (journalVersion < DataJournal.JournalVersion) {
+      console.log(`Klaf.js: The journal version is lower than the current version. The journal will be ignored.`)
+      await this.reset(metadata)
+      return false
     }
     // truncate database file size
     const maximumPageIndex = await this.initialOption.read('maximumPageIndex', 'numeric') as number
@@ -571,17 +487,15 @@ export class DataJournal {
     // restore database's metadata
     await restoreMetadata(metadata)
     // restore database's pages
-    const restoredIndexes = new Set()
-    const pages = this.getBackupPages(pageSize)
+    const pages = this.getBackupPages(journalPageSize)
     for await (const page of pages) {
-      const index = getPageIndex(page)
-      if (restoredIndexes.has(index)) {
-        continue
-      }
-      await restorePage(index, page)
-      restoredIndexes.add(index)
+      const { header, payload } = this.parsePage(page)
+      await restoreData(header.index, payload)
     }
-    await this.reset(handler, metadata)
+    await this.reset(metadata)
+    await done(metadata)
+    this.logJournalRestore({ maximumPageIndex, pageSize })
+    return true
   }
 
   /**
@@ -589,18 +503,20 @@ export class DataJournal {
    * @param pageIndex The index of the page to back up.
    * @param data The data of the page.
    */
-  async backupPage(pageIndex: number, data: number[]): Promise<void> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
+  async backupPage(pageIndex: number, data: Uint8Array): Promise<void> {
     if (this._indexes.has(pageIndex)) {
       return
     }
-    const maximumPageIndex = await this.initialOption.read('maximumPageIndex', 'numeric') as number
-    if (pageIndex > maximumPageIndex) {
-      return
-    }
-    await this.engine.append(data)
+
+    const header = DataJournal.CreateIterable(DataJournalPageFormat.HeaderSize, 0)
+    const headerIndex = IntegerConverter.ToArray32(pageIndex)
+    IterableView.Update(header, DataJournalPageFormat.HeaderIndexOffset, headerIndex)
+
+    const page = new Uint8Array([
+      ...header,
+      ...data,
+    ])
+    await this.engine.append(page)
     this._indexes.add(pageIndex)
   }
 
@@ -608,10 +524,7 @@ export class DataJournal {
    * Gets the backed-up metadata from the journal.
    * @returns The metadata.
    */
-  async getMetadataBackup(): Promise<number[]> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
+  async getMetadataBackup(): Promise<Uint8Array> {
     return this.engine.read(
       DataJournalFormat.DBMetadataOffset,
       DataJournalFormat.DBMetadataSize
@@ -623,59 +536,15 @@ export class DataJournal {
    * @param pageSize The size of each page.
    * @returns An asynchronous generator that yields backed-up pages.
    */
-  async *getBackupPages(pageSize: number): AsyncGenerator<number[]> {
-    if (!this.initialized) {
-      throw DataJournal.ERR_REQUIRE_INIT()
-    }
+  async *getBackupPages(pageSize: number): AsyncGenerator<Uint8Array> {
+    const { DBPageOffset } = DataJournalFormat
     const size = await this.engine.size()
-    const count = (size - DataJournalFormat.DBPageOffset) / pageSize
+    const allPagesSize = size - DBPageOffset
+    const count = allPagesSize / pageSize
     for (let i = 0; i < count; i++) {
-      const offset = DataJournalFormat.DBPageOffset + (i * pageSize)
+      const offset = DBPageOffset + (i * pageSize)
       const data = await this.engine.read(offset, pageSize)
       yield data
     }
-  }
-}
-
-/**
- * `AuthenticatedDataJournal` class
- * It is for providing authentication of `DataJournal` class.
- */
-export class AuthenticatedDataJournal<T> extends DataJournal {
-  /**
-   * Checks if an object is an instance of `AuthenticatedDataJournal`.
-   * @param object The object to check.
-   * @returns True if the object is a `AuthenticatedDataJournal` instance, false otherwise.
-   */
-  static IsInstance<T = any>(object: any): object is AuthenticatedDataJournal<T> {
-    return object instanceof AuthenticatedDataJournal
-  }
-
-  /**
-   * Creates an `AuthenticatedDataJournal` instance from a `DataJournal` instance.
-   * @param guessHandler The handler for authentication.
-   * @param journal The `DataJournal` instance.
-   * @returns An `AuthenticatedDataJournal` instance or `undefined` if the journal is not provided.
-   */
-  static From(guessHandler: any, journal: DataJournal|undefined): AuthenticatedDataJournal<any>|undefined {
-    if (!DataJournal.IsInstance(journal)) {
-      return undefined
-    }
-    if (AuthenticatedDataJournal.IsInstance(journal)) {
-      return journal as AuthenticatedDataJournal<any>
-    }
-    const engine = (journal as DataJournal).engine
-    return new AuthenticatedDataJournal(guessHandler, engine)
-  }
-
-  /**
-   * Creates a new `AuthenticatedDataJournal` instance.
-   * @param handler The handler for authentication.
-   * @param engine The data engine to use for journal operations.
-   */
-  constructor(handler: T, engine: DataEngine) {
-    super(engine)
-    this.handler = handler
-    this.initialized = true
   }
 }

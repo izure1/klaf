@@ -1,7 +1,7 @@
 import type { BPTreeNode, SerializeStrategyHead } from 'serializable-bptree'
 import type { SupportedType, KlafDocumentRoot } from './KlafDocumentService'
 import { SerializeStrategyAsync } from 'serializable-bptree'
-import { KlafService } from '../core/KlafService'
+import { type KlafService } from '../core/KlafService'
 import { KlafRepositorySynchronizer } from './KlafRepositorySynchronizer'
 
 export type QueueNode = BPTreeNode<string, SupportedType>|KlafDocumentRoot
@@ -13,8 +13,6 @@ export interface KlafStrategyConstructorArguments {
   synchronizer: KlafRepositorySynchronizer<QueueNode>
   rootId: string
   root: KlafDocumentRoot
-  deleteQueue: Set<string>
-  updateQueue: Map<string, QueueNode>
   tempNodes: Map<string, QueueNode>
 }
 
@@ -55,7 +53,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   }
 
   private async _addOverflowRecord(): Promise<string> {
-    return this.service.internalPut(
+    return await this.service.internalPut(
       this.service.createIterable(this.service.metadata.payloadSize, 0),
       false
     )
@@ -67,6 +65,10 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
     return node
   }
 
+  private _hasNode(id: string): boolean {
+    return this._tempNodes.has(id)
+  }
+
   private _updateNode(id: string, node: QueueNode): void {
     this._tempNodes.set(id, node)
   }
@@ -76,18 +78,18 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   }
 
   async id(): Promise<string> {
-    if (this.root.reassignments.length) {
-      const id = this.root.reassignments.shift()!
-      await this.writeHead(this.head)
-      return id
-    }
-    return this._addOverflowRecord()
+    // if (this.root.reassignments.length) {
+    //   const id = this.root.reassignments.shift()!
+    //   await this.writeHead(this.head)
+    //   return id
+    // }
+    return await this._addOverflowRecord()
   }
 
   async read(id: string): Promise<BPTreeNode<string, SupportedType>> {
-    if (!this._tempNodes.has(id)) {
+    if (!this._hasNode(id)) {
       const node = await this._readFromRepository(id)
-      this._tempNodes.set(id, node)
+      this._updateNode(id, node)
     }
     const node = this._tempNodes.get(id) as BPTreeNode<string, SupportedType>
     return structuredClone(node)
@@ -99,7 +101,7 @@ export class KlafStrategy extends SerializeStrategyAsync<string, SupportedType> 
   }
 
   async delete(id: string): Promise<void> {
-    this.root.reassignments.push(id)
+    // this.root.reassignments.push(id)
     this._deleteNode(id)
     this.synchronizer.deleteFromQueue(id)
   }

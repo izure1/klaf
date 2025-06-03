@@ -3,7 +3,6 @@ import { Buffer } from 'node:buffer'
 import { dirname } from 'node:path'
 import { fstat, ftruncate, read, write, existsSync, open, close } from 'node:fs'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
-import { Ryoiki } from 'ryoiki'
 import { DataEngine } from './DataEngine'
 
 export class FileSystemEngine extends DataEngine {
@@ -81,11 +80,22 @@ export class FileSystemEngine extends DataEngine {
   }
 
   protected fd!: number
-  protected readonly locker: Ryoiki
+  private readonly _buffers: Map<number, Buffer>
 
   constructor() {
     super()
-    this.locker = new Ryoiki()
+    this._buffers = new Map()
+  }
+
+  private _getBuffer(size: number): Buffer {
+    if (!this._buffers.has(size)) {
+      this._buffers.set(size, Buffer.alloc(size))
+    }
+    return this._buffers.get(size)!
+  }
+
+  get clone(): FileSystemEngine {
+    return new FileSystemEngine()
   }
 
   async exists(file: string): Promise<boolean> {
@@ -95,9 +105,9 @@ export class FileSystemEngine extends DataEngine {
   async boot(file: string): Promise<void> {
   }
 
-  async create(file: string, initialData: number[]): Promise<void> {
+  async create(file: string, initialData: Uint8Array): Promise<void> {
     await mkdir(dirname(file), { recursive: true })
-    await writeFile(file, Buffer.from(initialData))
+    await writeFile(file, initialData)
   }
   
   async open(file: string): Promise<void> {
@@ -109,6 +119,7 @@ export class FileSystemEngine extends DataEngine {
       return
     }
     await FileSystemEngine.Close(this.fd)
+    this.fd = undefined as any
   }
 
   async size(): Promise<number> {
@@ -116,30 +127,31 @@ export class FileSystemEngine extends DataEngine {
     return stats.size
   }
 
-  async read(start: number, length?: number): Promise<number[]> {
+  async read(start: number, length?: number): Promise<Uint8Array> {
     if (length === undefined) {
-      length = (await this.size())-start
+      const size = await this.size()
+      length = size - start
+      if (length > size) length = size
     }
-    const buf = Buffer.alloc(length)
+    if (length === 0) return new Uint8Array()
+    
+    const buf = this._getBuffer(length)
     await FileSystemEngine.Read(this.fd, buf, 0, buf.length, start)
-    return Array.from(buf)
+    return Uint8Array.from(buf)
   }
 
-  async update(start: number, data: number[]): Promise<number[]> {
+  async update(start: number, data: Uint8Array): Promise<Uint8Array> {
     const size      = await this.size()
-    const length    = Math.min(data.length, size-start)
-    const chunk     = data.slice(0, length)
-    const buf       = Uint8Array.from(chunk)
+    const length    = Math.min(data.length, size - start)
+    const buf       = data.subarray(0, length)
 
     await FileSystemEngine.Write(this.fd, buf, 0, buf.length, start)
-    return chunk
+    return buf
   }
 
-  async append(data: number[]): Promise<void> {
-    const buf = Uint8Array.from(data)
+  async append(data: Uint8Array): Promise<void> {
     const pos = await this.size()
-
-    await FileSystemEngine.Write(this.fd, buf, 0, buf.length, pos)
+    await FileSystemEngine.Write(this.fd, data, 0, data.length, pos)
   }
 
   async truncate(size: number): Promise<void> {
@@ -148,5 +160,9 @@ export class FileSystemEngine extends DataEngine {
 
   async unlink(file: string): Promise<void> {
     await unlink(file)
+  }
+
+  async reset(file: string): Promise<void> {
+    this.fd = undefined as any
   }
 }

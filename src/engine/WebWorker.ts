@@ -25,6 +25,10 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     super(directoryHandle, fileHandle)
   }
 
+  get clone(): FileSystemSyncAccessHandleStrategy {
+    return new FileSystemSyncAccessHandleStrategy(this.directoryHandle, this.fileHandle)
+  }
+
   async exists(file: string): Promise<boolean> {
     if (!this.directoryHandle) {
       return false
@@ -37,7 +41,8 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
       }
     }
     if (exists) {
-      exists = !!(await this.size())
+      const size = await this.size()
+      exists = !!size
     }
     return exists
   }
@@ -46,8 +51,8 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     this.accessHandle = await this.fileHandle.createSyncAccessHandle()
   }
   
-  async create(file: string, initialData: number[]): Promise<void> {
-    this.append(initialData)
+  async create(file: string, initialData: Uint8Array): Promise<void> {
+    await this.append(initialData)
   }
   
   async open(file: string): Promise<void> {
@@ -62,13 +67,14 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     return this.accessHandle.getSize()
   }
 
-  async read(start: number, length?: number): Promise<number[]> {
+  async read(start: number, length?: number): Promise<Uint8Array> {
+    const s = await this.size()
     if (length === undefined) {
-      length = (await this.size())-start
+      length = s - start
     }
-    const size    = Math.min((await this.size())-start, length)
+    const size    = Math.min(s - start, length)
     const buffer  = new DataView(new ArrayBuffer(size))
-    const chunk   = new Array(buffer.byteLength)
+    const chunk   = new Uint8Array(buffer.byteLength)
 
     this.accessHandle.read(buffer, { at: start })
     for (let i = 0; i < size; i++) {
@@ -77,10 +83,10 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     return chunk
   }
 
-  async update(start: number, data: number[]): Promise<number[]> {
+  async update(start: number, data: Uint8Array): Promise<Uint8Array> {
     const size      = await this.size()
-    const length    = Math.min(data.length, size-start)
-    const chunk     = data.slice(0, length)
+    const length    = Math.min(data.length, size - start)
+    const chunk     = data.subarray(0, length)
     const buf       = Uint8Array.from(chunk)
 
     this.accessHandle.write(buf, { at: start })
@@ -88,9 +94,9 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
     return chunk
   }
 
-  async append(data: number[]): Promise<void> {
+  async append(data: Uint8Array): Promise<void> {
     const before = await this.size()
-    this.accessHandle.truncate(before+data.length)
+    this.accessHandle.truncate(before + data.length)
     this.accessHandle.flush()
     await this.update(before, data)
   }
@@ -100,14 +106,17 @@ class FileSystemSyncAccessHandleStrategy extends WebWorkerStrategy {
   }
 
   async unlink(file: string): Promise<void> {
-    await this.close()
     await this.directoryHandle.removeEntry(file)
+  }
+
+  async reset(file: string): Promise<void> {
+    this.accessHandle = undefined as any 
   }
 }
 
 class WritableStreamStrategy extends WebWorkerStrategy {
   protected fileData!: Uint8Array
-  private readonly _debounce: Debounce
+  private _debounce: Debounce
 
   constructor(
     directoryHandle: FileSystemDirectoryHandle,
@@ -115,6 +124,10 @@ class WritableStreamStrategy extends WebWorkerStrategy {
   ) {
     super(directoryHandle, fileHandle)
     this._debounce = new Debounce(100)
+  }
+
+  get clone(): WritableStreamStrategy {
+    return new WritableStreamStrategy(this.directoryHandle, this.fileHandle)
   }
 
   private async _commit(): Promise<void> {
@@ -137,7 +150,8 @@ class WritableStreamStrategy extends WebWorkerStrategy {
       }
     }
     if (exists) {
-      exists = !!(await this.size())
+      const size = await this.size()
+      exists = !!size
     }
     return exists
   }
@@ -147,9 +161,9 @@ class WritableStreamStrategy extends WebWorkerStrategy {
     this.fileData = new Uint8Array(await rawFile.arrayBuffer())
   }
   
-  async create(file: string, initialData: number[]): Promise<void> {
-    this.append(initialData)
-    this._commit()
+  async create(file: string, initialData: Uint8Array): Promise<void> {
+    await this.append(initialData)
+    await this._commit()
   }
   
   async open(file: string): Promise<void> {
@@ -163,36 +177,41 @@ class WritableStreamStrategy extends WebWorkerStrategy {
     return this.fileData.length
   }
 
-  async read(start: number, length?: number): Promise<number[]> {
+  async read(start: number, length?: number): Promise<Uint8Array> {
+    const s = await this.size()
     if (length === undefined) {
-      length = (await this.size())-start
+      length = s - start
     }
-    const size    = Math.min((await this.size())-start, length)
-    return Array.from(this.fileData.slice(start, start+size))
+    const size    = Math.min(s - start, length)
+    return this.fileData.subarray(start, start + size)
   }
 
-  async update(start: number, data: number[]): Promise<number[]> {
+  async update(start: number, data: Uint8Array): Promise<Uint8Array> {
     const size      = await this.size()
-    const length    = Math.min(data.length, size-start)
-    const chunk     = data.slice(0, length)
+    const length    = Math.min(data.length, size - start)
+    const chunk     = data.subarray(0, length)
     this.fileData.set(chunk, start)
     this._commit()
     return chunk
   }
 
-  async append(data: number[]): Promise<void> {
+  async append(data: Uint8Array): Promise<void> {
     this.fileData = new Uint8Array([...this.fileData, ...data])
     this._commit()
   }
 
   async truncate(size: number): Promise<void> {
-    this.fileData = this.fileData.slice(0, size)
+    this.fileData = this.fileData.subarray(0, size)
     this._commit()
   }
 
   async unlink(file: string): Promise<void> {
-    await this.close()
     await this.directoryHandle.removeEntry(file)
+  }
+
+  async reset(file: string): Promise<void> {
+    this.fileData = undefined as any
+    this._debounce = new Debounce(100)
   }
 }
 
@@ -202,6 +221,10 @@ export class WebWorkerEngine extends DataEngine {
   
   constructor() {
     super()
+  }
+
+  get clone(): WebWorkerEngine {
+    return new WebWorkerEngine()
   }
 
   get fileHandle(): FileSystemFileHandle|null {
@@ -251,41 +274,39 @@ export class WebWorkerEngine extends DataEngine {
   }
 
   async boot(file: string): Promise<void> {
-    if (this.booting) {
+    if (this.isBooting) {
       return
     }
-    this.booting = true
-    
     const [directoryHandle, fileHandle] = await this._getHandles(file)
     this.strategy = await this._getBestStrategy(directoryHandle, fileHandle)
-    return this.strategy.boot(file)
+    return this.strategy._boot(file)
   }
   
-  async create(file: string, initialData: number[]): Promise<void> {
-    return this.strategy.create(file, initialData)
+  async create(file: string, initialData: Uint8Array): Promise<void> {
+    return this.strategy._create(file, initialData)
   }
   
   async open(file: string): Promise<void> {
-    return this.strategy.open(file)
+    return this.strategy._open(file)
   }
 
   async close(): Promise<void> {
-    return this.strategy.close()
+    return this.strategy._close()
   }
 
   async size(): Promise<number> {
     return this.strategy.size()
   }
 
-  async read(start: number, length?: number): Promise<number[]> {
+  async read(start: number, length?: number): Promise<Uint8Array> {
     return this.strategy.read(start, length)
   }
 
-  async update(start: number, data: number[]): Promise<number[]> {
+  async update(start: number, data: Uint8Array): Promise<Uint8Array> {
     return this.strategy.update(start, data)
   }
 
-  async append(data: number[]): Promise<void> {
+  async append(data: Uint8Array): Promise<void> {
     return this.strategy.append(data)
   }
 
@@ -294,7 +315,10 @@ export class WebWorkerEngine extends DataEngine {
   }
 
   async unlink(file: string): Promise<void> {
-    await this.close()
-    await this.strategy.unlink(file)
+    await this.strategy._unlink(file)
+  }
+
+  async reset(file: string): Promise<void> {
+    await this.strategy._reset(file)
   }
 }

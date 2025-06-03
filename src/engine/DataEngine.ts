@@ -3,6 +3,95 @@ export abstract class DataEngine {
     return object instanceof DataEngine
   }
 
+  private _isBooting: boolean = false
+  private _isOpened: boolean = false
+
+  get isBooting(): boolean {
+    return this._isBooting
+  }
+
+  get isOpened(): boolean {
+    return this._isOpened
+  }
+
+  /**
+   * 자신과 동일한 인스턴스를 복제하여 반환합니다.
+   * 복제된 자신과 동일하지 않으며, 사용되지 않은, 완전히 초기화된 상태여야 합니다.
+   */
+  abstract get clone(): DataEngine
+
+  /**
+   * This method is an abstract hook. You must call this method at the very top of the `boot` method you implement.
+   * Subsequently, in other implementations, call `engine._boot` instead of `engine.boot`.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   */
+  async _boot(file: string): Promise<void> {
+    await this.boot(file)
+    this._isBooting = true
+  }
+
+  /**
+   * This method is an abstract hook that calls `this.create(file, initialData)`.
+   * You must implement the `create` method in your subclass.
+   * Subsequently, in other implementations, call `engine._create` instead of `engine.create`.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   * @param initialData The initialization data.
+   */
+  async _create(file: string, initialData: Uint8Array): Promise<void> {
+    await this.create(file, initialData)
+  }
+
+  /**
+   * This method is an abstract hook that calls `this.open(file)` and manages the `_isOpened` state.
+   * You must implement the `open` method in your subclass.
+   * Subsequently, in other implementations, call `engine._open` instead of `engine.open`.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   */
+  async _open(file: string): Promise<void> {
+    if (this._isOpened) {
+      return
+    }
+    await this.open(file)
+    this._isOpened = true
+  }
+
+  /**
+   * This method is an abstract hook that calls `this.close()` (if opened) and manages the `_isOpened` state.
+   * You must implement the `close` method in your subclass.
+   * Subsequently, in other implementations, call `engine._close` instead of `engine.close`.
+   */
+  async _close(): Promise<void> {
+    if (this._isOpened) {
+      await this.close()
+    }
+    this._isOpened = false
+  }
+
+  /**
+   * This method is an abstract hook that calls `this.unlink(file)`.
+   * You must implement the `unlink` method in your subclass.
+   * Subsequently, in other implementations, call `engine._unlink` instead of `engine.unlink`.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   */
+  async _unlink(file: string): Promise<void> {
+    await this.unlink(file)
+  }
+
+  /**
+   * This method is an abstract hook that manages `_isBooting` and `_isOpened` states, then calls `this.reset(file)`.
+   * You must implement the `reset` method in your subclass.
+   * Subsequently, in other implementations, call `engine._reset` instead of `engine.reset`.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   */
+  async _reset(file: string): Promise<void> {
+    this._isBooting = false
+    if (this._isOpened) {
+      await this._close()
+      this._isOpened = false
+    }
+    await this.reset(file)
+  }
+
   /**
    * Should return whether the database exists at the given location. This method is used internally within the database.
    * @param file The location of the database. This can be a file path or a key used for storage.
@@ -26,7 +115,7 @@ export abstract class DataEngine {
    *  this.dataArray.push(...initialData)
    * }
    */
-  abstract create(file: string, initialData: number[]): Promise<void>
+  abstract create(file: string, initialData: Uint8Array): Promise<void>
 
   /**
    * Called when the database is opened.
@@ -70,7 +159,7 @@ export abstract class DataEngine {
    *  return this.dataArray.slice(start, start+length)
    * }
    */
-  abstract read(start: number, length?: number): Promise<number[]>
+  abstract read(start: number, length?: number): Promise<Uint8Array>
   
   /**
    * Updates the content in the database where the data is kept. This method should return the updated array of integers.
@@ -87,7 +176,7 @@ export abstract class DataEngine {
    *  return chunk
    * }
    */
-  abstract update(start: number, data: number[]): Promise<number[]>
+  abstract update(start: number, data: Uint8Array): Promise<Uint8Array>
 
   /**
    * Appends data to the end of the database, increasing its size.
@@ -98,7 +187,7 @@ export abstract class DataEngine {
    *  this.dataArray.push(data)
    * }
    */
-  abstract append(data: number[]): Promise<void>
+  abstract append(data: Uint8Array): Promise<void>
 
   /**
    * Truncates the database to the specified size.
@@ -123,4 +212,11 @@ export abstract class DataEngine {
    * }
    */
   abstract unlink(file: string): Promise<void>
+
+  /**
+   * When this method is called, the engine is closed and should be considered fully reset.
+   * Therefore, any state or values established by the `boot` method must be reverted to their initial instance values.
+   * @param file The location of the database. This can be a file path or a key used for storage.
+   */
+  abstract reset(file: string): Promise<void>
 }

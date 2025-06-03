@@ -101,14 +101,15 @@ import { DataEngine } from 'klaf.js/engine/DataEngine'
 class YourCustomEngine extends DataEngine {
   boot(file: string): Promise<void>
   exists(file: string): Promise<boolean>
-  create(file: string, initialData: number[]): Promise<void>
+  create(file: string, initialData: Uint8Array): Promise<void>
   open(file: string): Promise<void>
   close(): Promise<void>
   unlink(file: string): Promise<void>
+  reset(file: string): Promise<void>
   size(): Promise<number>
-  read(start: number, length: number): Promise<number[]>
-  write(start: number, data: number[]): Promise<number[]>
-  append(data: number[]): Promise<void>
+  read(start: number, length: number): Promise<Uint8Array>
+  write(start: number, data: Uint8Array): Promise<Uint8Array>
+  append(data: Uint8Array): Promise<void>
   truncate(size: number): Promise<void>
 }
 ```
@@ -123,8 +124,10 @@ const isOverwriting = option.overwrite
 
 if (databaseExisting) {
   if (isOverwriting) {
-    await engine.unlink(databasePath)
-    await engine.create(databasePath)
+    await engine.unlink(databasePath) // delete database file
+    await engine.reset(databasePath) // reset data engine instance
+    await engine.boot() // re-boot data engine instance
+    await engine.create(databasePath) // create database file
   }
 }
 else {
@@ -150,14 +153,14 @@ This method should return whether the database exists at the specified path.
 |---|---|
 |`file`|The location of the database. This can be a file path or a key used for storage.|
 
-### create(file: `string`, initialData: `number[]`): `Promise<void>`
+### create(file: `string`, initialData: `Uint8Array`): `Promise<void>`
 
 If the database does not exist, this method is called. Implement the logic to create a database file in this method. After creating the database, insert the **initialData** at the beginning. Below is an explanation of the parameters.
 
 |Parameter|Description|
 |---|---|
 |`file`|The location where the database should be created. This can be a file path or a key used for storage.|
-|`initialData`|An array of 8-bit positive integers. This is the root page data required for the database to function correctly. Insert this value at the very beginning of the database file.|
+|`initialData`|An typed array of 8-bit positive integers. This is the root page data required for the database to function correctly. Insert this value at the very beginning of the database file.|
 
 ### open(file: `string`): `Promise<void>`
 
@@ -179,13 +182,22 @@ Unlinks the database file. This method is automatically called when the database
 |---|---|
 |`file`|The location of the database. This can be a file path or a key used for storage.|
 
+### reset(file: `string`): `Promise<void>`
+
+When this method is called, the engine is closed and should be considered fully reset.
+Therefore, any state or values established by the `boot` method must be reverted to their initial instance values.
+
+|Parameter|Description|
+|---|---|
+|`file`|The location of the database. This can be a file path or a key used for storage.|
+
 ### size(): `Promise<number>`
 
 This returns the size of the database. You should return the size of the database file in bytes.
 
-### read(start: `number`, length: `number`): `Promise<number[]>`
+### read(start: `number`, length: `number`): `Promise<Uint8Array>`
 
-This method implements reading part of the database file. It should return a byte array (as a number array) from a specific location in the file for the given length. Below is an explanation of the parameters.
+This method implements reading part of the database file. It should return a byte array (as a typed number array) from a specific location in the file for the given length. Below is an explanation of the parameters.
 
 |Parameter|Description|
 |---|---|
@@ -196,7 +208,7 @@ For example, if the **start** parameter is 100 and the **length** parameter is 1
 
 **Note:** If the file size is 105, you should return a number array of size 5 containing the byte codes from positions 100 to 105.
 
-### update(start: `number`, data: `number[]`): `Promise<number[]>`
+### update(start: `number`, data: `Uint8Array`): `Promise<Uint8Array>`
 
 This method implements modifying part of the database file. You should modify the contents at a specific location in the file for the length of the **data** parameter array. Below is an explanation of the parameters.
 
@@ -209,7 +221,7 @@ For example, if the **start** parameter is 100 and the length of the **data** pa
 
 **Note:** If the file size is 105, only positions 100 to 105 should be modified, and only the modified 5 bytes should be returned as an array.
 
-### append(data: `number[]`): `Promise<void>`
+### append(data: `Uint8Array`): `Promise<void>`
 
 The values from the **data** parameter should be added to the end of the database file. This will increase the size of the database file.
 

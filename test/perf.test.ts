@@ -1,21 +1,18 @@
-import { unlink } from 'node:fs/promises'
 import Chance from 'chance'
-import { DataJournal, Klaf, KlafDocument } from 'klaf.js'
+import { Klaf, KlafDocument } from 'klaf.js'
 import { FileSystemEngine } from 'klaf.js/engine/FileSystem'
 
 async function createDatabase(name: string) {
   name = `_${name}`
   const engine = new FileSystemEngine()
-  const journal = new DataJournal(new FileSystemEngine())
   const db = await Klaf.Create({
     path: `perf-${name}.db`,
     engine,
-    journal,
     overwrite: true
   })
   const close = async () => {
     await db.close()
-    unlink(`perf-${name}.db`)
+    engine._unlink(`perf-${name}.db`)
   }
 
   return {
@@ -27,12 +24,10 @@ async function createDatabase(name: string) {
 async function createDocumentDatabase(name: string) {
   name = `_${name}`
   const engine = new FileSystemEngine()
-  const journal = new DataJournal(new FileSystemEngine())
   const db = await KlafDocument.Create({
     path: `perf-${name}.db`,
     version: 0,
     engine,
-    journal,
     scheme: {
       id: {
         default: () => '',
@@ -48,7 +43,7 @@ async function createDocumentDatabase(name: string) {
   })
   const close = async () => {
     await db.close()
-    await unlink(`perf-${name}.db`)
+    engine._unlink(`perf-${name}.db`)
   }
 
   return {
