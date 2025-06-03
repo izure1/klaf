@@ -27,7 +27,7 @@ const db = await KlafDocument.Open({
       validate: (v) => typeof v === 'number',
     },
   },
-  payloadSize: 1024,
+  payloadSize: 4096,
 })
 
 await db.put({ name: 'john' })
@@ -48,7 +48,7 @@ The **KlafDocument** manages files in logical blocks called pages. The payload s
 
 If there are many write/update operations in the database, it's recommended to set this value to a smaller size, around the size of one document. However, this may result in a larger overall database file size. On the other hand, if there are many read operations, it's advised to set this value to a larger size, but keep in mind that it might slow down write/update speeds.
 
-*Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **1024**.
+*Note that this value cannot be modified after the database is created*, so choose carefully. If you're unsure, you can leave it as the default, which is **4096**.
 
 ## Reserved document property names
 
@@ -88,7 +88,7 @@ const db = await KlafDocument.Open({
       validate: (v) => v === 'male' || v === 'female' || v === null,
     }
   },
-  payloadSize: 1024,
+  payloadSize: 4096,
 })
 ```
 
