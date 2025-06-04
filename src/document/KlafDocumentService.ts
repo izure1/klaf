@@ -784,6 +784,36 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     return ids.length
   }
 
+  async callInternalPutOrUpdate(
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    document: Partial<S>
+  ): Promise<KlafDocumentShape<S>|number> {
+    const ids = await this.findRecordIds(query)
+    if (!ids.length) {
+      const now = Date.now()
+      const overwrite = {
+        documentIndex: Number(this._metadata.autoIncrement)+1,
+        createdAt: now,
+        updatedAt: now,
+      } as KlafDocumentShape<S>
+      return this.callInternalPut(document, overwrite)
+    }
+    return this.callInternalUpdate(query, document, () => ({
+      updatedAt: Date.now()
+    }) as any)
+  }
+
+  async putOrUpdate(
+    query: KlafDocumentQuery<KlafDocumentShape<S>>,
+    document: Partial<S>
+  ): Promise<KlafDocumentShape<S>|number> {
+    return this.writeLock(async () => {
+      const result = await this.callInternalPutOrUpdate(query, document)
+      await this.synchronizer.sync()
+      return result
+    })
+  }
+
   async partialUpdate(
     query: KlafDocumentQuery<KlafDocumentShape<S>>,
     update: Partial<S>|((record: KlafDocumentShape<S>) => Partial<S>)

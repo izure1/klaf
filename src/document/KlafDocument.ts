@@ -163,6 +163,21 @@ export class KlafDocument<T extends KlafDocumentable> {
   }
 
   /**
+   * Insert or update values into the database. These values must follow the JSON format and are referred to as documents.
+   * If the query matches existing documents, those documents will be updated with the provided `document` data.
+   * If the query does not match any existing documents, a new document will be inserted with the provided `document` data.
+   * @param query The range of documents to be updated or inserted.
+   * @param document The document to be inserted or updated.
+   * @returns The inserted document if no documents matched the query, or the number of documents updated if documents matched the query.
+   */
+  async putOrUpdate(
+    query: KlafDocumentQuery<KlafDocumentShape<T>>,
+    document: Partial<T>,
+  ): Promise<CatchResult<KlafDocumentShape<T>|number>> {
+    return this.transaction(() => this.service.putOrUpdate(query, document), 'write')
+  }
+
+  /**
    * Updates a portion of the document(s) inserted into the database. You can specify the scope of the document to be updated using queries.
    * This method modifies only the specified properties without changing the entire document.  
    * 

@@ -98,7 +98,7 @@ const createDocumentDatabase = async (name: string) => {
     { name: 'kim', age: 10, sex: 'female' },
     { name: 'tomas', age: 80, sex: 'male' },
     { name: 'john', age: 20, sex: 'male' },
-    { name: 'lee', age: 50, sex: 'female' }
+    { name: 'lee', age: 50, sex: 'female' },
   ])
   
   const close = async () => {
@@ -543,6 +543,45 @@ describe('DOCUMENT', () => {
     expect(err).toBe(undefined)
     expect(err1).toBe(undefined)
     expect(updatedCount).toBe(2)
+
+    close()
+  })
+  
+  test('DOCUMENT:put or update', async () => {
+    const { sql, close } = await createDocumentDatabase('doc-put-or-update.db')
+
+    const [err1, result1] = await sql.putOrUpdate({
+      name: 'han'
+    }, {
+      name: 'han',
+      sex: 'male',
+      age: 30,
+    })
+    if (err1) throw err1
+    expect(result1).toMatchObject({ name: 'han', age: 30, sex: 'male' })
+
+    const [err2, result2] = await sql.putOrUpdate({
+      age: {
+        gt: 15
+      }
+    }, {
+      sex: 'male'
+    })
+    if (err2) throw err2
+    expect(result2).toBe(4)
+
+    const [err3, result3] = await sql.pick({})
+    if (err3) throw err3
+    const expect3 = [
+      { name: 'kim', age: 10, sex: 'female' },
+      { name: 'tomas', age: 80, sex: 'male' },
+      { name: 'john', age: 20, sex: 'male' },
+      { name: 'lee', age: 50, sex: 'male' },
+      { name: 'han', age: 30, sex: 'male' },
+    ]
+    result3!.forEach((record, i) => {
+      expect(record).toMatchObject(expect3[i])
+    })
 
     close()
   })

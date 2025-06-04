@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "4.0.0-beta.0",
+  "version": "4.0.0-beta.1",
   "description": "Lightning-fast async JavaScript database with key-value and document storage for modern applications.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",
