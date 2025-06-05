@@ -644,11 +644,14 @@ export class KlafService implements DataJournalContainer {
       recordPosition,
       pageHeader,
     }, index: number, order: number) => {
-      const pos = recordPosition.raw
-      const rHeader = await this.engine.read(pos, KlafFormat.RecordHeaderSize)
-      const payloadPos = KlafFormat.RecordHeaderSize + pos
+      const pagePos       = this.pagePosition(index)
+      const recordPos     = recordPosition.raw
+      const recordOffset  = recordPos - pagePos
+      const rawPage       = await this.get(index)
+      const rawHeader     = IterableView.Read(rawPage, recordOffset, KlafFormat.RecordHeaderSize)
+      const payloadOffset = KlafFormat.RecordHeaderSize + recordOffset
       const payloadLength = IntegerConverter.FromArray32(IterableView.Read(
-        rHeader,
+        rawHeader,
         KlafFormat.RecordHeaderLengthOffset,
         KlafFormat.RecordHeaderLengthSize
       ))
@@ -657,17 +660,17 @@ export class KlafService implements DataJournalContainer {
       
       // internal 페이지일 경우
       if (!header.next) {
-        const rPayload = await this.engine.read(payloadPos, payloadLength)
-        const merged = new Uint8Array(rHeader.length + rPayload.length)
-        merged.set(rHeader, 0)
-        merged.set(rPayload, rHeader.length)
+        const rPayload = IterableView.Read(rawPage, payloadOffset, payloadLength)
+        const merged = new Uint8Array(rawHeader.length + rPayload.length)
+        merged.set(rawHeader, 0)
+        merged.set(rPayload, rawHeader.length)
         return merged
       }
   
       // overflow 페이지로 나뉘어져 있을 경우
       let remain = payloadLength + KlafFormat.RecordHeaderSize
       let lastIndex = 0
-      const record = new Uint8Array(remain)
+      const record = this.createIterable(remain, 0)
   
       while (remain > 0) {
         const pos   = this.pagePayloadPosition(header.index)
