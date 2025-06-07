@@ -113,9 +113,6 @@ export interface KlafPageHeader {
 }
 
 export interface KlafRecord {
-  rawRecord: Uint8Array
-  rawHeader: Uint8Array
-  rawPayload: Uint8Array
   header: {
     id: string
     aliasId: string
@@ -128,6 +125,9 @@ export interface KlafRecord {
     deleted: number
   }
   payload: string
+  rawRecord: Uint8Array
+  rawHeader: Uint8Array
+  rawPayload: Uint8Array
 }
 
 export interface KlafPickResult {
@@ -413,11 +413,12 @@ export class KlafService implements DataJournalContainer {
   private _closing: boolean
   private readonly _encodingIdCache: ReturnType<KlafService['_createEncodingIdCache']>
   private readonly _decodingIdCache: ReturnType<KlafService['_createDecodingIdCache']>
-  private readonly _decodingRecordCache: ReturnType<KlafService['_createDecodingRecordCache']>
+  private readonly _pageCache: ReturnType<KlafService['_createPageCache']>
   private readonly _pageHeaderCache: ReturnType<KlafService['_createPageHeaderCache']>
   private readonly _pageParsedHeaderCache: ReturnType<KlafService['_createPageParsedHeaderCache']>
   private readonly _recordPositionCache: ReturnType<KlafService['_createRecordPositionCache']>
   private readonly _recordCache: ReturnType<KlafService['_createRecordCache']>
+  private readonly _parsedRecordCache: ReturnType<KlafService['_createParsedRecordCache']>
   private _metadata: KlafMetadata
   private _oldMetadata: KlafMetadata
 
@@ -439,11 +440,12 @@ export class KlafService implements DataJournalContainer {
 
     this._encodingIdCache       = this._createEncodingIdCache()
     this._decodingIdCache       = this._createDecodingIdCache()
-    this._decodingRecordCache   = this._createDecodingRecordCache()
+    this._pageCache             = this._createPageCache()
     this._pageHeaderCache       = this._createPageHeaderCache()
     this._pageParsedHeaderCache = this._createPageParsedHeaderCache()
     this._recordPositionCache   = this._createRecordPositionCache()
-    this._recordCache           = this._createRecordCache(this._recordPositionCache, this._pageHeaderCache)
+    this._recordCache           = this._createRecordCache()
+    this._parsedRecordCache     = this._createParsedRecordCache()
 
     this.commitDebounce             = commitDebounce
     this.commitDebounceMaximumSkip  = commitDebounceMaximumSkip
@@ -518,58 +520,10 @@ export class KlafService implements DataJournalContainer {
     })
   }
 
-  private _createDecodingRecordCache() {
-    return new CacheEntanglementSync((key, state, rawHeader: Uint8Array) => {
-      const index = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderIndexOffset,
-        KlafFormat.RecordHeaderIndexSize
-      ))
-      const order = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderOrderOffset,
-        KlafFormat.RecordHeaderOrderSize
-      ))
-      const length = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderLengthOffset,
-        KlafFormat.RecordHeaderLengthSize
-      ))
-      const maxLength = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderMaxLengthOffset,
-        KlafFormat.RecordHeaderMaxLengthSize
-      ))
-      const deleted = IntegerConverter.FromArray8(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderDeletedOffset,
-        KlafFormat.RecordHeaderDeletedSize
-      ))
-      const aliasIndex = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderAliasIndexOffset,
-        KlafFormat.RecordHeaderAliasIndexSize
-      ))
-      const aliasOrder = IntegerConverter.FromArray32(IterableView.Read(
-        rawHeader,
-        KlafFormat.RecordHeaderAliasOrderOffset,
-        KlafFormat.RecordHeaderAliasOrderSize
-      ))
-  
-      const id = this.recordId(index, order)
-      const aliasId = this.recordId(aliasIndex, aliasOrder)
-
-      return {
-        id,
-        aliasId,
-        index,
-        order,
-        aliasIndex,
-        aliasOrder,
-        length,
-        maxLength,
-        deleted,
-      }
+  private _createPageCache() {
+    return new CacheEntanglementAsync(async (key, state, index: number) => {
+      const page = await this.get(index)
+      return page
     }, {
       lifespan: this.cacheLifespan
     })
@@ -577,77 +531,60 @@ export class KlafService implements DataJournalContainer {
 
   private _createPageHeaderCache() {
     return new CacheEntanglementAsync(async (key, state, index: number) => {
-      const page    = await this.get(index)
+      const page    = state.page.raw
       const header  = IterableView.Read(page, 0, this.pageHeaderSize)
       return header
     }, {
-      lifespan: this.cacheLifespan
+      lifespan: this.cacheLifespan,
+      dependencies: {
+        page: this._pageCache
+      },
+      beforeUpdateHook: async (key, dependencyKey, index) => {
+        await this._pageCache.cache(key, index)
+      },
     })
   }
 
   private _createPageParsedHeaderCache() {
-    return new CacheEntanglementSync((key, state, header: Uint8Array) => {
-      const type  = IntegerConverter.FromArray32(IterableView.Read(
-        header,
-        KlafFormat.PageTypeOffset,
-        KlafFormat.PageTypeSize
-      ))
-      const index = IntegerConverter.FromArray32(IterableView.Read(
-        header,
-        KlafFormat.PageIndexOffset,
-        KlafFormat.PageIndexSize
-      ))
-      const next  = IntegerConverter.FromArray32(IterableView.Read(
-        header,
-        KlafFormat.PageNextOffset,
-        KlafFormat.PageNextSize
-      ))
-      const count = IntegerConverter.FromArray32(IterableView.Read(
-        header,
-        KlafFormat.PageCountOffset,
-        KlafFormat.PageCountSize
-      ))
-      const free  = IntegerConverter.FromArray32(IterableView.Read(
-        header,
-        KlafFormat.PageFreeOffset,
-        KlafFormat.PageFreeSize
-      ))
-      return {
-        type,
-        index,
-        next,
-        count,
-        free,
-      }
+    return new CacheEntanglementAsync(async (key, state, pageIndex: number) => {
+      return this.internalParsePageHeader(state.header.raw)
     }, {
-      lifespan: this.cacheLifespan
+      lifespan: this.cacheLifespan,
+      dependencies: {
+        header: this._pageHeaderCache
+      },
+      beforeUpdateHook: async (key, dependencyKey, index) => {
+        await this._pageHeaderCache.cache(key, index)
+      },
     })
   }
 
   private _createRecordPositionCache() {
     return new CacheEntanglementAsync(async (key, state, index: number, order: number) => {
+      const pagePos       = this.pagePosition(index)
       const payloadPos    = this.pagePayloadPosition(index)
       const cellPos       = this.pageCellPosition(index, order)
-      const cellValue     = await this.engine.read(cellPos, KlafFormat.PageCellSize)
+      const cellOffset    = cellPos - pagePos
+      const cellValue     = IterableView.Read(state.page.raw, cellOffset, KlafFormat.PageCellSize)
       const recordOffset  = IntegerConverter.FromArray32(cellValue)
       return payloadPos + recordOffset
     }, {
-      lifespan: this.cacheLifespan
+      lifespan: this.cacheLifespan,
+      dependencies: {
+        page: this._pageCache
+      },
+      beforeUpdateHook: async (key, dependencyKey, index, order) => {
+        await this._pageCache.cache(dependencyKey, index)
+      }
     })
   }
 
-  private _createRecordCache(
-    recordPosition: ReturnType<KlafService['_createRecordPositionCache']>,
-    pageHeader: ReturnType<KlafService['_createPageHeaderCache']>
-  ) {
-    return new CacheEntanglementAsync(async (key, {
-      recordPosition,
-      pageHeader,
-    }, index: number, order: number) => {
+  private _createRecordCache() {
+    return new CacheEntanglementAsync(async (key, state, index: number, order: number) => {
       const pagePos       = this.pagePosition(index)
-      const recordPos     = recordPosition.raw
+      const recordPos     = state.recordPosition.raw
+      const rawPage       = state.page.raw
       const recordOffset  = recordPos - pagePos
-      const rawPage       = await this.get(index)
       const rawHeader     = IterableView.Read(rawPage, recordOffset, KlafFormat.RecordHeaderSize)
       const payloadOffset = KlafFormat.RecordHeaderSize + recordOffset
       const payloadLength = IntegerConverter.FromArray32(IterableView.Read(
@@ -656,12 +593,12 @@ export class KlafService implements DataJournalContainer {
         KlafFormat.RecordHeaderLengthSize
       ))
       
-      let header = this.parseHeader(pageHeader.raw)
+      let header = await this.parsePageHeader(index)
       
       // internal 페이지일 경우
       if (!header.next) {
         const rPayload = IterableView.Read(rawPage, payloadOffset, payloadLength)
-        const merged = new Uint8Array(rawHeader.length + rPayload.length)
+        const merged = this.createIterable(rawHeader.length + rPayload.length, 0)
         merged.set(rawHeader, 0)
         merged.set(rPayload, rawHeader.length)
         return merged
@@ -682,8 +619,7 @@ export class KlafService implements DataJournalContainer {
         if (!header.next) {
           break
         }
-        const rawHeader = await this.getHeader(header.next)
-        header = this.parseHeader(rawHeader)
+        header = await this.parsePageHeader(header.next)
         remain -= size
       }
   
@@ -691,12 +627,26 @@ export class KlafService implements DataJournalContainer {
     }, {
       lifespan: this.cacheLifespan,
       dependencies: {
-        recordPosition,
-        pageHeader,
+        page: this._pageCache,
+        recordPosition: this._recordPositionCache,
       },
       beforeUpdateHook: async (key, dependencyKey, index, order) => {
-        await recordPosition.cache(key, index, order)
-        await pageHeader.cache(dependencyKey, index)
+        await this._pageCache.cache(dependencyKey, index)
+        await this._recordPositionCache.cache(key, index, order)
+      },
+    })
+  }
+
+  private _createParsedRecordCache() {
+    return new CacheEntanglementAsync(async (key, state, _index: number, _order: number) => {
+      return this.internalParseRecord(state.record.raw)
+    }, {
+      lifespan: this.cacheLifespan,
+      dependencies: {
+        record: this._recordCache,
+      },
+      beforeUpdateHook: async (key, dependencyKey, index, order) => {
+        await this._recordCache.cache(key, index, order)
       },
     })
   }
@@ -810,7 +760,7 @@ export class KlafService implements DataJournalContainer {
     order: number
   } {
     const cache = this._decodingIdCache.cache(recordId)
-    return cache.clone('object-shallow-copy')
+    return cache.raw//clone('object-shallow-copy')
   }
 
   rawRecordId(recordId: string): Uint8Array {
@@ -850,35 +800,121 @@ export class KlafService implements DataJournalContainer {
     return cache.raw
   }
 
-  parseRecord(record: Uint8Array): KlafRecord {
-    const rawHeader   = IterableView.Read(record, 0, KlafFormat.RecordHeaderSize)
-    const rawPayload  = IterableView.Read(record, KlafFormat.RecordHeaderSize)
+  internalParseRecord(rawRecord: Uint8Array): KlafRecord {
+    const index = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderIndexOffset,
+      KlafFormat.RecordHeaderIndexSize
+    ))
+    const order = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderOrderOffset,
+      KlafFormat.RecordHeaderOrderSize
+    ))
+    const length = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderLengthOffset,
+      KlafFormat.RecordHeaderLengthSize
+    ))
+    const maxLength = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderMaxLengthOffset,
+      KlafFormat.RecordHeaderMaxLengthSize
+    ))
+    const deleted = IntegerConverter.FromArray8(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderDeletedOffset,
+      KlafFormat.RecordHeaderDeletedSize
+    ))
+    const aliasIndex = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderAliasIndexOffset,
+      KlafFormat.RecordHeaderAliasIndexSize
+    ))
+    const aliasOrder = IntegerConverter.FromArray32(IterableView.Read(
+      rawRecord,
+      KlafFormat.RecordHeaderAliasOrderOffset,
+      KlafFormat.RecordHeaderAliasOrderSize
+    ))
 
-    const cache = this._decodingRecordCache.cache(
-      rawHeader.join(','),
-      rawHeader
+    const rawHeader   = IterableView.Read(rawRecord, 0, KlafFormat.RecordHeaderSize)
+    const rawPayload  = IterableView.Read(rawRecord, KlafFormat.RecordHeaderSize, length)
+    const payload     = TextConverter.FromArray(
+      IterableView.Read(rawRecord, KlafFormat.RecordHeaderSize, length)
     )
-    const header = cache.clone('object-shallow-copy')
 
-    const rawRecord = IterableView.Concat(rawHeader, rawPayload)
-    const payload = TextConverter.FromArray(rawPayload)
+    const id = this.recordId(index, order)
+    const aliasId = this.recordId(aliasIndex, aliasOrder)
+
     return {
+      header: {
+        id,
+        aliasId,
+        index,
+        order,
+        aliasIndex,
+        aliasOrder,
+        length,
+        maxLength,
+        deleted,
+      },
+      payload,
       rawRecord,
       rawHeader,
       rawPayload,
-      header,
-      payload,
     }
   }
 
-  async getHeader(index: number): Promise<Uint8Array> {
+  internalParsePageHeader(header: Uint8Array): KlafPageHeader {
+    const type  = IntegerConverter.FromArray32(IterableView.Read(
+      header,
+      KlafFormat.PageTypeOffset,
+      KlafFormat.PageTypeSize
+    ))
+    const index = IntegerConverter.FromArray32(IterableView.Read(
+      header,
+      KlafFormat.PageIndexOffset,
+      KlafFormat.PageIndexSize
+    ))
+    const next  = IntegerConverter.FromArray32(IterableView.Read(
+      header,
+      KlafFormat.PageNextOffset,
+      KlafFormat.PageNextSize
+    ))
+    const count = IntegerConverter.FromArray32(IterableView.Read(
+      header,
+      KlafFormat.PageCountOffset,
+      KlafFormat.PageCountSize
+    ))
+    const free  = IntegerConverter.FromArray32(IterableView.Read(
+      header,
+      KlafFormat.PageFreeOffset,
+      KlafFormat.PageFreeSize
+    ))
+    return {
+      type,
+      index,
+      next,
+      count,
+      free,
+    }
+  }
+
+  async parseRecord(index: number, order: number): Promise<KlafRecord> {
+    const key = `${index}/${order}`
+    const cache = await this._parsedRecordCache.cache(key, index, order)
+    const record = cache.clone('object-shallow-copy')
+    return record
+  }
+
+  async getPageHeader(index: number): Promise<Uint8Array> {
     const cache = await this._pageHeaderCache.cache(`${index}`, index)
     return cache.raw
   }
 
-  parseHeader(header: Uint8Array): KlafPageHeader {
-    const cache = this._pageParsedHeaderCache.cache(header.join(','), header)
-    return cache.raw
+  async parsePageHeader(index: number): Promise<KlafPageHeader> {
+    const cache = await this._pageParsedHeaderCache.cache(index.toString(), index)
+    return cache.clone('object-shallow-copy')
   }
 
   async getHeadPageIndex(index: number): Promise<number> {
@@ -886,8 +922,7 @@ export class KlafService implements DataJournalContainer {
       return 1
     }
     while (true) {
-      const header = await this.getHeader(index)
-      const { type } = this.parseHeader(header)
+      const { type } = await this.parsePageHeader(index)
       if (type !== KlafPageType.OverflowType) {
         break
       }
@@ -938,10 +973,8 @@ export class KlafService implements DataJournalContainer {
   async internalPick(recordId: string, recursiveAlias: boolean): Promise<KlafPickResult> {
     while (true) {
       const recordIdInfo = this.parseRecordId(recordId)
-      const header  = await this.getHeader(recordIdInfo.index)
-      const raw     = await this.getRecord(recordIdInfo.index, recordIdInfo.order)
-      const record  = this.parseRecord(raw)
-      const page    = this.parseHeader(header)
+      const page    = await this.parsePageHeader(recordIdInfo.index)
+      const record  = await this.parseRecord(recordIdInfo.index, recordIdInfo.order)
       
       if (
         recursiveAlias &&
@@ -970,14 +1003,12 @@ export class KlafService implements DataJournalContainer {
     }
     return this.readLock(async () => {
       const headIndex = await this.getHeadPageIndex(index)
-      const header = await this.getHeader(headIndex)
-      const parsedHeader = this.parseHeader(header)
+      const parsedHeader = await this.parsePageHeader(headIndex)
   
       const records = []
       for (let i = 0; i < parsedHeader.count; i++) {
         const order = i + 1
-        const rawRecord = await this.getRecord(parsedHeader.index, order)
-        const record = this.parseRecord(rawRecord)
+        const record = await this.parseRecord(parsedHeader.index, order)
         records.push(record)
       }
       return records
@@ -988,7 +1019,6 @@ export class KlafService implements DataJournalContainer {
     const pos = this.pagePosition(header.index)
     const rHeader = this.createEmptyHeader(header)
     await this.engine.update(pos, rHeader)
-    this._pageHeaderCache.delete(`${header.index}`)
   }
 
   async setPagePayload(index: number, order: number, record: Uint8Array): Promise<void> {
@@ -997,9 +1027,8 @@ export class KlafService implements DataJournalContainer {
 
     let recordPos
     if (order > 1) {
-      const record      = await this.getRecord(index, prevOrder)
-      const prevRecord  = this.parseRecord(record)
-      recordPos         = await this.recordPosition(index, prevOrder) + prevRecord.rawRecord.length
+      const prevRecord = await this.parseRecord(index, prevOrder)
+      recordPos = await this.recordPosition(index, prevOrder) + prevRecord.rawRecord.length
     }
     else {
       recordPos = payloadPos
@@ -1010,11 +1039,9 @@ export class KlafService implements DataJournalContainer {
 
     await this.engine.update(recordPos, record)
     await this.engine.update(cellPos, cell)
-
-    this._recordCache.delete(`${index}/${order}`)
   }
 
-  async setPage(header: KlafPageHeader, data: Uint8Array): Promise<string> {
+  async appendToPage(header: KlafPageHeader, data: Uint8Array): Promise<string> {
     const recordId  = this.recordId(header.index, header.count + 1)
     const record    = this.createRecord(recordId, data)
 
@@ -1023,10 +1050,7 @@ export class KlafService implements DataJournalContainer {
     const usage = KlafFormat.RecordHeaderSize + KlafFormat.PageCellSize + data.length
     header.count += 1
     header.free -= usage
-    if (header.free < 0) {
-      header.free = 0
-    }
-
+    header.free = Math.max(header.free, 0)
     await this.setPageHeader(header)
 
     return recordId
@@ -1042,8 +1066,7 @@ export class KlafService implements DataJournalContainer {
     }
     const lastInternalIndex = this._metadata.lastInternalIndex
     let index   = lastInternalIndex
-    const t = await this.getHeader(index)
-    let header  = this.parseHeader(t)
+    let header  = await this.parsePageHeader(index)
 
     if (autoIncrement) {
       let { autoIncrement: increment, count } = this._metadata
@@ -1064,7 +1087,8 @@ export class KlafService implements DataJournalContainer {
     const recordSize  = KlafFormat.RecordHeaderSize + data.length
     const recordUsage = KlafFormat.PageCellSize + recordSize
     if (header.free >= recordUsage) {
-      const recordId = await this.setPage(header, data)
+      const recordId = await this.appendToPage(header, data)
+      await this._pageCache.update(header.index.toString(), header.index)
       return recordId
     }
     
@@ -1077,7 +1101,7 @@ export class KlafService implements DataJournalContainer {
     // 이전 페이지가 이미 사용되었습니다. 새로운 페이지를 생성합니다.
     if (header.count) {
       index = await this.addEmptyPage({ type: KlafPageType.InternalType }, true)
-      header = this.parseHeader(await this.getHeader(index))
+      header = await this.parsePageHeader(index)
     }
     
     const count = Math.ceil(recordSize / this.maximumFreeSize)
@@ -1087,7 +1111,7 @@ export class KlafService implements DataJournalContainer {
     
     // 한 페이지에 삽입이 가능할 경우, Internal 타입으로 생성되어야 하며, 삽입 후 종료되어야 합니다.
     if (isWillBeInternal) {
-      return this.setPage(header, data)
+      return this.appendToPage(header, data)
     }
 
     // 이전 페이지가 사용되지 않았지만, 한 페이지 내에 넣기엔 너무 큽니다.
@@ -1108,7 +1132,7 @@ export class KlafService implements DataJournalContainer {
       const start = i * this.maximumFreeSize
       const chunk = IterableView.Read(record, start, this.maximumFreeSize)
       
-      const current = this.parseHeader(await this.getHeader(index))
+      const current = await this.parsePageHeader(index)
       await this.setPagePayload(
         current.index,
         current.count + 1,
@@ -1126,12 +1150,14 @@ export class KlafService implements DataJournalContainer {
         current.next = 0
       }
       await this.setPageHeader(current)
+      await this._pageCache.update(current.index.toString(), current.index)
     }
-    const headHeader = this.parseHeader(await this.getHeader(headIndex))
+    const headHeader = await this.parsePageHeader(headIndex)
     headHeader.type = KlafPageType.InternalType
     headHeader.count = 1
     headHeader.free = 0
     await this.setPageHeader(headHeader)
+    await this._pageCache.update(headIndex.toString(), headIndex)
 
     if (isInternalIndexDeferred) {
       this._metadata.lastInternalIndex = index
@@ -1148,30 +1174,35 @@ export class KlafService implements DataJournalContainer {
   async setInternalRecord(
     index: number,
     order: number,
-    record: Uint8Array
+    record: Uint8Array,
+    pageCaching = true
   ): Promise<number> {
-    await this.engine.update(await this.recordPosition(index, order), record)
+    const recordPosition = await this.recordPosition(index, order)
+    await this.engine.update(recordPosition, record)
+    if (pageCaching) {
+      await this._pageCache.update(index.toString(), index)
+    }
     return index
   }
 
   async setOverflowedRecord(
     index: number,
-    record: Uint8Array
+    record: Uint8Array,
   ): Promise<number> {
     while (index) {
       const size = Math.min(this.maximumFreeSize, record.length)
       const chunk = IterableView.Read(record, 0, size)
       
       await this.engine.update(this.pagePayloadPosition(index), chunk)
+      await this._pageCache.update(index.toString(), index)
       record = record.subarray(size)
       
       if (!record.length) {
-        this._recordCache.delete(`${index}/1`)
         return index
       }
 
-      const header = await this.getHeader(index)
-      const parsedHeader = this.parseHeader(header)
+      const header = await this.getPageHeader(index)
+      const parsedHeader = await this.parsePageHeader(index)
       let next = parsedHeader.next
       if (!next) {
         next = await this.addEmptyPage({
@@ -1188,20 +1219,16 @@ export class KlafService implements DataJournalContainer {
           this.pagePosition(index),
           header
         )
+        await this._pageCache.update(index.toString(), index)
       }
-      this._pageHeaderCache.delete(`${index}`)
-      this._recordCache.delete(`${index}/1`)
       index = next
     }
 
     return index
   }
 
-  async isInternalRecord(record: Uint8Array): Promise<boolean> {
-    const parsedRecord  = this.parseRecord(record)
-    const index         = parsedRecord.header.index
-    const header        = await this.getHeader(index)
-    const page          = this.parseHeader(header)
+  async isInternalRecord(index: number): Promise<boolean> {
+    const page = await this.parsePageHeader(index)
     return !page.next
   }
 
@@ -1217,12 +1244,9 @@ export class KlafService implements DataJournalContainer {
       throw KlafService.ErrorBuilder.ERR_ALREADY_DELETED(id)
     }
 
-    this._recordCache.delete(`${head.record.header.index}/${head.record.header.order}`)
-    this._recordCache.delete(`${tail.record.header.index}/${tail.record.header.order}`)
-
     const record = this.createRecord(tail.record.header.id, payload)
 
-    const isInternalBeforeTail = await this.isInternalRecord(tail.record.rawRecord)
+    const isInternalBeforeTail = await this.isInternalRecord(tail.record.header.index)
     const isLongerThanBefore = tail.record.rawRecord.length < record.length
 
     if (isLongerThanBefore) {
@@ -1247,9 +1271,17 @@ export class KlafService implements DataJournalContainer {
           ),
           headClone
         )
+        await this._pageCache.update(
+          head.record.header.index.toString(),
+          head.record.header.index,
+        )
         if (head.record.header.id !== tail.record.header.id) {
-          await this.internalDelete(tail.record.header.id, false)
+          await this.internalDelete(tail.record.header.id, false, false)
         }
+        await this._pageCache.update(
+          tail.record.header.index.toString(),
+          tail.record.header.index,
+        )
         return {
           id,
           text
@@ -1269,22 +1301,28 @@ export class KlafService implements DataJournalContainer {
         await this.setInternalRecord(
           tail.record.header.index,
           tail.record.header.order,
-          record
+          record,
+          false
         )
       }
       else {
         await this.setOverflowedRecord(tail.record.header.index, record)
       }
     }
+    await this._pageCache.update(
+      tail.record.header.index.toString(),
+      tail.record.header.index,
+    )
     return {
       id: tail.record.header.id,
-      text
+      text,
     }
   }
 
   async internalDelete(
     recordId: string,
-    countDecrement: boolean
+    countDecrement: boolean,
+    pageCaching = true
   ): Promise<void> {
     const { index, order } = this.parseRecordId(recordId)
     const pos = await this.recordPosition(index, order) + KlafFormat.RecordHeaderDeletedOffset
@@ -1298,10 +1336,12 @@ export class KlafService implements DataJournalContainer {
       )
     }
     await this.engine.update(pos, flagForDeleted)
+    if (pageCaching) {
+      await this._pageCache.update(index.toString(), index)
+    }
+
     this._encodingIdCache.delete(`${index}/${order}`)
     this._decodingIdCache.delete(recordId)
-    this._pageHeaderCache.delete(index.toString())
-    this._recordCache.delete(`${index}/${order}`)
   }
 
   async transaction<T>(work: () => Promise<T>, lockType: 'read'|'write'): Promise<T> {
@@ -1401,11 +1441,7 @@ export class KlafService implements DataJournalContainer {
     return this.writeLock(async () => {
       this._decodingIdCache.clear()
       this._encodingIdCache.clear()
-      this._pageHeaderCache.clear()
-      this._recordCache.clear()
-      this._decodingRecordCache.clear()
-      this._recordPositionCache.clear()
-      this._pageParsedHeaderCache.clear()
+      this._pageCache.clear()
       await this.engine._close()
       await this.journal?.close(this.path)
     })

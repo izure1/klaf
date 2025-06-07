@@ -18,6 +18,11 @@ const db = await KlafDocument.Open({
   engine: new FileSystemEngine(),
   version: 0,
   scheme: {
+    id: {
+      default: () => crypto.randomUUID(),
+      validate: (v) => typeof v === 'string',
+      index: true,
+    },
     name: {
       default: () => 'Anonymous',
       validate: (v) => typeof v === 'string',
@@ -38,7 +43,7 @@ const [err, result] = await db.pick({
   age: { gt: 15 }
 })
 
-console.log(result) // [{ name: 'park', age: 25 }]
+console.log(result) // [{ id: 'your-random-uuid-v4' name: 'park', age: 25 }]
 
 db.metadata.autoIncrement // 3
 db.metadata.count // 3
@@ -120,6 +125,14 @@ It is a function that checks the validity of the value when inserting or updatin
 
 For example, if you want the **name** attribute to accept only strings, you can implement it like this: `validate: (v) => typeof v === 'string'`.
 
+#### index (optional)
+
+This value is optional and defaults to **false**.
+
+It is a boolean value that determines whether to create an index for the property. If this value is set to **true**, a B+tree structure is created for the property, which can significantly improve the performance of search queries using this property.
+
+However, creating indexes can increase the size of the database file and slow down write/update operations. Therefore, it is recommended to use indexes only for properties that have unique values across all documents.
+
 ### Scheme structure change
 
 However, you may want to extend the properties of the scheme. For example, let's say you want to add a **student** property that you didn't have before.
@@ -150,6 +163,8 @@ When migrating to delete an existing property, properties that do not exist in t
 
 Please note that this migration process can affect application performance if there are many inserted documents, as it updates all inserted documents.
 
+**Additionally, you do not need to increment the version when modifying schema information such as **default**, **validate**, or **index**. Only increment the **version** when schema properties are added or removed.**
+
 ### Database Indexing
 
 **KlafDocument** inserts data in the form of **JSON** records, which are referred to as documents. A document has a **key-value** relationship, and the values can be of type **string**, **number**, **boolean**, or **null**. It follows the same format as **JSON**, and there is no limit to the depth of the document.
@@ -171,7 +186,7 @@ For example, you can insert a document like the following:
 }
 ```
 
-When inserting a document, **KlafDocument** looks for properties that have primitive types as values. Primitive types include **string**, **number**, **boolean**, and **null**. In the example document, properties like **name**, **color**, and **owner** fall into this category. **KlafDocument** attempts to optimize these properties by creating a new B+tree structure.
+When inserting a document, **KlafDocument** looks for properties that have primitive types as values. Primitive types include **string**, **number**, **boolean**, and **null**. In the example document, properties like **name**, **color**, and **owner** fall into this category. These properties with such values can be indexed using a b+tree by setting **index: true** in the schema.
 
 However, there's an important point to note. The properties **more** and **products** do not have primitive types as values. These properties are not optimized for queries and cannot be used as conditions for the **pick** method.
 

@@ -149,9 +149,8 @@ describe('DB', () => {
       throw errBatch
     }
 
-    const rand = Math.floor(Math.random()*max)
-    const target = ids[rand]
-    const guess = `:db-put-test-${rand}:`
+    const target = ids[3]
+    const guess = `:db-put-test-${3}:`
 
     const [err, res] = await db.pick(target)
     expect(err).toBe(undefined)

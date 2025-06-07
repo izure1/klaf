@@ -108,11 +108,11 @@ deno add jsr:@izure/klaf
 ### Browser (ESM)
 
 ```javascript
-import { Klaf, KlafDocument } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/index.mjs'
+import { Klaf, KlafDocument } from 'https://cdn.jsdelivr.net/npm/klaf.js@3/dist/esm/index.mjs'
 
 // engines
-import { InMemoryEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/engine/InMemory.mjs'
-import { WebWorkerEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js/dist/esm/engine/WebWorker.mjs'
+import { InMemoryEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js@3/dist/esm/engine/InMemory.mjs'
+import { WebWorkerEngine } from 'https://cdn.jsdelivr.net/npm/klaf.js@3/dist/esm/engine/WebWorker.mjs'
 ```
 
 ## Why
