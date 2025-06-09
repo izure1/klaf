@@ -1,6 +1,6 @@
 {
   "name": "klaf.js",
-  "version": "4.0.0-beta.2",
+  "version": "4.0.0-beta.3",
   "description": "Lightning-fast async JavaScript database with key-value and document storage for modern applications.",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.mjs",
@@ -76,6 +76,6 @@
     "@noble/ciphers": "1.0.0",
     "cache-entanglement": "^1.5.5",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^5.1.2"
+    "serializable-bptree": "^5.1.3"
   }
 }

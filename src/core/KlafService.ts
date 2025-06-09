@@ -704,6 +704,7 @@ export class KlafService implements DataJournalContainer {
     // extend payload
     const page = this.createEmptyPage({ ...header, index })
     await this.engine.append(page)
+    await this._pageCache.cache(index.toString(), index)
 
     if (header.type === KlafPageType.InternalType && incrementInternalIndex) {
       lastInternalIndex++
@@ -1111,7 +1112,9 @@ export class KlafService implements DataJournalContainer {
     
     // 한 페이지에 삽입이 가능할 경우, Internal 타입으로 생성되어야 하며, 삽입 후 종료되어야 합니다.
     if (isWillBeInternal) {
-      return this.appendToPage(header, data)
+      const res = this.appendToPage(header, data)
+      await this._pageCache.update(header.index.toString(), header.index)
+      return res
     }
 
     // 이전 페이지가 사용되지 않았지만, 한 페이지 내에 넣기엔 너무 큽니다.

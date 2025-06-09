@@ -435,6 +435,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
   get documentIndices(): Set<keyof KlafDocumentScheme<KlafDocumentShape<S>>> {
     const documentProperties = this.documentProperties
     for (const property of documentProperties) {
+      // allow default property
       if (!Object.hasOwn(this.scheme, property)) {
         continue
       }
@@ -652,9 +653,8 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     } as KlafDocumentShape<S>
     const stringify = JSON.stringify(record)
     const documentId = await this.core.put(stringify)
-    for (const property in record) {
-      const tree = this.getBTree(property)
-      if (!tree) {
+    for (const [property, tree] of this._trees) {
+      if (!Object.hasOwn(record, property)) {
         continue
       }
       const value = record[property]
