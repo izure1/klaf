@@ -306,7 +306,7 @@ export class VirtualDataEngine extends DataEngine {
         this._view.update(lastChunk, lastChunkOffset, newChunkData)
 
         this.updatedChunks.set(lastChunkIndex.toString(), lastChunk)
-        this.virtualChunks.update(lastChunkIndex.toString(), lastChunkIndex, lastChunk)
+        await this.virtualChunks.update(lastChunkIndex.toString(), lastChunkIndex, lastChunk)
 
         dataOffset += newChunkData.length
         dataRemain -= newChunkData.length

@@ -74,7 +74,7 @@
   },
   "dependencies": {
     "@noble/ciphers": "1.0.0",
-    "cache-entanglement": "^1.5.5",
+    "cache-entanglement": "^1.6.0",
     "ryoiki": "^1.2.0",
     "serializable-bptree": "^5.1.3"
   }
