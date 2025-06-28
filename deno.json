@@ -1,6 +1,6 @@
 {
   "name": "@izure/klaf",
-  "version": "4.0.0-beta.3",
+  "version": "4.0.0",
   "description": "Lightning-fast async JavaScript database with key-value and document storage for modern applications.",
   "author": "izure1 <admin@izure.org>",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "node:fs": "node:fs",
     "@noble/ciphers": "npm:@noble/ciphers@1.0.0",
     "cache-entanglement": "jsr:@izure/cache-entanglement@^1.6.0",
-    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.1.3",
+    "serializable-bptree": "jsr:@izure/serializable-bptree@^5.1.6",
     "ryoiki": "jsr:@izure/ryoiki@^1.2.0"
   },
   "publish": {

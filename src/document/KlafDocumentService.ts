@@ -975,7 +975,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       delete normalizedQuery[property]
     }
 
-    // search from full scan fallback
+    // search from fullScan fallback
     for (const property in normalizedQuery) {
       const condition = normalizedQuery[property]! as KlafDocumentQueryCondition<S>
       filterKeys = await this.fullScanRecordsInfo(property, condition, filterKeys)
