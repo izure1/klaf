@@ -411,14 +411,14 @@ export class KlafService implements DataJournalContainer {
   private readonly _locker: Ryoiki
   private readonly _transactions: KlafTransactionManager
   private _closing: boolean
-  private readonly _encodingIdCache: ReturnType<KlafService['_createEncodingIdCache']>
-  private readonly _decodingIdCache: ReturnType<KlafService['_createDecodingIdCache']>
-  private readonly _pageCache: ReturnType<KlafService['_createPageCache']>
-  private readonly _pageHeaderCache: ReturnType<KlafService['_createPageHeaderCache']>
-  private readonly _pageParsedHeaderCache: ReturnType<KlafService['_createPageParsedHeaderCache']>
-  private readonly _recordPositionCache: ReturnType<KlafService['_createRecordPositionCache']>
-  private readonly _recordCache: ReturnType<KlafService['_createRecordCache']>
-  private readonly _parsedRecordCache: ReturnType<KlafService['_createParsedRecordCache']>
+  readonly _encodingIdCache: ReturnType<KlafService['_createEncodingIdCache']>
+  readonly _decodingIdCache: ReturnType<KlafService['_createDecodingIdCache']>
+  readonly _pageCache: ReturnType<KlafService['_createPageCache']>
+  readonly _pageHeaderCache: ReturnType<KlafService['_createPageHeaderCache']>
+  readonly _pageParsedHeaderCache: ReturnType<KlafService['_createPageParsedHeaderCache']>
+  readonly _recordPositionCache: ReturnType<KlafService['_createRecordPositionCache']>
+  readonly _recordCache: ReturnType<KlafService['_createRecordCache']>
+  readonly _parsedRecordCache: ReturnType<KlafService['_createParsedRecordCache']>
   private _metadata: KlafMetadata
   private _oldMetadata: KlafMetadata
 
@@ -761,7 +761,7 @@ export class KlafService implements DataJournalContainer {
     order: number
   } {
     const cache = this._decodingIdCache.cache(recordId)
-    return cache.raw//clone('object-shallow-copy')
+    return cache.raw
   }
 
   rawRecordId(recordId: string): Uint8Array {
@@ -1279,7 +1279,7 @@ export class KlafService implements DataJournalContainer {
           head.record.header.index,
         )
         if (head.record.header.id !== tail.record.header.id) {
-          await this.internalDelete(tail.record.header.id, false, false)
+          await this.internalDelete(tail.record.header.id, false)
         }
         await this._pageCache.update(
           tail.record.header.index.toString(),
@@ -1322,11 +1322,7 @@ export class KlafService implements DataJournalContainer {
     }
   }
 
-  async internalDelete(
-    recordId: string,
-    countDecrement: boolean,
-    pageCaching = true
-  ): Promise<void> {
+  async internalDelete(recordId: string, countDecrement: boolean): Promise<void> {
     const { index, order } = this.parseRecordId(recordId)
     const pos = await this.recordPosition(index, order) + KlafFormat.RecordHeaderDeletedOffset
     const flagForDeleted = IntegerConverter.ToArray8(1)
@@ -1339,9 +1335,7 @@ export class KlafService implements DataJournalContainer {
       )
     }
     await this.engine.update(pos, flagForDeleted)
-    if (pageCaching) {
-      await this._pageCache.update(index.toString(), index)
-    }
+    await this._pageCache.update(index.toString(), index)
 
     this._encodingIdCache.delete(`${index}/${order}`)
     this._decodingIdCache.delete(recordId)

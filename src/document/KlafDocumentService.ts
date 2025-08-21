@@ -1,5 +1,5 @@
 import { type SerializeStrategyHead } from 'serializable-bptree'
-import { CacheEntanglementAsync } from 'cache-entanglement'
+import { CacheEntanglementAsync, CacheEntanglementSync } from 'cache-entanglement'
 import { Ryoiki } from 'ryoiki'
 import { KlafFormat, type KlafMetadata, KlafPageType, KlafService } from '../core/KlafService'
 import { KlafComparator } from './KlafComparator'
@@ -371,7 +371,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
   private _createdTrees: boolean
   private _closing: boolean
   private readonly _trees: Map<keyof KlafDocumentScheme<KlafDocumentShape<S>>, KlafDocumentBTree<string, SupportedType>>
-  private readonly _record: ReturnType<KlafDocumentService<S>['_createRecordCache']>
+  private readonly _rawDocument: ReturnType<KlafDocumentService<S>['_createRawDocumentCache']>
   private readonly _document: ReturnType<KlafDocumentService<S>['_createDocumentCache']>
   private readonly _treeTempNodes: Map<string, QueueNode>
   private _root: KlafDocumentRoot
@@ -409,7 +409,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     this._root              = root
     this._trees             = new Map()
     this._treeTempNodes     = new Map()
-    this._record            = this._createRecordCache()
+    this._rawDocument       = this._createRawDocumentCache()
     this._document          = this._createDocumentCache()
 
     const { autoIncrement, count } = metadata
@@ -514,29 +514,47 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     return false
   }
 
-  private _createRecordCache() {
-    return new CacheEntanglementAsync(async (key, state) => {
-      const payload = await this.core.pickPayload(key)
-      return payload
+  private _createRawDocumentCache() {
+    return new CacheEntanglementAsync(async (key, state, index: number, order: number) => {
+      const encodedId = this.core.recordId(index, order)
+      return await this.core.pickPayload(encodedId)
     }, {
-      lifespan: this.core.cacheLifespan
+      lifespan: this.core.cacheLifespan,
+      dependencies: {
+        record: this.core._recordCache
+      },
+      beforeUpdateHook: async (key, dependencyKey, index, order) => {
+        await this.core._recordCache.cache(key, index, order)
+      }
     })
   }
 
   private _createDocumentCache() {
-    return new CacheEntanglementAsync(async (key, state) => {
-      const payload = state.record.raw
+    return new CacheEntanglementAsync(async (key, state, index: number, order: number) => {
+      const payload = state.rawDocument.raw
       const record = JSON.parse(TextConverter.FromArray(payload)) as KlafDocumentShape<S>
       return record
     }, {
       lifespan: this.core.cacheLifespan,
       dependencies: {
-        record: this._record
+        rawDocument: this._rawDocument,
       },
-      beforeUpdateHook: async (key) => {
-        await this._record.cache(key)
+      beforeUpdateHook: async (key, dependencyKey, index, order) => {
+        await this._rawDocument.cache(key, index, order)
       }
     })
+  }
+
+  protected getDocumentCache(key: string) {
+    const { index, order } = this.core.parseRecordId(key)
+    const documentKey = `${index}/${order}`
+    return this._document.cache(documentKey, index, order)
+  }
+
+  protected getRawDocumentCache(key: string) {
+    const { index, order } = this.core.parseRecordId(key)
+    const documentKey = `${index}/${order}`
+    return this._rawDocument.cache(documentKey, index, order)
   }
 
   protected getBTree(property: keyof KlafDocumentShape<S>): KlafDocumentBTree<string, SupportedType>|null {
@@ -660,7 +678,6 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       const value = record[property]
       await tree.insert(documentId, value)
     }
-    await this._record.update(documentId)
     this._metadata.autoIncrement++
     this._metadata.count++
     return { ...record }
@@ -713,7 +730,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       const ids = await this.findRecordIds(query)
       for (let i = 0, len = ids.length; i < len; i++) {
         const id = ids[i]
-        const cache = await this._document.cache(id)
+        const cache = await this.getDocumentCache(id)
         const document = cache.raw
         for (const property in document) {
           const tree = this.getBTree(property)
@@ -724,8 +741,6 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
           await tree.delete(id, value)
         }
         await this.core.delete(id)
-        this._record.delete(id)
-        this._document.delete(id)
       }
       this._metadata.count -= ids.length
       await this.synchronizer.sync()
@@ -745,7 +760,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     const ids = await this.findRecordIds(query)
     for (let i = 0, len = ids.length; i < len; i++) {
       const id = ids[i]
-      const beforeDocument = await this._document.cache(id)
+      const beforeDocument = await this.getDocumentCache(id)
       const before = beforeDocument.raw
       const normalizedBefore = {
         ...this.normalizeRecord(before),
@@ -778,7 +793,6 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       }
       const stringify = JSON.stringify(after)
       await this.core.update(id, stringify)
-      await this._record.update(id)
     }
     await this.synchronizer.sync()
     return ids.length
@@ -936,7 +950,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
     }
     const primaryTree = this.getBTree('documentIndex')!
     for (const key of filterKeys) {
-      const record = await this._record.cache(key)
+      const record = await this.getRawDocumentCache(key)
       const jsonString = record.raw
       const insertedValue = this._findFromRaw(jsonString, property as any)
       for (const verifierKey in condition) {
@@ -988,7 +1002,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
 
     const documents = []
     for (const key of filterKeys) {
-      const cache = await this._document.cache(key)
+      const cache = await this.getDocumentCache(key)
       const document = cache.raw
       documents.push({ key, document })
     }
@@ -1021,7 +1035,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       const copy = (r: KlafDocumentShape<S>) => JSON.parse(JSON.stringify(r))
       for (let i = 0, len = guessIds.length; i < len; i++) {
         const id = guessIds[i]
-        const record = await this._document.cache(id)
+        const record = await this.getDocumentCache(id)
         const document = record.clone(copy)
         documents.push(document)
       }
@@ -1048,7 +1062,7 @@ export class KlafDocumentService<S extends KlafDocumentable> implements DataJour
       await this.synchronizer.sync()
       await this.core.close()
       this.clearBTrees()
-      this._record.clear()
+      this._rawDocument.clear()
       this._document.clear()
     })
   }
